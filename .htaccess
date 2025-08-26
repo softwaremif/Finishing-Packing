@@ -1,0 +1,32 @@
+<IfModule mod_rewrite.c>
+#index_folder
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+    #RewriteBase /
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Redirect Trailing Slashes If Not A Folder...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # Send Requests To Front Controller...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+    
+    #index_folder
+    #Options -Indexes
+    
+    #ErrorDocument 404 http://morich.com/
+    #rrorDocument 400 http://morich.com/ 
+    #ErrorDocument 401 http://morich.com/ 
+    #ErrorDocument 403 http://morich.com/
+    #ErrorDocument 404 http://morich.com/ 
+    #ErrorDocument 500 http://morich.com/
+</IfModule>

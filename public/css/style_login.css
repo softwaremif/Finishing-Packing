@@ -1,0 +1,142 @@
+/* Rectangle 20 */
+/*@charset "utf-8";*/
+/* copy*/
+body {
+width: 100%;
+height: 100%;
+background: #F1F1F1;
+overflow-x: hidden;
+overflow-y: hidden; 
+}
+
+#kotak {
+width: 465px;
+height: 462px;
+/* White */
+background: #FFFFFF;
+/* W - Drop Shadow */
+box-shadow: 0px 0px 16px -4px rgba(0, 0, 0, 0.12);
+border-radius: 8px;
+}
+
+.font-besar-login {
+/* Garment Information System */
+width: 331px;
+height: 28px;
+/* W - H3 */
+font-family: 'Arial';
+font-style: normal;
+font-weight: 700;
+font-size: 24px;
+line-height: 28px;
+/* identical to box height, or 117% */
+color: #000000;
+}
+
+.font-kecil-login {
+/* Login into your account */
+width: 181px;
+height: 20px;
+/* W - Sub 1 */
+font-family: 'Arial';
+font-style: normal;
+font-weight: 700;
+font-size: 14px;
+line-height: 20px;
+/* identical to box height, or 125% */
+/*text-align: center;*/
+color: #000000;
+}
+
+.input {
+/* Textbox */
+box-sizing: border-box;
+/* Auto layout */
+/* display: flex;
+flex-direction: row;
+align-items: flex-start; */
+padding: 8px 12px;
+gap: 10px;
+/* position: absolute; */
+width: 244px;
+height: 34px;
+/* White */
+background: #FFFFFF;
+/* Dark grey */
+border: 1px solid #333333;
+border-radius: 8px;
+}
+
+.button {
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 8px;
+gap: 8px;
+
+width: 151px;
+height: 34px;
+
+background: #000000;
+border-radius: 8px;
+
+/* Warren-Body2 */
+font-family: 'Arial';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 18px;
+
+/* identical to box height, or 129% */
+display: flex;
+/*align-items: center;*/
+text-align: center;
+
+color: #FFFFFF;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+}
+
+.font-gagal-login {
+    /* Informasi salah, silahkan coba lagi */
+width: 218px;
+height: 18px;
+
+/* W - Body 2 */
+font-family: 'Arial';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 18px;
+
+/* identical to box height, or 129% */
+
+/* Text-Red */
+color: #EF3B42;
+}
+
+.bi::before,
+[class^="bi-"]::before,
+[class*=" bi-"]::before {
+display: inline-block;
+font-family: bootstrap-icons !important;
+font-style: normal;
+font-weight: normal !important;
+font-variant: normal;
+text-transform: none;
+line-height: 1;
+vertical-align: -.125em;
+-webkit-font-smoothing: antialiased;
+-moz-osx-font-smoothing: grayscale;
+}
+
+.bi-eye-fill::before { content: url(images/eye-fill.svg); }
+.bi-eye-slash-fill::before { content: url(images/eye-slash-fill.svg); }
+.bi-eye-slash::before { content: url(images/eye-slash-fill.svg);}
+.bi-eye::before { content: url(images/eye-fill.svg); }
+.bi-eyedropper::before { content: "\f342"; }
+.bi-eyeglasses::before { content: "\f343"; }
