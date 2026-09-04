@@ -2556,7 +2556,7 @@
 
             if (window.pageCfg.showKembalikanButton) {
                 const allHaveInspecDoc = selectedRows.length > 0 && selectedRows.every(r => r.has_inspec_doc === true);
-                // const allHaveInspecDoc = selectedRows.length > 0;
+                // const allHaveInspecDoc = selectedRows.length > 0 ;
                 $('#btnBuatDokumenInspectGlobal').toggleClass('d-none', allHaveInspecDoc);
                 $('#btnKembalikanStuffingGlobal').toggleClass('d-none', !allHaveInspecDoc);
             }
