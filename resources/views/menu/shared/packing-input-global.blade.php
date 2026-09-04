@@ -2556,6 +2556,7 @@
 
             if (window.pageCfg.showKembalikanButton) {
                 const allHaveInspecDoc = selectedRows.length > 0 && selectedRows.every(r => r.has_inspec_doc === true);
+                // const allHaveInspecDoc = selectedRows.length > 0;
                 $('#btnBuatDokumenInspectGlobal').toggleClass('d-none', allHaveInspecDoc);
                 $('#btnKembalikanStuffingGlobal').toggleClass('d-none', !allHaveInspecDoc);
             }
@@ -3998,13 +3999,13 @@
                 const $display = $('#kembalikanHasilDisplay');
                 $('#kembalikanWarningBoxOk, #kembalikanWarningBoxReject, #kembalikanWarningBoxMissing').addClass('d-none');
 
-                if (missingDoc) {
-                    $display.attr('class', 'alert alert-secondary py-2 px-3 mb-0 text-center fw-bold')
-                        .text('Belum ada Dokumen Inspect');
-                    $('#kembalikanWarningBoxMissing').removeClass('d-none');
-                    $('#btnConfirmKembalikanStuffing').prop('disabled', true);
-                    return;
-                }
+                // if (missingDoc) {
+                //     $display.attr('class', 'alert alert-secondary py-2 px-3 mb-0 text-center fw-bold')
+                //         .text('Belum ada Dokumen Inspect');
+                //     $('#kembalikanWarningBoxMissing').removeClass('d-none');
+                //     $('#btnConfirmKembalikanStuffing').prop('disabled', true);
+                //     return;
+                // }
 
                 // Ambil hasil dari dokumen -- SEHARUSNYA seragam (1 session biasanya
                 // 1 dokumen), tapi kalau kebetulan campur, REJECT menang (paling aman).
