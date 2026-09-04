@@ -1,285 +1,250 @@
 <style>
-    .btn.dropdown-toggle:focus,
-    .btn.dropdown-toggle:active,
-    .btn.dropdown-toggle.show {
-        outline: none;
-        box-shadow: none;
+    .navbar-toggler {
         border: none;
+        box-shadow: none !important;
+    }
+
+    .navbar-toggler:focus {
+        box-shadow: none !important;
+    }
+
+    #logo-brand {
+        width: 24px;
+        height: 24px;
+    }
+
+    .navbar .dropdown-menu {
+        border: none;
+        border-radius: 10px;
+        padding: 8px;
+        margin-top: 10px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.10);
+    }
+
+    .navbar .dropdown-item {
+        padding: 9px 14px;
+        border-radius: 7px;
+        font-size: 14px;
+        transition: all .2s ease;
+    }
+
+    .navbar .dropdown-item:hover {
+        background-color: #f3f4f6;
+        color: #000000;
+    }
+
+    .navbar .dropdown-toggle::after {
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+
+    @media (max-width: 991px) {
+
+        .navbar-collapse {
+            margin-top: 10px;
+        }
+
+        .navbar-nav {
+            margin-bottom: 10px;
+        }
+
+        .d-flex.align-items-center.gap-3 {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 10px !important;
+        }
     }
 </style>
+<nav id="mainNavbar" class="navbar navbar-expand-lg bg-white shadow-sm">
+    <div class="container-fluid">
 
-<nav class="navbar pb-1 pt-1">
-    <div class="container-fluid" style="background-color: white;">
-        <div class="navbar-brand d-inline-flex d-inline-flex-custom" href="#" style="padding-left:10px;">
-            <div class="p-1 align-self-center">
-                <div div class="input-group">
-                    <div class="align-self-center" style="margin-top: -1%;">
-                        <img id="logo-brand" src="{!! asset('public/css/images/morich.png') !!}">
-                    </div>
-                    <div class="align-self-center" align=center>
-                        <span class="nav-title">Finance</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Logo -->
+        <a class="navbar-brand d-flex align-items-center" href="#">
+            <img id="logo-brand" src="{!! asset('public/css/images/morich.png') !!}" alt="Logo">
+            <span class="nav-title ms-2">Finishing & Packing</span>
+        </a>
 
-        <div class="d-inline-flex d-inline-flex-custom align-self-center gap-5" style="padding-right: 20px;">
-            <div class="p-0 d-inline-flex gap-3 flex-wrap">
+        <!-- Hamburger -->
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarPackingList"
+            aria-controls="navbarPackingList" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
 
-                @if (in_array(Session::get('deppk'), ['1', '3', '6', '8', '24']))
-                <div class="dropdown">
-                    
-                    <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="border: none; outline: none; box-shadow: none; 
-                    @if (request()->segment(1) == 'barang') font-weight:700; @endif
-                    @if (request()->segment(1) == 'stok-barang') font-weight:700; @endif
-                    @if (request()->segment(1) == 'supplier') font-weight:700; @endif
-                    @if (request()->segment(1) == 'kategori-barang') font-weight:700; @endif">
-                        Tabel
-                    </button>
+        <!-- Menu -->
+        <div class="collapse navbar-collapse" id="navbarPackingList">
 
-                    <ul class="dropdown-menu dropdown-menu">
-                        @if (in_array(Session::get('deppk'), ['1']))
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'barang') font-weight:700; @endif" href="{{ route('page.barang') }}">List Barang Upload</a></li>
-                        <hr class="dropdown-divider p-0 m-0">
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'stok-barang') font-weight:700; @endif" href="{{ route('page.stok-barang') }}">Stok Barang</a></li>
-                        <hr class="dropdown-divider p-0 m-0">   
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'supplier') font-weight:700; @endif" href="{{ route('supplier.index') }}">Supplier</a></li>
-                        <hr class="dropdown-divider p-0 m-0">   
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'kategori-barang') font-weight:700; @endif" href="{{ route('kategori-barang.index') }}">Kategori Barang</a></li>
-                        
-                        @endif
-                    
-                        @if (in_array(Session::get('deppk'), ['3', '6', '24', '8']))
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'supplier') font-weight:700; @endif" href="{{ route('supplier.index') }}">Supplier</a></li>
-                        <hr class="dropdown-divider p-0 m-0">   
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'kategori-barang') font-weight:700; @endif" href="{{ route('kategori-barang.index') }}">Kategori Barang</a></li>
-                        @endif
-                    </ul>
-                </div>
-                @endif
+            <!-- Left Menu -->
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
-                <div class="dropdown">
-                    <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="border: none; outline: none; box-shadow: none;
-                    @if (request()->segment(1) == 'pembelian-cash-tempo') font-weight:700; @endif
-                    @if (request()->segment(1) == 'tanda-terima') font-weight:700; @endif
-                    @if (request()->segment(1) == 'pengisian-pengembalian-kas') font-weight:700; @endif
-                    @if (request()->segment(1) == 'purchase-order') font-weight:700; @endif
-                    @if (request()->segment(1) == 'purchase-request') font-weight:700; @endif">
-                        Aktifitas
-                    </button>
-           
-                    <ul class="dropdown-menu dropdown-menu">
-                        <!-- User Gudang, dll -->
-                        @if (!in_array(Session::get('deppk'), ['1', '3', '6', '8', '24']))
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-request') font-weight:700; @endif" href="{{ route('index.poreq') }}">Purchase Request</a></li>
-                        @endif
+            </ul>
 
-                        <!-- User CR -->
-                        @if (in_array(Session::get('deppk'), ['24']))
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'pembelian-cash-tempo') font-weight:700; @endif" href="{{ route('page.pembelian-ct') }}">Pembelian Cash / Tempo</a></li>
-                        <hr class="dropdown-divider p-0 m-0">   
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'tanda-terima') font-weight:700; @endif" href="{{ route('page.tanda-terima') }}">Tanda Terima</a></li>
-                        <hr class="dropdown-divider p-0 m-0">
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'pengisian-pengembalian-kas') font-weight:700; @endif" href="{{ route('page.kas-ppk') }}">Pengisian / Pengembalian Kas</a></li>
-                        <hr class="dropdown-divider p-0 m-0">
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-request') font-weight:700; @endif" href="{{ route('index.poreq') }}">Purchase Request</a></li>
-                        @endif
-
-                        <!-- User Grace Purchasing -->
-                        @if (in_array(Session::get('deppk'), ['3']))
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'pembelian-cash-tempo') font-weight:700; @endif" href="{{ route('page.pembelian-ct') }}">Pembelian Cash / Tempo</a></li>
-                        <hr class="dropdown-divider p-0 m-0">   
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'tanda-terima') font-weight:700; @endif" href="{{ route('page.tanda-terima') }}">Tanda Terima</a></li>
-                        <hr class="dropdown-divider p-0 m-0">
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-order') font-weight:700; @endif" href="{{ route('index.porder') }}">Purchase Order</a></li>
-                        <hr class="dropdown-divider p-0 m-0">
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-request') font-weight:700; @endif" href="{{ route('index.poreq') }}">Purchase Request</a></li>
-                        @endif
-                        <!-- <hr class="dropdown-divider p-0 m-0"> -->
-
-                        <!-- User IT -->
-                        @if (in_array(Session::get('deppk'), ['1']))
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-order') font-weight:700; @endif" href="{{ route('index.porder') }}">Purchase Order</a></li>
-                            <hr class="dropdown-divider p-0 m-0">   
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-request') font-weight:700; @endif" href="{{ route('index.poreq') }}">Purchase Request</a></li>
-                            <hr class="dropdown-divider p-0 m-0">
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'tanda-terima') font-weight:700; @endif" href="{{ route('page.tanda-terima') }}">Tanda Terima</a></li>
-                        @endif
-
-
-                        <!-- User Finance -->
-                        @if (in_array(Session::get('deppk'), ['6']))
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'pengisian-pengembalian-kas') font-weight:700; @endif" href="{{ route('page.kas-ppk') }}">Pengisian / Pengembalian Kas</a></li>
-                            <hr class="dropdown-divider p-0 m-0">
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-request') font-weight:700; @endif" href="{{ route('index.poreq') }}">Purchase Request</a></li>
-                        @endif
-
-
-                        <!-- User HRD -->
-                        @if (in_array(Session::get('deppk'), ['8']))
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'pembelian-cash-tempo') font-weight:700; @endif" href="{{ route('page.pembelian-ct') }}">Pembelian Cash / Tempo</a></li>
-                            <hr class="dropdown-divider p-0 m-0">   
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'pengisian-pengembalian-kas') font-weight:700; @endif" href="{{ route('page.kas-ppk') }}">Pengisian / Pengembalian Kas</a></li>
-                            <hr class="dropdown-divider p-0 m-0">
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-request') font-weight:700; @endif" href="{{ route('index.poreq') }}">Purchase Request</a></li>
-                            <hr class="dropdown-divider p-0 m-0">
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'tanda-terima') font-weight:700; @endif" href="{{ route('page.tanda-terima') }}">Tanda Terima</a></li>
-                        @endif
-                    </ul>
-                </div>
-
-                @if (in_array(Session::get('deppk'), ['1', '3', '6', '8', '24']))
-                <div class="dropdown">
-                    <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="border: none; outline: none; box-shadow: none; 
-                    @if (request()->segment(2) == 'pembayaran-cash-giro') font-weight:700; @endif
-                    @if (request()->segment(3) == 'cash-tempo') font-weight:700; @endif
-                    @if (request()->segment(2) == 'bukti-kas-keluar') font-weight:700; @endif
-                    @if (request()->segment(2) == 'purchase-request') font-weight:700; @endif
-                    @if (request()->segment(2) == 'purchase-order') font-weight:700; @endif
-                    @if (request()->segment(3) == 'purchase-order') font-weight:700; @endif
-                    @if (request()->segment(2) == 'stok-barang') font-weight:700; @endif">
-                        Laporan
-                    </button>
-
-                    <ul class="dropdown-menu dropdown-menu">
-                        <!-- User CR dan HRD-->
-                        @if (in_array(Session::get('deppk'), ['24', '8'])) 
-                            <li><a class="dropdown-item" style="@if (request()->segment(3) == 'cash-tempo') font-weight:700; @endif" href="{{ route('page.ct') }}">Pembelian Cash/Tempo</a></li>
-                        @endif
-                        
-                        <!-- User Finance -->
-                        @if (in_array(Session::get('deppk'), ['6']))
-                            <li><a class="dropdown-item" style="@if (request()->segment(2) == 'purchase-request') font-weight:700; @endif" href="{{ route('page.lap-pr') }}">Purchase Request</a></li>
-                            <hr class="dropdown-divider p-0 m-0">
-                            <li><a class="dropdown-item" style="@if (request()->segment(2) == 'purchase-order') font-weight:700; @endif" href="{{ route('page.lap-po') }}">Purchase Order</a></li>
-                            <hr class="dropdown-divider p-0 m-0">
-                            <li><a class="dropdown-item" style="@if (request()->segment(2) == 'pembayaran-cash-giro') font-weight:700; @endif" href="{{ route('page.cg') }}">Pembayaran Cash/Giro</a></li>
-                            <hr class="dropdown-divider p-0 m-0">
-                            <li><a class="dropdown-item" style="@if (request()->segment(2) == 'bukti-kas-keluar') font-weight:700; @endif" href="{{ route('page.bkk') }}">Bukti Kas Keluar</a></li>
-                        @endif
-
-                        <!-- user Grace Pur -->
-                        @if (in_array(Session::get('deppk'), ['3'])) 
-                            <li><a class="dropdown-item" style="@if (request()->segment(3) == 'cash-tempo') font-weight:700; @endif" href="{{ route('page.ct') }}">Pembelian Cash/Tempo</a></li>
-                            <hr class="dropdown-divider p-0 m-0">
-                            <li><a class="dropdown-item" style="@if (request()->segment(2) == 'purchase-order') font-weight:700; @endif" href="{{ route('page.lap-po')}}">Purchase Order</a></li>
-                            <hr class="dropdown-divider p-0 m-0">
-                            <li><a class="dropdown-item" style="@if (request()->segment(2) == 'stok-barang') font-weight:700; @endif" href="{{ route('page.lap-stok')}}">Stok Barang</a></li>
-                        @endif
-
-                        <!-- user IT -->
-                        @if (in_array(Session::get('deppk'), ['1'])) 
-                            <li><a class="dropdown-item" style="@if (request()->segment(2) == 'purchase-order') font-weight:700; @endif" href="{{ route('page.lap-po')}}">Purchase Order</a></li>
-                        @endif
-                    </ul>
-                </div>
-                @endif
-
-                <!-- User Gudang, dll selain staf -->
-                @if (!in_array(Session::get('deppk'), ['1', '3', '6', '8', '24']))
-                    <div class="dropdown">
-                        <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="border: none; outline: none; box-shadow: none; 
-                        @if (request()->segment(2) == 'purchase-request') font-weight:700; @endif">
-                            Laporan
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu">
-                                <li><a class="dropdown-item" style="@if (request()->segment(2) == 'purchase-request') font-weight:700; @endif" href="{{ route('page.lap-pr')}}">Purchase Request</a></li>
-                        </ul>
-                    </div>
-                @endif
-
-
-                <!-- <div class="dropdown">
-                    <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="border: none; outline: none; box-shadow: none;">
-                        Purchase
-                    </button>
-
-                    <ul class="dropdown-menu dropdown-menu">
-                        <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-order') font-weight:700; @endif" href="{{ route('index.porder') }}">Purchase Order</a></li>
-                        <hr class="dropdown-divider p-0 m-0"> -->
-
-                        <!-- @if (in_array(Session::get('guserpk'), ['5', '8', '10'])) -->
-                        
-                        <!-- ini guser dari akses -->
-                        <!-- <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-order') font-weight:700; @endif" href="{{ route('index.porder') }}">Purchase Order</a></li>
-                        <hr class="dropdown-divider p-0 m-0"> -->
-
-                        <!-- @endif -->
-
-                        <!-- @if (in_array(Session::get('deppk'), ['1', '3', '8', '9']) || in_array(Session::get('guserpk'), ['2', '5', '6', '8', '10']))
-                            <li><a class="dropdown-item" style="@if (request()->segment(1) == 'purchase-request') font-weight:700; @endif" href="{{ route('index.poreq') }}">Purchase Request</a></li>
-                        @endif
-                    </ul>
-                </div> -->
-
-                <!-- <div class="p-1 mt-1 align-self-center">
-                    <a href="{{ route('index.poreq') }}"
-                        style="cursor: pointer;color: black;text-decoration: none; @if (request()->segment(1) == 'purchase-request') font-weight: 700; @endif">
-                        Purchase Request
+            <!-- Right Menu -->
+            <div class="d-flex align-items-center gap-4">
+                @php
+                    $guserpk = Session::get('guserpk');
+                @endphp
+                @if (in_array($guserpk, [23, 34]))
+                    <!-- TRANSFER TO FINISHING -->
+                    <a href="{{ route('tf_finishing.index') }}"
+                        class="nav-link p-0 @if (request()->is('tf-finishing*')) fw-bold @endif">
+                        Transfer to Finishing
                     </a>
-                </div>
+                    <!-- POLIBAG -->
+                    <a href="{{ route('transfer.index') }}"
+                        class="nav-link p-0 @if (request()->is('polibag*')) fw-bold @endif">
+                        Polibag
+                    </a>
+                    {{-- STOK SISA --}}
+                    {{-- <a href="{{ route('stok-sisa.index') }}"
+                        class="nav-link p-0 @if (request()->is('stok-sisa*')) fw-bold @endif">
+                        Stok Sisa(Grade)
+                    </a> --}}
 
-                @if (in_array(Session::get('deppk'), ['1', '3', '8', '9']) || in_array(Session::get('guserpk'), ['2', '5', '6', '8', '9', '10']))
-                    <div class="p-1 mt-1 align-self-center">
-                        <a href="{{ route('index.porder') }}"
-                            style="cursor:pointer; color:black; text-decoration:none; @if (request()->segment(1) == 'purchase-order') font-weight:700; @endif">
-                            Purchase Order
-                        </a>
-                    </div>
-                @endif -->
-
-                <!-- @if (in_array(Session::get('guserpk'), ['3', '6']))
-                    <div class="p-1 mt-1 align-self-center">
-                        <a href="{{ route('po-cash-tempo.index') }}" style="cursor:pointer; color:black; text-decoration:none; @if (request()->segment(1) == 'purchase-cash-tempo') font-weight:700; @endif">
-                            Purchase Cash / Tempo
-                        </a>
-                    </div>
-                @endif -->
-
-                @if (strtolower(Session::get('gusernm')) == 'finance')
-                    <div class="p-1 mt-1 align-self-center">
+                    <div class="dropdown">
                         <a href="#"
-                            style="cursor: pointer;color: black;text-decoration: none; @if (request()->segment(1) == 'xxx') font-weight: 700; @endif">
-                            Keuangan
-                        </a>
-                    </div>
-
-                    <div class="p-1 mt-1 align-self-center">
-                        <a href="#"
-                            style="cursor: pointer;color: black;text-decoration: none; @if (request()->segment(1) == 'xx') font-weight: 700; @endif">
-                            Payment
-                        </a>
-                    </div>
-
-                    <div class="p-1 mt-1 align-self-center">
-                        <a href="#"
-                            style="cursor: pointer;color: black;text-decoration: none; @if (request()->segment(1) == 'xxx') font-weight: 700; @endif">
-                            Shipment
-                        </a>
-                    </div>
-                @endif
-            </div>
-
-            <div class="p-1 mt-0 align-self-center">
-                @if (!empty(Session::get('login')))
-                    <div class="btn-group p-0">
-                        <button type="button" class="btn dropdown-toggle-custom p-0" data-bs-toggle="dropdown"
+                            class="nav-link dropdown-toggle p-0
+                            @if (request()->is('stok-sisa*') || request()->is('kirim-sisa*')) fw-bold @endif"
+                            role="button"
+                            data-bs-toggle="dropdown"
                             aria-expanded="false">
-                            {{ Str::limit(ucwords(strtolower(Session::get('login'))), 8) }}
-                            <img id="polygon" src="{!! asset('public/css/images/Polygon.png') !!}" style="margin-top: -2px;">
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end dropdown-menu-custom-global p-0">
-                            <li><a class="dropdown-item dropdown-item-custom-global dropdown-item-custom-global-start p-2"
-                                    onclick="changePassword()">Password</a></li>
+                            Stok Sisa
+                        </a>
+                    
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            {{-- SUBMENU 1 --}}
                             <li>
-                                <hr class="dropdown-divider p-0 m-0">
+                                <a class="dropdown-item @if (request()->is('stok-sisa*')) active fw-semibold @endif"
+                                    href="{{ route('stok-sisa.index') }}">
+                                    Stok Sisa (Grade)
+                                </a>
                             </li>
-                            <li><a class="dropdown-item dropdown-item-custom-global dropdown-item-custom-global-end p-2"
-                                    href="{{ route('logout') }}">Logout</a></li>
+                            {{-- SUBMENU 2 --}}
+                            <li>
+                                <a class="dropdown-item @if (request()->is('kirim-sisa*')) active fw-semibold @endif"
+                                    href="{{ route('lo.index') }}">
+                                    Kirim Sisa ke Gudang
+                                </a>
+                            </li>
                         </ul>
                     </div>
                 @endif
+                
+                @if (in_array($guserpk, [34, 37]))
+                    <!-- PACKING -->
+                    <a href="{{ route('packing.index') }}"
+                        class="nav-link p-0 @if (request()->is('packing*')) fw-bold @endif">
+                        Packing
+                    </a>
+                @endif
+                @if (in_array($guserpk, [36, 34]))
+                    <!-- Sisa Produksi -->
+                    {{-- <a href="{{ route('sisa-produksi.index') }}"
+                        class="nav-link p-0 @if (request()->is('sisa-produksi*')) fw-bold @endif">
+                        Sisa Produksi
+                    </a> --}}
+
+                    <div class="dropdown">
+                        <a href="#"
+                            class="nav-link dropdown-toggle p-0
+                            @if (request()->is('sisa-produksi*') || request()->is('terima-sisa*') || request()->is('keluarkan-sisa*')) fw-bold @endif"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                            Sisa Produksi
+                        </a>
+                    
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            {{-- SUBMENU 1 --}}
+                            <li>
+                                <a class="dropdown-item @if (request()->is('sisa-produksi*')) active fw-semibold @endif"
+                                    href="{{ route('sisa-produksi.index') }}">
+                                    All Data Sisa
+                                </a>
+                            </li>
+                            {{-- SUBMENU 2 --}}
+                            <li>
+                                <a class="dropdown-item @if (request()->is('terima-sisa*')) active fw-semibold @endif"
+                                    href="{{ route('lo.gudang.index') }}">
+                                    Terima Sisa
+                                </a>
+                            </li>
+                            {{-- SUBMENU 3 --}}
+                            <li>
+                                <a class="dropdown-item @if (request()->is('keluarkan-sisa*')) active fw-semibold @endif"
+                                    href="{{ route('lo.keluargudang.index') }}">
+                                    Keluarkan Sisa
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <a href="{{ route('sisa-sample.index') }}"
+                        class="nav-link p-0 @if (request()->is('sisa-sample*')) fw-bold @endif">
+                        Sisa Sample
+                    </a>
+                @endif
+                
+                @if (in_array($guserpk, [34]))
+                    <!-- finGoods -->
+                    <a href="{{ route('stuff.index') }}"
+                    class="nav-link p-0 @if (request()->is('finGoods*')) fw-bold @endif">
+                        Finished Goods
+                    </a>
+                    <a href="{{ route('finGoods.index') }}"
+                    class="nav-link p-0 @if (request()->is('stuffing*')) fw-bold @endif">
+                        Stuffing
+                    </a>
+                    {{-- <a href="{{ route('stok-sisa.index') }}"
+                        class="nav-link p-0 @if (request()->is('stok-sisa*') || (request()->is('polibag/input*') && session('guserpk') == 35)) fw-bold @endif">
+                        Stok Sisa(Grade)
+                    </a> --}}
+                @endif
+                @if (in_array($guserpk, [34, 35, 38]))
+                    <!-- FG/STUFFING -->
+                    <a href="{{ route('finish-good-stuffing.index') }}"
+                        class="nav-link p-0 @if (request()->is('finish-good-stuffing*')) fw-bold @endif">
+                        FG/Stuffing
+                    </a>
+                @endif
+                @if (in_array($guserpk, [17, 34]))
+                    <!-- INSPECTION -->
+                    <a href="{{ route('inspection.index') }}" class="nav-link p-0 @if (request()->is('inspection*')) fw-bold @endif">
+                        Inspection
+                    </a>
+                @endif
+
+                @if (!empty(Session::get('login')))
+                    <div class="dropdown">
+                        <button class="btn dropdown-toggle-custom p-0" type="button" data-bs-toggle="dropdown">
+
+                            {{ Str::limit(ucwords(strtolower(Session::get('login'))), 15) }}
+
+                            <img id="polygon" src="{!! asset('public/css/images/Polygon.png') !!}">
+                        </button>
+
+                        <ul class="dropdown-menu dropdown-menu-end dropdown-menu-custom-global">
+
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="changePassword()">
+                                    Password
+                                </a>
+                            </li>
+
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+
+                            <li>
+                                <a class="dropdown-item" href="{{ route('logout') }}">
+                                    Logout
+                                </a>
+                            </li>
+
+                        </ul>
+                    </div>
+                @endif
+
             </div>
+
         </div>
     </div>
 </nav>

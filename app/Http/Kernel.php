@@ -64,5 +64,7 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'check' => \App\Http\Middleware\SessionVerified::class,
+        'guser' => \App\Http\Middleware\CheckGuser::class,
+        'db.pos' => \App\Http\Middleware\SetDatabaseConnection::class,
     ];
 }

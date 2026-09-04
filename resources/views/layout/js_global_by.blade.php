@@ -1,0 +1,10 @@
+<script type="text/javascript" src="{!! asset('public/media/jquery-easyui-1.11.3/jquery.min.js') !!}"></script>
+<script type="text/javascript" src="{!! asset('public/media/jquery-easyui-1.11.3/jquery.easyui.min.js') !!}"></script>
+<script type="text/javascript" src="{!! asset('public/bootstrap-5.3.2-dist/js/bootstrap.bundle.min.js') !!}"></script>
+<script type="text/javascript" src="{!! asset('public/media/jquery-easyui-1.9.15/jquery.edatagrid.js') !!}"></script>
+<script type="text/javascript" src="{!! asset('public/media/jquery-easyui-1.9.15/datagrid-groupview.js') !!}"></script>
+<script type="text/javascript" src="{!! asset('public/media/jquery-easyui-1.9.15/datagrid-detailview.js') !!}"></script>
+<script type="text/javascript" src="{!! asset('public/js/script.js') !!}"></script>
+<script type="text/javascript" src="{!! asset('public/chart.js') !!}"></script>
+<script type="text/javascript" src="{!! asset('public/chartjs-plugin-datalabels.js') !!}"></script>
+<script type="text/javascript" src="{!! asset('public/flatpickr/flatpickr.js') !!}"></script>

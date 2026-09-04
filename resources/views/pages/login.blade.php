@@ -133,7 +133,7 @@
                 <img src="{!! asset('public/css/images/morich.gif') !!}" class="img-fluid">
               </div>
               <div class="d-inline-flex justify-content-center pt-2">
-                <h2 class="title">Finance</h2>
+                <h2 class="title">Finishing & Packing</h2>
               </div>
               <div class="d-inline-flex justify-content-center pt-5">
                 <span class="title">Login into your account</span>

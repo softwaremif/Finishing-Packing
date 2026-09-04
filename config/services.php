@@ -30,4 +30,10 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'foto' => [
+        'gis_base'        => env('GIS_FOTO_BASE_URL', 'http://192.168.0.22/GIS/foto'),
+        'production_base' => env('PRODUCTION_FOTO_BASE_URL', 'http://192.168.0.22/production/public/foto'),
+        'sample_base'     => env('SAMPLE_FOTO_BASE_URL', 'http://192.168.0.22/SOM/public/foto'),
+    ],
+
 ];

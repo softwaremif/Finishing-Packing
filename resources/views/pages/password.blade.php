@@ -176,39 +176,12 @@
         }
       }
 
-      function onCancelUpdatePassword(){
-        let url = "{{ route('logout') }}";
-        window.location.href= url;
+      function onContinueUpdatePassword() {
+        window.location.href="/packinglist_v2/";
       }
 
-      function onContinueUpdatePassword() {
-        // var gusernm = "{{ Session::get('gusernm') }}";
-
-        // if (gusernm == "MD") {
-        //   window.location.href="style";
-        // } else if (gusernm == "Sample" || gusernm == "Pattern") {
-        //   window.location.href="sample";
-        // } else if (gusernm == "IE") {
-        //   window.location.href="ie";
-        // } else if (gusernm == "Cutting") {
-        //   window.location.href="cutting/todo/web";
-        // } else if(gusernm =="Sewing"){
-        //   window.location.href="sewing/todo/web";
-        // } else if (gusernm == "QA") {
-        //   window.location.href="qa/todo";
-        // } else if (gusernm == "Manager") {
-        //   window.location.href="man";
-        // } else if (gusernm == "Pola") {
-        //   window.location.href="pola";
-        // } else if (gusernm == "Embellishment") {
-        //   window.location.href="embellishment/todo/web";
-        // } else if (gusernm == "Washing") {
-        //   window.location.href="washing/todo/web";
-        // }
-        let url = "{{ route('index.poreq') }}";
-        window.location.href= url;
-
-        console.log("gusernm tidak terdaftar, cek blade pages.password");
+      function onCancelUpdatePassword(){
+        window.location.href="logout";
       }
     </script>
 

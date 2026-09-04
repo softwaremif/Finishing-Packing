@@ -22,5 +22,8 @@ Route::post('/delete-ttdt', [TandaTerimaController::class, 'DeleteTtdt'])->name(
 Route::get('get-lookup-detbeli-on-tt', [TandaTerimaController::class, 'GetDetBeliOnTT'])->name('get.lookup-detbeli-on-tt');
 Route::post('add-beli-to-tt', [TandaTerimaController::class, 'AddBeliToTt'])->name('add-beli-to-tt');
 //Get data PO on modal TT
+Route::get('get-lookup-po-on-tt', [TandaTerimaController::class, 'GetDetPoOnTT'])->name('get.lookup-detpo-on-tt');
 Route::post('add-po-to-tt', [TandaTerimaController::class, 'AddPoToTt'])->name('add-po-to-tt');
-
+//Get data Barang on modal TT
+Route::get('get-lookup-barang-on-tt', [TandaTerimaController::class, 'GetDetBarangOnTT'])->name('get.lookup-barang-on-tt');
+Route::post('add-barang-to-tt', [TandaTerimaController::class, 'AddBarangToTt'])->name('add-barang-to-tt');

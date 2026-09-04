@@ -1,0 +1,310 @@
+@extends('layout.main')
+@section('css_custom')
+    <style>
+        /* Lebar modal rincian: 90% viewport, maks 1200px */
+        #poPopup .modal-dialog.modal-xl {
+            max-width: min(1200px, 90vw);
+        }
+
+        .po-popup-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .po-popup-table th, .po-popup-table td {
+            border-bottom: 1px solid #f3f4f6;
+            padding: 10px 12px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .po-popup-table th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+        }
+        .po-popup-table td.cell-left { text-align: left; }
+        .po-popup-table .sub {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .cell-stack {
+        text-align: left;
+        line-height: 1.35;
+        }
+        .cell-stack .cs-main {
+            font-weight: 600;
+            font-size: 13px;
+            color: #0f172a;
+        }
+        .cell-stack .cs-sub {
+            font-size: 11px;
+            color: #64748b;
+        }
+        .cell-stack .cs-meta {
+            font-size: 10.5px;
+            color: #94a3b8;
+        }
+    </style>
+@endsection
+@section('content')
+    <div class="page-wrap">
+        <x-table-default
+            id="dgInspection"
+            title="Daftar Inspection"
+            search search-name="search" search-placeholder="Search..." buyer
+            buyer-name="buyer" buyer-url="{{ route('api.buyer-list') }}" buyer-value-field="buyer"
+            buyer-text-field="buyer_name" buyer-mode="remote" year year-name="year" exfactory exfactory-name="ex_factory"
+            sort-dropdown sort-asc-label="Awal Ex-Factory" sort-desc-label="Akhir Ex-Factory"
+        >
+
+            <table id="dgInspection" class="easyui-datagrid" style="width:100%;height:500px"
+                url="{{ route('inspection.list') }}" method="get" pagination="true" pageSize="50"
+                pageList="[25,50,100,200,500]" rownumbers="false" singleSelect="true"
+                checkOnSelect="true" selectOnCheck="true" fitColumns="false" border="false">
+            
+                {{-- FIX UTAMA: frozen HANYA sampai Ex Factory -- Cartons in
+                    inspection & Inspection Status DIKELUARKAN dari sini. --}}
+                <thead frozen="true">
+                    <tr>
+                        <th field="action" width="90" formatter="formatAction" align="center">Aksi</th>
+                        <th field="OP" width="230" formatter="formatOrderInfo">Order Information</th>
+                        <th field="POno" width="220" formatter="formatPOno">PO No</th>
+                        <th field="GAC" width="100" align="center" formatter="formatExFactory">Ex Factory</th>
+                    </tr>
+                </thead>
+            
+                {{-- FIX UTAMA: Cartons in inspection & Inspection Status PINDAH ke
+                    sini, diletakkan BERSEBELAHAN sebagai 2 kolom PERTAMA di thead
+                    scrollable ini (persis setelah Ex Factory secara visual). --}}
+                <thead>
+                    <tr>
+                        <th field="pcs_inspect" width="150" formatter="pcsctn" align="center">Cartons <br> in inspection</th>
+                        <th field="inspect_status" width="150" formatter="formatInspectStatus" align="center">Inspection <br> Status</th>
+                        <th field="material" width="150">Color</th>
+                        <th field="secsz" width="150">Secondary<br>Size</th>
+                        {{-- <th width="200" ></th> --}}
+                    </tr>
+                </thead>
+            </table>
+        </x-table-default>
+    </div>
+
+    {{-- Popup rincian PO+OP+poref (MODAL BOOTSTRAP): baris per
+         popk+part+secsz dengan angka Inspect + tanggal Pinjam/Kembali,
+         tombol edit tiap baris masuk ke halaman detail inspection
+         (sekarang GLOBAL: pono/op saja, bukan popk/part). --}}
+    <div class="modal fade" id="poPopup" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="poPopupTitle">Rincian PO</h5>
+                    <button type="button" class="close btn-close"
+                            data-dismiss="modal" data-bs-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div id="poPopupBody" style="min-height:160px;">
+                        <div style="text-align:center;color:#94a3b8;padding:40px 0;">Memuat...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+@endsection
+
+@section('js_custom')
+    <script>
+        var popupUrl = "{{ route('finGoods.popup') }}";
+        const isSuperUser = @json(session('guserpk') === 34);
+        const localNoImg = "{{ asset('public/css/images/no-img.png') }}";
+
+        function pcsctn(value, row, index) {
+            var field = this.field;
+            var ctnMap = { pcs_stuff: 'ctn_stuff', pcs_inspect: 'ctn_inspect', pcs_ship: 'ctn_ship' };
+            var ctnValue = row[ctnMap[field]] || 0;
+            var pcs = parseInt(value) || 0;
+            var ctn = parseInt(ctnValue) || 0;
+
+            return '<div style="font-size:14px;">' + ctn.toLocaleString() + ' ctn</div>' + '<div style="font-size:11px;color:#888;">' + pcs.toLocaleString() + ' pcs</div>';
+        }
+
+        // Kolom Pinjam / Kembali: tampilkan "-" jika kosong (belum pernah dipinjam/dikembalikan)
+        function formatDate(value, row, index) {
+            if (!value) return '-';
+            return value;
+        }
+
+        // function formatPinjamKembali(value, row, index) {
+        //     var pinjam  = row.pinjam  ? row.pinjam  : '-';
+        //     var kembali = row.kembali ? row.kembali : '-';
+
+        //     return '<div style="line-height:1.4;">' +
+        //         '<div><span style="color:#94a3b8;">P:</span> ' + pinjam + '</div>' +
+        //         '<div><span style="color:#94a3b8;">K:</span> ' + kembali + '</div>' +
+        //         '</div>';
+        // }
+
+        // Status inspect — fraksi HANYA dari carton yang PERNAH diinspect:
+        //   pembagi   = pinjam_count  (carton yang pernah dipinjam/inspect)
+        //   pembilang = returned_count = pinjam_count - borrowed_count
+        //               (yang pernah dipinjam dan kini sudah kembali)
+        // Contoh: total 50 ctn, diinspect 10, belum ada yang kembali -> 0 / 10.
+        // 'complete' -> semua yang dipinjam sudah kembali
+        // 'partial'  -> masih ada yang dipinjam
+        function formatInspectStatus(value, row, index) {
+            var inspectedCount = parseInt(row.pinjam_count) || 0;
+            var returnedCount  = parseInt(row.returned_count) || 0;
+
+            if (value === 'complete') {
+                return '<span class="badge" style="background:#dcfce7;color:#15803d;font-weight:600;padding:4px 10px;border-radius:10px;">' +
+                    'Complete</span>' +
+                    '<div style="font-size:11px;color:#888;">' + returnedCount + ' / ' + inspectedCount + ' carton</div>';
+            }
+
+            if (value === 'partial') {
+                return '<span class="badge" style="background:#fef3c7;color:#b45309;font-weight:600;padding:4px 10px;border-radius:10px;">' +
+                    'Belum Complete</span>' +
+                    '<div style="font-size:11px;color:#888;">' + returnedCount + ' / ' + inspectedCount + ' carton</div>';
+            }
+
+            return '-';
+        }
+
+        function formatShipdate(value, row, index) {
+            if (!value || value === '0000-00-00' || value === '0000-00-00 00:00:00') return '-';
+            return value;
+        }
+
+        // 2 tombol aksi per baris (konsisten dengan Finished Goods):
+        //   mata (fa-eye)  -> buka modal rincian per popk+part+secsz
+        //   edit (fa-edit) -> langsung ke halaman detail GLOBAL (pono/op)
+        function formatAction(value, row, index) {
+            return `
+                <a href="javascript:void(0)"
+                onclick="openInspectionInput('${row.POno}', '${row.OP}', '${row.poref ?? ''}', ${row.mif ?? 'null'})"
+                class="action-btn"
+                style="margin-left:6px;"
+                title="Buka Input Inspect">
+                    <i class="fas fa-edit"></i>
+                </a>
+            `;
+        }
+
+        function openInspectionInput(pono, op, poref, mif) {
+            let url = "{{ route('inspection.input.global') }}"
+                + "?po=" + encodeURIComponent(pono ?? '')
+                + "&op=" + encodeURIComponent(op)
+                + "&poref=" + encodeURIComponent(poref ?? '');
+            if (mif) url += "&mif=" + mif;
+            window.location.href = url;
+        }
+
+        /* ============ Modal Bootstrap (kompatibel BS4 & BS5) ============ */
+
+        var popupPono  = null;
+        var popupOp    = null;
+        var popupPoref = null;
+
+        function bsModal(el, action) {
+            if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+                $(el).modal(action);
+            } else if (window.bootstrap && window.bootstrap.Modal) {
+                var inst = window.bootstrap.Modal.getOrCreateInstance(el);
+                action === 'show' ? inst.show() : inst.hide();
+            }
+        }
+
+        function esc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function pcsCtnCell(pcs, ctn) {
+            pcs = parseInt(pcs) || 0;
+            ctn = parseInt(ctn) || 0;
+            return '<div>' + pcs.toLocaleString() + ' pcs</div>'
+                + '<div class="sub">' + ctn.toLocaleString() + ' ctn</div>';
+        }
+
+        function dateCell(v) {
+            if (!v || v === '0000-00-00' || v === '0000-00-00 00:00:00') return '-';
+            return esc(v);
+        }
+
+        // GLOBAL: navigasi ke halaman detail lewat pono/op saja (tidak
+        // ada lagi popk/part/gab di URL).
+        function openInspection(pono, op) {
+            const url = `{{ route('inspection.detail') }}?pono=${encodeURIComponent(pono)}&op=${encodeURIComponent(op)}`;
+            window.location.href = url;
+        }
+
+
+                // Ex Factory -- validasi KETAT, SAMA pola dengan index Packing.
+        function formatExFactory(value) {
+            if (value === null || value === undefined || value === '') return '';
+
+            const datePart = String(value).split(' ')[0].split('T')[0];
+            const parts = datePart.split('-');
+            if (parts.length !== 3) return '';
+
+            const year     = parseInt(parts[0], 10);
+            const monthIdx = parseInt(parts[1], 10) - 1;
+            const dayNum   = parseInt(parts[2], 10);
+
+            if (
+                !Number.isFinite(year) || year <= 0 ||
+                !Number.isFinite(monthIdx) || monthIdx < 0 || monthIdx > 11 ||
+                !Number.isFinite(dayNum) || dayNum <= 0 || dayNum > 31
+            ) {
+                return '';
+            }
+
+            const bulanSingkat = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+            return `${dayNum} ${bulanSingkat[monthIdx]} ${year}`;
+        }
+
+        // PO No + Place digabung 1 cell. Badge mif ikut di sini (bukan
+        // di Order Information) -- SAMA seperti versi lama formatPOno()
+        // halaman ini yang menampilkan mif.
+        function formatPOno(value, row) {
+            const mifBadge = isSuperUser
+                ? `<span class="badge bg-secondary-subtle text-secondary-emphasis mif-badge">mif ${row.mif}</span>`
+                : '';
+            return `
+                <div class="cell-stack">
+                    <div class="cs-main">${value ?? '-'}${mifBadge}</div>
+                    <div class="cs-sub">${row.customer ?? '-'}</div>
+                </div>
+            `;
+        }
+
+        // Order Information -- foto, OP, Buyer, Season, Style, Qty
+        // digabung 1 cell. SAMA pola dengan index Packing.
+        function formatOrderInfo(value, row) {
+            const imgUrl = row.order_image || localNoImg;
+            const imgHtml = `
+                <img src="${imgUrl}" width="60" height="60"
+                    style="object-fit:cover;border-radius:6px;flex-shrink:0;"
+                    onerror="this.onerror=null;this.src='${localNoImg}';">
+            `;
+
+            return `
+                <div class="d-flex align-items-start gap-2">
+                    ${imgHtml}
+                    <div class="cell-stack">
+                        <div class="cs-main">${row.OP ?? '-'}</div>
+                        <div class="cs-sub">${row.buyer ?? '-'} &middot; ${row.season ?? '-'}</div>
+                        <div class="cs-sub">${row.style ?? '-'}</div>
+                        <div class="cs-meta">Qty: <strong style="color:#334155;">${Number(row.qty || 0).toLocaleString()}</strong></div>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+@endsection
