@@ -197,7 +197,7 @@
             <div class="card-body p-0">
                 <x-table-bootstrap
                     id="dgTransfer"
-                    url="{{ route('tf_finishing.detail.list', $popk) }}"
+                    url="{{ route('tf_finishing.detail.list', $popk) }}?mif={{ $mif }}"
                     :page-size="50"
                     sort-dropdown
                     sort-name="sort"
@@ -252,8 +252,15 @@
 @section('js_custom')
     <script>
         const currentPopk = {{ $popk }};
+        const currentMif  = {{ $dt->mif ?? 'null' }};
         
         window.tfSizes = @json($sizes->map(fn($s) => ['mopdtpk' => $s->mopdtpk, 'ukuran' => $s->ukuran])->values());
+ 
+        function reloadBreakdownSummary() {
+            $.get("{{ route('tf_finishing.breakdown-summary', $popk) }}", { mif: currentMif }, function(html) {
+                $('#breakdownSummaryWrapper').html(html);
+            });
+        }
 
         function formatLine(value) {
             if (!value) return '<span class="dg-empty-cell">-</span>';
@@ -331,12 +338,6 @@
 
         function reloadTransferGrid(cr) {
             window.BsTable.reload('dgTransfer');
-        }
-
-        function reloadBreakdownSummary() {
-            $.get("{{ route('tf_finishing.breakdown-summary', $popk) }}", function(html) {
-                $('#breakdownSummaryWrapper').html(html);
-            });
         }
 
         let currentDateMode = null; // 'add' | 'edit'

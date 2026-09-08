@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\TransferFinishing;
 
 use App\Http\Controllers\Controller;
+use App\Services\OrderImageService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,17 +25,45 @@ class TransferFinishingController extends Controller
         return ((int) $mif) === 1 ? 'mysql_andon' : 'mysql';
     }
 
-    // Daftar Data OP index.blade.php -- endpoint utama datagrid. Alur:
-    // fetch mentah per-mif -> hitung R+Q & Transfer to Finishing -> ambil
-    // foto order -> agregasi per PO+OP -> filter (safety-net + R+Q>0) ->
-    // sort berdasarkan Ex Factory -> paginasi.
+    private function resolveCanonicalPopks(array $mif1Popks): array
+    {
+        if (empty($mif1Popks)) {
+            return [];
+        }
+    
+        $bdownpkByPopk = DB::connection('mysql_andon')->table('po')
+            ->whereIn('popk', $mif1Popks)
+            ->pluck('bdownpk', 'popk');
+    
+        $bdownpks = $bdownpkByPopk->filter()->unique()->values()->all();
+        if (empty($bdownpks)) {
+            return [];
+        }
+    
+        $canonicalByBdownpk = DB::connection('mysql')->table('po')
+            ->whereIn('bdownpk', $bdownpks)
+            ->pluck('popk', 'bdownpk');
+    
+        $result = [];
+        foreach ($bdownpkByPopk as $mif1Popk => $bdownpk) {
+            if ($bdownpk !== null && isset($canonicalByBdownpk[$bdownpk])) {
+                $result[$mif1Popk] = $canonicalByBdownpk[$bdownpk];
+            }
+        }
+    
+        return $result;
+    }
+
+        // Daftar Data OP index.blade.php -- endpoint utama datagrid. Alur:
+        // fetch mentah per-mif -> hitung R+Q & Transfer to Finishing -> ambil
+        // foto order -> agregasi per PO+OP -> filter (safety-net + R+Q>0) ->
+        // sort berdasarkan Ex Factory -> paginasi.
     public function getList(Request $request)
     {
         $page   = (int) ($request->page ?? 1);
         $rows   = (int) ($request->rows ?? 50);
         $offset = ($page - 1) * $rows;
         $sortDir = $request->input('sort', 'desc') === 'asc' ? 'asc' : 'desc';
-
         $isSuper = session('guserpk') == 34;
 
         if ($isSuper) {
@@ -45,22 +74,24 @@ class TransferFinishingController extends Controller
             $this->addRQToRows($rowsMysql);
             $combined = $rowsAndon->concat($rowsMysql);
         } else {
-            // User biasa HANYA melihat mif sesuai session('pos') miliknya.
-            $mif        = session('pos') == 1 ? 1 : 2;
-            $connection = $this->resolveConnection($mif);
-            $combined   = $this->fetchAll($connection, $mif, $request);
-            $this->addRQToRows($combined);
+            // GANTI TOTAL -- FIX UTAMA: user biasa TETAP query KEDUA koneksi
+            // (mysql_andon DAN mysql), TAPI filter 'mif' sesuai session('pos')
+            // miliknya di KEDUANYA -- karena baris dengan mif=1 BISA ADA di
+            // KEDUA host (data tidak murni terpisah per host, sudah
+            // dikonfirmasi ada di database.11 MAUPUN database.19), bukan cuma
+            // di satu host tertentu seperti asumsi lama.
+            $mif = session('pos') == 1 ? 1 : 2;
+
+            $rowsAndon = $this->fetchAll('mysql_andon', $mif, $request);
+            $rowsMysql = $this->fetchAll('mysql', $mif, $request);
+            $this->addRQToRows($rowsAndon);
+            $this->addRQToRows($rowsMysql);
+            $combined = $rowsAndon->concat($rowsMysql);
         }
 
         $this->addTransferFinishingToRows($combined);
-
-        // Ambil URL gambar order dari mysql_gis (+ fallback mysql_sample).
         $this->addOrderImageToRows($combined);
 
-        // Agregasi per PO+OP, lalu validasi ULANG semua filter aktif
-        // (safety-net -- lihat applyPostAggregationFilters()), lalu
-        // sembunyikan PO+OP yang R+Q-nya 0/null (belum ada aktivitas sama
-        // sekali, tidak relevan ditampilkan di menu ini).
         $aggregated = $this->applyPostAggregationFilters(
             $this->aggregateByPoOp($combined),
             $request
@@ -68,8 +99,6 @@ class TransferFinishingController extends Controller
             ->filter(fn($r) => (float) ($r->transfer ?? 0) > 0)
             ->values();
 
-        // Normalisasi GAC (Ex Factory) jadi timestamp SEBELUM sort -- lihat
-        // normalizeGacForSort() untuk alasannya.
         foreach ($aggregated as $r) {
             $r->gac_sort_ts = $this->normalizeGacForSort($r->GAC);
         }
@@ -77,8 +106,8 @@ class TransferFinishingController extends Controller
         $aggregated = $aggregated
             ->when(
                 $sortDir === 'asc',
-                fn($c) => $c->sortBy('gac_sort_ts'),       // Earliest Ex Factory dulu
-                fn($c) => $c->sortByDesc('gac_sort_ts')    // Latest Ex Factory dulu
+                fn($c) => $c->sortBy('gac_sort_ts'),
+                fn($c) => $c->sortByDesc('gac_sort_ts')
             )
             ->values();
 
@@ -100,94 +129,7 @@ class TransferFinishingController extends Controller
     // asset LOKAL aplikasi ini, bukan server remote.
     private function addOrderImageToRows($rows): void
     {
-        if ($rows->isEmpty()) {
-            return;
-        }
-
-        // Base URL tiap server foto -- taruh di config/env supaya gampang
-        // diubah per environment tanpa edit kode.
-        $gisFotoBase        = rtrim(config('services.foto.gis_base'), '/');
-        $productionFotoBase = rtrim(config('services.foto.production_base'), '/');
-        $sampleFotoBase     = rtrim(config('services.foto.sample_base'), '/');
-        $noImageUrl = asset('public/css/images/no-img.png');
-
-        // Default semua row -> no image dulu.
-        foreach ($rows as $r) {
-            $r->order_image = $noImageUrl;
-        }
-
-        $ordpks = $rows->pluck('ordpk')->filter()->unique()->values()->all();
-        if (empty($ordpks)) {
-            return;
-        }
-
-        // ---- Ambil data dasar dari mysql_gis.ord ----
-        $ordRows = DB::connection('mysql_gis')->table('ord')
-            ->whereIn('ordpk', $ordpks)
-            ->get(['ordpk', 'srno', 'foto', 'foto2', 'stsfoto']);
-
-        $ordByOrdpk = $ordRows->keyBy('ordpk');
-
-        // ---- Fallback sample: butuh srno -> srpk -> status.foto (terbaru) ----
-        $srnos = $ordRows->pluck('srno')->filter()->unique()->values()->all();
-
-        $srpkBySrno = [];
-        $fotoBySrpk = [];
-
-        if (!empty($srnos)) {
-            $reqRows = DB::connection('mysql_sample')->table('request')
-                ->whereIn('srno', $srnos)
-                ->get(['srno', 'srpk']);
-
-            foreach ($reqRows as $r) {
-                $srpkBySrno[$r->srno] = $r->srpk;
-            }
-
-            $srpks = array_values(array_unique(array_values($srpkBySrno)));
-
-            if (!empty($srpks)) {
-                $statusRows = DB::connection('mysql_sample')->table('status')
-                    ->whereIn('srpk', $srpks)
-                    ->orderByDesc('statuspk')
-                    ->get(['srpk', 'foto', 'statuspk']);
-
-                foreach ($statusRows as $r) {
-                    // Ambil yang PALING BARU saja (statuspk desc, isi pertama menang).
-                    if (!isset($fotoBySrpk[$r->srpk])) {
-                        $fotoBySrpk[$r->srpk] = $r->foto;
-                    }
-                }
-            }
-        }
-
-        // ---- Terapkan aturan sumber gambar per row ----
-        foreach ($rows as $r) {
-            $ord = $ordByOrdpk->get($r->ordpk);
-            if (!$ord) {
-                continue; // tetap pakai default no-image
-            }
-
-            $stsfoto = $ord->stsfoto ?? null;
-            $foto1   = $ord->foto ?? null;
-            $srno    = $ord->srno ?? null;
-
-            $srpk  = $srno ? ($srpkBySrno[$srno] ?? null) : null;
-            $foto2 = $srpk ? ($fotoBySrpk[$srpk] ?? null) : ($ord->foto2 ?? null);
-
-            if ($stsfoto == 1) {
-                $r->order_image = !empty($foto1)
-                    ? "{$gisFotoBase}/{$foto1}"
-                    : $noImageUrl;
-            } elseif ($stsfoto == 2) {
-                $r->order_image = !empty($foto1)
-                    ? "{$productionFotoBase}/{$foto1}"
-                    : $noImageUrl;
-            } else {
-                $r->order_image = !empty($foto2)
-                    ? "{$sampleFotoBase}/{$foto2}"
-                    : $noImageUrl;
-            }
-        }
+        app(OrderImageService::class)->attachToRows($rows, 'ordpk', 'order_image');
     }
 
     // Hitung R+Q (sumber tunggal, dari output jnspk 2,6 -- mysql_polibag) per popk.
@@ -196,57 +138,59 @@ class TransferFinishingController extends Controller
         if ($rows->isEmpty()) {
             return;
         }
-    
+
         $normalize = fn($v) => trim(mb_strtoupper((string) $v));
-    
-        // Kelompokkan SEMUA popk yang ada di $rows per grup ORDER
-        // (ordpk+OP+POno) -- $rows di sini biasanya SUDAH mencakup semua
-        // warna dalam order yang sama (fetchAll() tidak memfilter material).
+
+        // GANTI -- FIX UTAMA: kelompokkan popk KANONIK (bukan popk mentah)
+        // per orderKey -- popk kanonik inilah yang cocok dengan output.popk.
         $popksByOrderKey = $rows
             ->groupBy(fn($r) => implode('|', [$r->ordpk, $r->OP, $r->POno]))
-            ->map(fn($group) => $group->pluck('popk')->unique()->values()->all());
-    
+            ->map(function ($group) {
+                return $group
+                    ->map(fn($r) => $r->canonical_popk ?? $r->popk)
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+            });
+
         $allPopks = $popksByOrderKey->flatten()->unique()->values();
-    
+
         if ($allPopks->isEmpty()) {
             foreach ($rows as $r) {
                 $r->transfer = 0;
             }
             return;
         }
-    
-        // Ambil SEMUA baris output R+Q (jnspk 2,6) untuk SELURUH popk dalam
-        // order-order ini, LENGKAP dengan kolom material asli -- supaya baris
-        // yang "kesasar" di popk warna lain tetap ikut dihitung ke warna yang
-        // BENAR (output.material), bukan ke warna popk tempat ia tercatat.
+
         $outputRows = DB::connection('mysql_polibag')->table('output')
             ->whereIn('popk', $allPopks)
             ->whereIn('jnspk', [2, 6])
             ->where('linepk', '>', 0)
             ->where('statuspk', '>', 0)
             ->get(['popk', 'material', 'jmlpcs']);
-    
-        // popk -> orderKey, supaya tiap baris output tahu ia milik order yang
-        // mana (walau popk-nya bisa jadi popk warna lain dalam order itu).
+
+        // orderKeyByPopk SEKARANG di-key oleh popk KANONIK (SAMA persis
+        // dengan yang dipakai query di atas).
         $orderKeyByPopk = [];
         foreach ($popksByOrderKey as $orderKey => $popksInGroup) {
             foreach ($popksInGroup as $p) {
                 $orderKeyByPopk[$p] = $orderKey;
             }
         }
-    
-        // Total R+Q per kombinasi (orderKey + material asli output) -- INI
-        // kunci pengelompokan yang BENAR.
+
         $rqByOrderMaterial = [];
         foreach ($outputRows as $o) {
             $orderKey = $orderKeyByPopk[$o->popk] ?? null;
             if ($orderKey === null) {
-                continue; // popk di luar scope $rows, aman diabaikan
+                continue;
             }
             $key = $orderKey . '||' . $normalize($o->material);
             $rqByOrderMaterial[$key] = ($rqByOrderMaterial[$key] ?? 0) + (float) $o->jmlpcs;
         }
-    
+
+        // Assign balik TETAP pakai orderKey dari ordpk/OP/POno -- ini SUDAH
+        // konsisten lintas database, TIDAK BERUBAH.
         foreach ($rows as $r) {
             $orderKey = implode('|', [$r->ordpk, $r->OP, $r->POno]);
             $key = $orderKey . '||' . $normalize($r->material);
@@ -261,38 +205,43 @@ class TransferFinishingController extends Controller
         if ($rows->isEmpty()) {
             return;
         }
-
         foreach ($rows as $r) {
             $r->transfer_finishing = 0;
         }
 
-        $popks = $rows->pluck('popk')->unique()->values()->all();
-        if (empty($popks)) {
-            return;
+        // ---- MANUAL: SUM(tfpb.tot) per moppk -- GANTI: pakai moppk
+        // (SAMA di kedua database), BUKAN join ke mop.popk. ----
+        $moppks = $rows->pluck('moppk')->filter()->unique()->values()->all();
+        $manualByMoppk = [];
+        if (!empty($moppks)) {
+            $manualByMoppk = DB::connection('mysql_finance_mif')
+                ->table('tfpb')
+                ->whereIn('moppk', $moppks)
+                ->groupBy('moppk')
+                ->selectRaw('moppk, SUM(tot) as total_manual')
+                ->pluck('total_manual', 'moppk')
+                ->all();
         }
 
-        // ---- MANUAL: SUM(tfpb.tot) per popk -- join LANGSUNG mop.popk,
-        //      TANPA filter mop.noop (tidak reliable, sudah dihapus). ----
-        $manualByPopk = DB::connection('mysql_finance_mif')
-            ->table('tfpb')
-            ->leftJoin('mop', 'mop.moppk', '=', 'tfpb.moppk')
-            ->whereIn('mop.popk', $popks)
-            ->groupBy('mop.popk')
-            ->selectRaw('mop.popk, SUM(tfpb.tot) as total_manual')
-            ->pluck('total_manual', 'popk');
-
-        // ---- BARCODE: SUM(output.jmlpcs) jnspk=10 per popk. ----
-        $barcodeByPopk = DB::connection('mysql_polibag')
-            ->table('output')
-            ->whereIn('popk', $popks)
-            ->where('jnspk', 10)
-            ->groupBy('popk')
-            ->selectRaw('popk, SUM(jmlpcs) as total_barcode')
-            ->pluck('total_barcode', 'popk');
+        // ---- BARCODE: SUM(output.jmlpcs) jnspk=10 -- GANTI: pakai
+        // canonical_popk (output.popk merujuk ke popk database 19). ----
+        $canonicalPopks = $rows->map(fn($r) => $r->canonical_popk ?? $r->popk)->filter()->unique()->values()->all();
+        $barcodeByCanonicalPopk = [];
+        if (!empty($canonicalPopks)) {
+            $barcodeByCanonicalPopk = DB::connection('mysql_polibag')
+                ->table('output')
+                ->whereIn('popk', $canonicalPopks)
+                ->where('jnspk', 10)
+                ->groupBy('popk')
+                ->selectRaw('popk, SUM(jmlpcs) as total_barcode')
+                ->pluck('total_barcode', 'popk')
+                ->all();
+        }
 
         foreach ($rows as $r) {
-            $manual  = (int) ($manualByPopk[$r->popk] ?? 0);
-            $barcode = (int) ($barcodeByPopk[$r->popk] ?? 0);
+            $manual  = (int) ($manualByMoppk[$r->moppk] ?? 0);
+            $canonicalPopk = $r->canonical_popk ?? $r->popk;
+            $barcode = (int) ($barcodeByCanonicalPopk[$canonicalPopk] ?? 0);
             $r->transfer_finishing = $manual + $barcode;
         }
     }
@@ -305,16 +254,23 @@ class TransferFinishingController extends Controller
             return $rows;
         }
 
-        $popks = $rows->pluck('popk')->unique()->values()->all();
+        // GANTI TOTAL -- FIX UTAMA: pakai 'moppk' (SAMA PERSIS di
+        // mysql_andon & mysql untuk baris logis yang sama), BUKAN popk
+        // (yang untuk mif=1 tidak pernah cocok ke mop.popk).
+        $moppks = $rows->pluck('moppk')->filter()->unique()->values()->all();
 
-        $popksWithMop = DB::connection('mysql_finance_mif')
+        if (empty($moppks)) {
+            return $rows->filter(fn() => false)->values();
+        }
+
+        $moppksWithMop = DB::connection('mysql_finance_mif')
             ->table('mop')
-            ->whereIn('popk', $popks)
-            ->pluck('popk')
+            ->whereIn('moppk', $moppks)
+            ->pluck('moppk')
             ->unique()
-            ->flip(); // lookup set O(1) -- isset() jauh lebih cepat dari contains()
+            ->flip();
 
-        return $rows->filter(fn($r) => isset($popksWithMop[$r->popk]))->values();
+        return $rows->filter(fn($r) => isset($moppksWithMop[$r->moppk]))->values();
     }
 
     // Get All data list -- query mentah per popk dari tabel po, dengan
@@ -356,7 +312,6 @@ class TransferFinishingController extends Controller
                 'po.GAC',
                 'po.silhouette'
             );
-
         if ($request->filled('search')) {
             $search = trim($request->search);
             $query->where(function ($q) use ($search) {
@@ -371,18 +326,14 @@ class TransferFinishingController extends Controller
                     ->orWhere('po.style', 'like', "%{$search}%");
             });
         }
-
         if ($request->filled('buyer')) {
             $query->where('po.buyer', $request->buyer);
         }
-
         if ($request->filled('year')) {
             $year = (int) $request->year;
             $shortYear = $year - 2000;
             $query->whereRaw("LEFT(TRIM(po.OP),2) = ?", [sprintf('%02d', $shortYear)]);
         }
-
-        // Filter Ex Factory (po.GAC) berdasarkan preset rentang tanggal.
         if ($request->filled('ex_factory')) {
             $range = $this->resolveExFactoryRange($request->ex_factory);
             if ($range) {
@@ -392,9 +343,24 @@ class TransferFinishingController extends Controller
                 ]);
             }
         }
-
         $sortDir = $request->input('sort', 'desc') === 'asc' ? 'asc' : 'desc';
         $rows = $query->orderBy('po.popk', $sortDir)->get();
+
+        // BARU -- FIX UTAMA: tempel canonical_popk. Untuk mif=1 (mysql_andon),
+        // terjemahkan popk-nya ke versi 'mysql' (database 19) lewat bdownpk --
+        // popk kanonik inilah yang dipakai output/tfpb (via popk mentah).
+        // Untuk mif=2 (mysql), popk-nya SENDIRI SUDAH kanonik.
+        if ($connection === 'mysql_andon') {
+            $popks = $rows->pluck('popk')->unique()->values()->all();
+            $canonicalMap = $this->resolveCanonicalPopks($popks);
+            foreach ($rows as $r) {
+                $r->canonical_popk = $canonicalMap[$r->popk] ?? null;
+            }
+        } else {
+            foreach ($rows as $r) {
+                $r->canonical_popk = $r->popk;
+            }
+        }
 
         return $this->filterRowsWithMop($rows);
     }
@@ -590,14 +556,11 @@ class TransferFinishingController extends Controller
     // ===============  HALAMAN INPUT TRANSFER TO FINISHING ===========
     public function inputTransfer($popk, Request $request)
     {
-        $fin = DB::connection('mysql_finance_mif');
-        $mop = $fin->table('mop')->where('popk', $popk)->first();
-        abort_unless($mop, 404, "Data mop untuk popk {$popk} tidak ditemukan.");
+        $mif = $request->filled('mif') ? (int) $request->query('mif') : null;
 
-        $mifGuess   = str_contains((string) $mop->noop, 'MIF1') ? 1 : 2;
-        $connection = $this->resolveConnection($mifGuess);
-        $dt = DB::connection($connection)->table('po')->where('popk', $popk)->first();
-        abort_unless($dt, 404, "Data po untuk popk {$popk} tidak ditemukan.");
+        // GANTI TOTAL -- FIX UTAMA: pakai resolvePoAndMop() -- TIDAK LAGI
+        // cari 'mop' lewat 'popk' langsung sebagai langkah pertama.
+        [$dt, $mop, $connection] = $this->resolvePoAndMop($popk, $mif);
 
         $breakdown = $this->getBreakdownDataFinishing($mop->moppk, (int) $popk, $connection, (string) $dt->material);
         $siblingPopks = $this->getSiblingPopksByOrder($connection, (int) $popk);
@@ -613,10 +576,6 @@ class TransferFinishingController extends Controller
             ->distinct()
             ->pluck('linepk');
 
-        // $lines -- line R+Q yang stsbar-nya null/0 SAJA -- dipakai KHUSUS
-        // dropdown di modal Add/Edit (input manual, jadi line yang sudah
-        // pakai barcoding tidak boleh dipilih di sini). TETAP SAMA, tidak
-        // diubah.
         $lines = $usedLinepks->isNotEmpty()
             ? DB::connection('mysql_polibag')->table('line')
                 ->whereIn('linepk', $usedLinepks)
@@ -627,16 +586,8 @@ class TransferFinishingController extends Controller
                 ->get()
             : collect();
 
-        // ============================================================
-        // GANTI TOTAL: $filterLines -- SEBELUMNYA diambil dari output
-        // jnspk [2,6] (kriteria BEDA dari yang benar-benar ditampilkan di
-        // tabel Detail Data Transfer to Finishing), sekarang diambil
-        // LANGSUNG dari 2 SUMBER DATA ASLI yang dipakai detailList():
-        //   1) tfpb (baris manual)          -> linepk milik moppk ini
-        //   2) output dengan jnspk = 10     -> baris barcode (BUKAN [2,6])
-        // supaya dropdown filter PERSIS mencerminkan line yang benar-benar
-        // ada di data tabel, dari kedua sumber sekaligus.
-        // ============================================================
+        $fin = DB::connection('mysql_finance_mif');
+
         $linepksFromManual = $fin->table('tfpb')
             ->where('moppk', $mop->moppk)
             ->whereNotNull('linepk')
@@ -644,9 +595,11 @@ class TransferFinishingController extends Controller
             ->distinct()
             ->pluck('linepk');
 
+        // GANTI -- FIX UTAMA: query output DISINI juga pakai popk KANONIK
+        // ($siblingPopks, BUKAN join po.moppk=output.popk yang sebelumnya
+        // salah asumsi output.popk sama dengan po mentah).
         $linepksFromBarcode = DB::connection('mysql_polibag')->table('output')
-            ->leftJoin('po', 'po.popk', '=', 'output.popk')
-            ->where('po.moppk', $mop->moppk)
+            ->whereIn('output.popk', $siblingPopks)
             ->where('output.linepk', '>', 0)
             ->where('output.jnspk', 10)
             ->distinct()
@@ -665,33 +618,20 @@ class TransferFinishingController extends Controller
             : collect();
 
         return view('menu.transfer-finishing.input', array_merge(
-            ['mop' => $mop, 'dt' => $dt, 'popk' => $popk, 'lines' => $lines, 'filterLines' => $filterLines],
+            ['mop' => $mop, 'dt' => $dt, 'popk' => $popk, 'mif' => $mif, 'lines' => $lines, 'filterLines' => $filterLines],
             $breakdown
         ));
     }
 
-
-    // GANTI breakdownSummary() -- SEBELUMNYA:
-    //
-    //     $breakdown = $this->getBreakdownDataFinishing($mop->moppk);
-    //
-    // JADI (resolve mif/connection dulu, baru tambah $popk dan $connection):
-
     public function breakdownSummary($popk, Request $request)
     {
-        $fin = DB::connection('mysql_finance_mif');
-        $mop = $fin->table('mop')->where('popk', $popk)->first();
-        abort_unless($mop, 404);
-    
-        $mifGuess   = str_contains((string) $mop->noop, 'MIF1') ? 1 : 2;
-        $connection = $this->resolveConnection($mifGuess);
-    
-        // FIX: butuh $dt->material untuk filter output.material yang benar.
-        $dt = DB::connection($connection)->table('po')->where('popk', $popk)->first(['material']);
-        abort_unless($dt, 404);
-    
+        $mif = $request->filled('mif') ? (int) $request->query('mif') : null;
+
+        // GANTI TOTAL -- FIX UTAMA: pakai resolvePoAndMop().
+        [$dt, $mop, $connection] = $this->resolvePoAndMop($popk, $mif);
+
         $breakdown = $this->getBreakdownDataFinishing($mop->moppk, (int) $popk, $connection, (string) $dt->material);
-    
+
         return view('menu.transfer-finishing.partials.breakdown_summary', array_merge(
             ['mop' => $mop],
             $breakdown
@@ -874,47 +814,38 @@ class TransferFinishingController extends Controller
         $rows   = (int) ($request->rows ?? 50);
         $offset = ($page - 1) * $rows;
         $filterLinepk = $request->cr;
-
-        // BARU: arah sort tanggal dari dropdown Terbaru/Terlama.
-        // 'desc' (default) = Terbaru dulu, 'asc' = Terlama dulu.
         $sortDir = $request->input('sort', 'desc') === 'asc' ? 'asc' : 'desc';
+
+        $mif = $request->filled('mif') ? (int) $request->query('mif') : null;
+
+        // GANTI TOTAL -- FIX UTAMA: pakai resolvePoAndMop() -- TIDAK LAGI
+        // cari 'mop' lewat 'popk' langsung.
+        [$dt, $mop, $connection] = $this->resolvePoAndMop($popk, $mif);
 
         $fin = DB::connection('mysql_finance_mif');
 
-        $mop = $fin->table('mop')->where('popk', $popk)->first();
-        abort_unless($mop, 404);
-
         [$sizes, $canonicalMap,] = $this->getDedupedSizes($mop->moppk);
-
         $normalize = fn($v) => mb_strtoupper(trim((string) $v));
         $ukuranToMopdtpk = $sizes->pluck('mopdtpk', 'ukuran')
             ->mapWithKeys(fn($mopdtpk, $ukuran) => [$normalize($ukuran) => $mopdtpk])
             ->all();
 
-        // ---- Baris MANUAL (tfpb) -- bisa diedit/dihapus ----
         $tfpbRows = $fin->table('tfpb')
             ->where('moppk', $mop->moppk)
             ->when($filterLinepk, fn($q) => $q->where('linepk', $filterLinepk))
             ->get();
-
         $tfpbpks = $tfpbRows->pluck('tfpbpk')->values();
-
         $tfpbdtRows = $tfpbpks->isNotEmpty()
             ? $fin->table('tfpbdt')->whereIn('tfpbpk', $tfpbpks)->orderBy('mopdtpk')->get()
             : collect();
-
         $tfpbdtByTfpbpk = $tfpbdtRows->groupBy('tfpbpk');
-
         $manualRows = $tfpbRows->map(function ($row) use ($tfpbdtByTfpbpk, $canonicalMap, $ukuranToMopdtpk, $normalize) {
             $sizesForRow = $tfpbdtByTfpbpk->get($row->tfpbpk, collect());
-
             $flat = [];
             foreach ($sizesForRow as $d) {
                 $ukuranKey = $normalize($d->ukuran);
                 $targetMopdtpk = $ukuranToMopdtpk[$ukuranKey] ?? ($canonicalMap[$d->mopdtpk] ?? $d->mopdtpk);
-
                 $key = "qty_{$targetMopdtpk}";
-
                 if ($d->qty === null) {
                     if (!array_key_exists($key, $flat)) {
                         $flat[$key] = null;
@@ -934,8 +865,10 @@ class TransferFinishingController extends Controller
             ], $flat);
         });
 
-        // ---- Baris BARCODE (output jnspk=10) -- read-only, diagregasi per
-        //      tanggal, size di-map via prefix match (findMopdtpkBySizeText). ----
+        // GANTI -- FIX UTAMA: barcode di-filter pakai 'po.moppk' via
+        // 'mysql_polibag' -- SAMA seperti sebelumnya (join po di dalam
+        // koneksi mysql_polibag sendiri, host 19, jadi moppk-nya SUDAH
+        // otomatis benar/kanonik -- TIDAK PERLU translasi tambahan di sini).
         $barcodeRowsRaw = DB::connection('mysql_polibag')->table('output')
             ->leftJoin('po', 'po.popk', '=', 'output.popk')
             ->leftJoin('line', 'line.linepk', '=', 'output.linepk')
@@ -945,16 +878,13 @@ class TransferFinishingController extends Controller
             ->when($filterLinepk, fn($q) => $q->where('output.linepk', $filterLinepk))
             ->select('output.*', 'line.linenm')
             ->get();
-
         $barcodeByDate = $barcodeRowsRaw->groupBy(function ($row) {
             return \Illuminate\Support\Carbon::parse($row->hari ?? $row->tanggal)->format('Y-m-d');
         });
-
         $barcodeRows = collect();
         foreach ($barcodeByDate as $dateKey => $rowsOnDate) {
             $flat = [];
             $totalPcs = 0;
-
             foreach ($rowsOnDate as $r) {
                 $mopdtpk = $this->findMopdtpkBySizeText((string) $r->size, $sizes);
                 if ($mopdtpk !== null) {
@@ -962,7 +892,6 @@ class TransferFinishingController extends Controller
                 }
                 $totalPcs += (float) ($r->jmlpcs ?? 0);
             }
-
             $barcodeRows->push((object) array_merge([
                 'tfpbpk'  => null,
                 'tanggal' => $dateKey,
@@ -974,25 +903,16 @@ class TransferFinishingController extends Controller
             ], $flat));
         }
 
-        // ============================================================
-        // GANTI: gabungkan SEMUA baris (manual + barcode) dulu jadi SATU
-        // koleksi, baru di-sort BERSAMA sesuai $sortDir -- sebelumnya
-        // manual & barcode di-sort TERPISAH lalu di-concat begitu saja,
-        // yang berarti urutan globalnya SALAH (semua manual selalu duluan
-        // sebelum barcode, walau tanggal barcode lebih baru/lama).
-        // Sekarang keduanya benar-benar tercampur berdasarkan tanggal.
-        // ============================================================
         $allRows = $manualRows->concat($barcodeRows)
             ->sortBy(
                 fn($r) => \Illuminate\Support\Carbon::parse($r->tanggal)->format('Y-m-d'),
                 SORT_REGULAR,
-                $sortDir === 'desc' // descending kalau true
+                $sortDir === 'desc'
             )
             ->values();
 
         $total = $allRows->count();
         $data  = $allRows->slice($offset, $rows)->values();
-
         foreach ($data as $i => $row) {
             $row->no = $offset + $i + 1;
         }
@@ -1048,6 +968,7 @@ class TransferFinishingController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'popk'    => 'required',
+            'mif'     => 'nullable|integer',
             'tanggal' => 'required|date',
             'linepk'  => 'required',
             'sizes'   => 'required|array|min:1',
@@ -1069,25 +990,22 @@ class TransferFinishingController extends Controller
 
         $fin  = DB::connection('mysql_finance_mif');
         $popk = $request->popk;
-        $mop  = $fin->table('mop')->where('popk', $popk)->first();
-        abort_unless($mop, 404, "Data mop untuk popk {$popk} tidak ditemukan.");
-        
+        $mif  = $request->filled('mif') ? (int) $request->mif : null;
+
+        // GANTI TOTAL -- FIX UTAMA: pakai resolvePoAndMop() -- TIDAK LAGI
+        // cari 'mop' lewat 'popk' langsung.
+        [$poRowForMaterial, $mop, $connection] = $this->resolvePoAndMop($popk, $mif);
+
         $tfpbpkEditing = $request->filled('tfpbpk') ? (int) $request->tfpbpk : null;
         $sizesInput    = $request->input('sizes', []);
-        
+
         [$sizes,, $mopdtpksByUkuran] = $this->getDedupedSizes($mop->moppk);
         $mopdtpkToUkuran = $sizes->pluck('ukuran', 'mopdtpk')->all();
-        
-        // resolve connection & sibling popks (warna sama) dulu --
-        // SAMA pola dengan getBreakdownDataFinishing()/addRQToRowsViaBreakdown().
-        $mifGuess     = str_contains((string) $mop->noop, 'MIF1') ? 1 : 2;
-        $connection   = $this->resolveConnection($mifGuess);
-        
-        $poRowForMaterial = DB::connection($connection)->table('po')->where('popk', $popk)->first(['material']);
-        $currentMaterial  = $poRowForMaterial ? (string) $poRowForMaterial->material : '';
-        
+
+        $currentMaterial = (string) $poRowForMaterial->material;
+
         $siblingPopks = $this->getSiblingPopksByOrder($connection, (int) $popk);
-        
+
         [$rqQtyPerSize, $barcodeQtyPerSize] = $this->getRqBarcodePerSize($siblingPopks, $mopdtpkToUkuran, $currentMaterial);
 
         // ---- Manual yang SUDAH terpakai di TFPB LAIN (baris yang sedang
@@ -1098,15 +1016,12 @@ class TransferFinishingController extends Controller
             $tfpbIdsOtherQuery->where('tfpbpk', '<>', $tfpbpkEditing);
         }
         $tfpbIdsOther = $tfpbIdsOtherQuery->pluck('tfpbpk');
-
         $manualOtherRaw = $tfpbIdsOther->isNotEmpty()
             ? $fin->table('tfpbdt')->whereIn('tfpbpk', $tfpbIdsOther)->get(['mopdtpk', 'ukuran', 'qty'])
             : collect();
-
         $ukuranToRepresentative = $sizes->mapWithKeys(
             fn($s) => [trim(mb_strtoupper($s->ukuran)) => $s->mopdtpk]
         )->all();
-
         $manualOtherPerSize = [];
         foreach ($manualOtherRaw as $r) {
             $ukuranKey = trim(mb_strtoupper($r->ukuran));
@@ -1114,30 +1029,24 @@ class TransferFinishingController extends Controller
             $manualOtherPerSize[$representative] = ($manualOtherPerSize[$representative] ?? 0) + (float) $r->qty;
         }
 
-        // ---- Validasi PER SIZE: Barcode + Manual (TFPB lain) + yang mau
-        //      diinput sekarang TIDAK BOLEH melebihi R+Q size tersebut. ----
+        // ---- Validasi PER SIZE ----
         $errorsPerSize = [];
         $totalBaru = 0;
-
         foreach ($sizesInput as $s) {
             $mopdtpk  = (int) ($s['mopdtpk'] ?? 0);
             $qtyInput = (float) ($s['qty'] ?? 0);
             $totalBaru += $qtyInput;
-
             if ($qtyInput <= 0) continue;
-
             $rqCap       = (float) ($rqQtyPerSize[$mopdtpk] ?? 0);
             $barcodeUsed = (float) ($barcodeQtyPerSize[$mopdtpk] ?? 0);
             $manualOther = (float) ($manualOtherPerSize[$mopdtpk] ?? 0);
             $available   = max(0, $rqCap - $barcodeUsed - $manualOther);
-
             if ($qtyInput > $available) {
                 $ukuranName = $mopdtpkToUkuran[$mopdtpk] ?? "Size {$mopdtpk}";
                 $errorsPerSize[] = "Size <b>{$ukuranName}</b>: maksimal <b>{$available}</b> "
                     . "(R+Q: {$rqCap}, Barcode: {$barcodeUsed}, Manual lain: {$manualOther}).";
             }
         }
-
         if (!empty($errorsPerSize)) {
             return response()->json([
                 'icon'  => 'warning',
@@ -1145,7 +1054,6 @@ class TransferFinishingController extends Controller
             ], 422);
         }
 
-        // Resolve Line -- SAMA seperti native: substring linenm sesuai mif.
         $lineRow = $fin->table('line')->where('linepk', $request->linepk)->first();
         abort_unless($lineRow, 422, 'Line tidak ditemukan.');
         $lineText = ((int) $lineRow->mif === 1)
@@ -1167,17 +1075,12 @@ class TransferFinishingController extends Controller
                     'userpk' => session('userpk'),
                     'moppk'  => $mop->moppk,
                 ]);
-
                 foreach ($sizesInput as $s) {
-                    $qtyValue = (isset($s['qty']) && $s['qty'] !== null && $s['qty'] !== '')
-                        ? $s['qty']
-                        : null;
-
+                    $qtyValue = (isset($s['qty']) && $s['qty'] !== null && $s['qty'] !== '') ? $s['qty'] : null;
                     $existing = $fin->table('tfpbdt')
                         ->where('tfpbpk', $tfpbpkEditing)
                         ->where('mopdtpk', $s['mopdtpk'])
                         ->first();
-
                     if ($existing) {
                         $fin->table('tfpbdt')->where('tfpbdtpk', $existing->tfpbdtpk)
                             ->update(['ukuran' => $s['ukuran'], 'qty' => $qtyValue]);
@@ -1190,12 +1093,9 @@ class TransferFinishingController extends Controller
                         ]);
                     }
                 }
-
                 $msg = 'Data berhasil diupdate';
             } else {
-                // PK manual (MAX+1) -- tabel tfpb tidak pakai AUTO_INCREMENT.
                 $newTfpbpk = (int) ($fin->table('tfpb')->lockForUpdate()->max('tfpbpk')) + 1;
-
                 $fin->table('tfpb')->insert([
                     'tfpbpk'  => $newTfpbpk,
                     'nobukti' => $newTfpbpk,
@@ -1208,14 +1108,9 @@ class TransferFinishingController extends Controller
                     'userpk'  => session('userpk'),
                     'moppk'   => $mop->moppk,
                 ]);
-
                 foreach ($sizesInput as $s) {
-                    $qtyValue = (isset($s['qty']) && $s['qty'] !== null && $s['qty'] !== '')
-                        ? $s['qty']
-                        : null;
-
+                    $qtyValue = (isset($s['qty']) && $s['qty'] !== null && $s['qty'] !== '') ? $s['qty'] : null;
                     if ($qtyValue === null || (float) $qtyValue <= 0) continue;
-
                     $fin->table('tfpbdt')->insert([
                         'tfpbpk'  => $newTfpbpk,
                         'mopdtpk' => $s['mopdtpk'],
@@ -1223,16 +1118,12 @@ class TransferFinishingController extends Controller
                         'qty'     => $qtyValue,
                     ]);
                 }
-
                 $msg = 'Data berhasil disimpan';
             }
-
             $fin->commit();
-
             return response()->json(['icon' => 'success', 'title' => $msg]);
         } catch (\Throwable $e) {
             $fin->rollBack();
-
             return response()->json([
                 'icon'  => 'error',
                 'title' => 'Gagal menyimpan data.',
@@ -1264,12 +1155,40 @@ class TransferFinishingController extends Controller
         }
     }
 
+    private function resolvePoAndMop($popk, ?int $mif): array
+    {
+        $fin = DB::connection('mysql_finance_mif');
+    
+        if ($mif !== null) {
+            // Path BENAR -- mif dikirim eksplisit (dari frontend, row.mif).
+            $connection = $this->resolveConnection($mif);
+            $dt = DB::connection($connection)->table('po')->where('popk', $popk)->first();
+            abort_unless($dt, 404, "Data po untuk popk {$popk} (mif={$mif}) tidak ditemukan.");
+    
+            $mop = $fin->table('mop')->where('moppk', $dt->moppk)->first();
+            abort_unless($mop, 404, "Data mop untuk moppk {$dt->moppk} tidak ditemukan.");
+    
+            return [$dt, $mop, $connection];
+        }
+    
+        // Fallback -- TIDAK ADA mif dikirim (link lama/belum diupdate).
+        // HANYA BEKERJA untuk mif=2 (mysql), karena mop.popk cuma valid di situ.
+        $mop = $fin->table('mop')->where('popk', $popk)->first();
+        abort_unless($mop, 404, "Data mop untuk popk {$popk} tidak ditemukan (parameter 'mif' tidak dikirim -- kalau ini PO mif=1, WAJIB kirim 'mif' di request).");
+    
+        $mifGuess   = str_contains((string) $mop->noop, 'MIF1') ? 1 : 2;
+        $connection = $this->resolveConnection($mifGuess);
+        $dt = DB::connection($connection)->table('po')->where('popk', $popk)->first();
+        abort_unless($dt, 404, "Data po untuk popk {$popk} tidak ditemukan.");
+    
+        return [$dt, $mop, $connection];
+    }
+
     private function addRQToRowsViaBreakdown($rows, string $connection): void
     {
         if ($rows->isEmpty()) {
             return;
         }
-        $fin = DB::connection('mysql_finance_mif');
         // FIX: cache key SEKARANG tanpa material -- siblings per ORDER
         // (dipakai bersama lintas warna dalam order yang sama), lebih hemat
         // query dan lebih benar.
@@ -1280,41 +1199,24 @@ class TransferFinishingController extends Controller
                 $siblingCache[$groupKey] = $this->getSiblingPopksByOrder($connection, (int) $r->popk);
             }
             $siblingPopks = $siblingCache[$groupKey];
-    
-            $mop = $fin->table('mop')->where('popk', $r->popk)->first(['moppk']);
-            if (!$mop) {
+
+            // GANTI TOTAL -- FIX UTAMA: pakai $r->moppk LANGSUNG (sudah ada
+            // dari selectRaw fetchAll()) -- TIDAK LAGI cari 'mop' lewat
+            // 'popk' (yang untuk mif=1 SELALU gagal, karena mop.popk null).
+            // Kalau $r->moppk kosong/null, aman set transfer=0.
+            if (empty($r->moppk)) {
                 $r->transfer = 0;
                 continue;
             }
-            [$sizes,,] = $this->getDedupedSizes($mop->moppk);
+            [$sizes,,] = $this->getDedupedSizes($r->moppk);
             $mopdtpkToUkuran = $sizes->pluck('ukuran', 'mopdtpk')->all();
-    
+
             // FIX: kirim $r->material -- INI yang menentukan filter warna yang
             // BENAR (dari kolom output.material), bukan dari kecocokan popk.
             [$rqQty,] = $this->getRqBarcodePerSize($siblingPopks, $mopdtpkToUkuran, (string) $r->material);
             $r->transfer = (int) array_sum($rqQty);
         }
     }
-
-    private function getSiblingPopksByColor(string $connection, int $popk): array
-    {
-        $db = DB::connection($connection);
-
-        $current = $db->table('po')->where('popk', $popk)->first(['ordpk', 'material', 'OP', 'POno']);
-        if (!$current) {
-            return [$popk];
-        }
-
-        return $db->table('po')
-            ->where('ordpk', $current->ordpk)
-            ->where('OP', $current->OP)
-            ->where('POno', $current->POno)
-            ->where('material', $current->material)
-            ->pluck('popk')
-            ->values()
-            ->all();
-    }
-
 
     private function getSiblingPopksByOrder(string $connection, int $popk): array
     {
@@ -1323,13 +1225,24 @@ class TransferFinishingController extends Controller
         if (!$current) {
             return [$popk];
         }
-        return $db->table('po')
+        $popks = $db->table('po')
             ->where('ordpk', $current->ordpk)
             ->where('OP', $current->OP)
             ->where('POno', $current->POno)
             ->pluck('popk')
             ->values()
             ->all();
+
+        // GANTI -- FIX UTAMA: fungsi ini SELALU dipakai buat query ke
+        // 'mysql_polibag' (output) selanjutnya -- yang popk-nya SELALU versi
+        // kanonik (database 19). Kalau koneksi asalnya mysql_andon (mif=1),
+        // terjemahkan dulu semua sibling popk ke versi kanonik.
+        if ($connection === 'mysql_andon') {
+            $canonicalMap = $this->resolveCanonicalPopks($popks);
+            return array_values(array_unique(array_values($canonicalMap)));
+        }
+
+        return $popks;
     }
 
     // Filter Buyer
@@ -1619,4 +1532,5 @@ class TransferFinishingController extends Controller
             'barcode_distinct_size_texts' => $barcodeDistinctSizes,
         ]);
     }
+
 }

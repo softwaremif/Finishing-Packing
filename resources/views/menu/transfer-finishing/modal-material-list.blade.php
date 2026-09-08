@@ -16,17 +16,11 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <table id="dgDetailModal" class="easyui-datagrid" style="width:100%;height:350px"
-                    url="{{ route('tf_finishing.detail-by-po-op') }}" method="get"
-                    rownumbers="false" singleSelect="true" fitColumns="false" border="false"
-                    data-options="
-                        loadMsg: 'Memuat data...',
-                        onLoadSuccess: onDetailModalLoad
-                    ">
+                <table id="dgDetailModal" style="width:100%;height:350px"
+                    rownumbers="false" singleSelect="true" fitColumns="false" border="false">
                     <thead>
                         <tr>
                             <th field="action" width="50" align="center" formatter="formatActionModal">Aksi</th>
-                            {{-- <th field="no" width="45" align="center" formatter="formatNoModal">No</th> --}}
                             <th field="customer" width="180" align="left">Place</th>
                             <th field="poref" width="130" align="left" formatter="formatDashModal">License<br>PO Ref</th>
                             <th field="material" width="160" align="left">Color</th>
@@ -35,8 +29,6 @@
                             <th field="transfer" width="100" align="right">R+Q</th>
                             <th field="transfer_finishing" width="110" align="right">Transfer To <br> Finishing</th>
                             <th field="balance" width="100" align="right" formatter="formatBalanceModal">Balance</th>
-                            {{-- FIX: kolom Description DIHAPUS dari sini, sudah
-                                 pindah ke header <h5> di atas. --}}
                         </tr>
                     </thead>
                 </table>

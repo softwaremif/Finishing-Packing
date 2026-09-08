@@ -18,6 +18,151 @@ class PackingController extends Controller
      * pakai resolveConnection(session('pos')). Packpk yang dikirim EXIM
      * bisa saja campuran mif 1 & 2 sekaligus.
      */
+
+    // public function apiLoadCartonToContainer(Request $request)
+    // {
+    //     $validated = $request->validate([
+    //         'contpk'   => 'required|integer',
+    //         'exportpk' => 'required|integer',
+    //         'packpk'   => 'required|array|min:1',
+    //         'packpk.*' => 'integer',
+    //     ]);
+
+    //     // BARU -- FIX UTAMA: tentukan mif per packpk dengan CEK KEDUA
+    //     // koneksi (bukan asumsi semua packpk dari 1 mif seperti kode lama
+    //     // yang hardcode 'mysql_andon').
+    //     $packpks = collect($validated['packpk'])->unique()->values();
+    //     $packsByConn = [];
+    //     foreach (['mysql_andon', 'mysql'] as $conn) {
+    //         $found = DB::connection($conn)->table('pack')
+    //             ->whereIn('packpk', $packpks)
+    //             ->get();
+    //         if ($found->isNotEmpty()) {
+    //             $packsByConn[$conn] = $found;
+    //         }
+    //     }
+
+    //     if (empty($packsByConn)) {
+    //         return response()->json(['message' => 'Data carton tidak ditemukan.'], 404);
+    //     }
+
+    //     $allLoadedItems = [];
+    //     $anyError = null;
+
+    //     foreach ($packsByConn as $connName => $packs) {
+    //         DB::connection($connName)->beginTransaction();
+    //         try {
+    //             $packs->each(function ($pack) {
+    //                 $pack->t_cbm = ($pack->panjang !== null && $pack->lebar !== null && $pack->tinggi !== null)
+    //                     ? ($pack->panjang * $pack->lebar * $pack->tinggi) / 1000000
+    //                     : 0;
+    //             });
+
+    //             $popks = $packs->pluck('popk')->unique();
+    //             $popkCartonInfo = [];
+    //             foreach ($popks as $popk) {
+    //                 $totalCarton = DB::connection($connName)->table('pack')
+    //                     ->where('popk', $popk)->distinct()->count('carton');
+    //                 $loadedCarton = DB::connection($connName)->table('pack')
+    //                     ->where('popk', $popk)->whereNotNull('exportpk')->distinct()->count('carton');
+    //                 $loadingNowCarton = $packs->where('popk', $popk)->pluck('carton')->unique()->count();
+    //                 $popkCartonInfo[$popk] = [
+    //                     'total' => $totalCarton, 'loaded' => $loadedCarton, 'now' => $loadingNowCarton,
+    //                 ];
+    //             }
+
+    //             $lastPartCache = [];
+
+    //             foreach ($packs as $pack) {
+    //                 // BARU -- FIX UTAMA: 'exportdt' TIDAK LAGI ditulis di sini.
+    //                 // pack.exportpk/pack.contpk/pack.part SUDAH CUKUP sebagai
+    //                 // sumber kebenaran "carton ini dimuat di container mana" --
+    //                 // EXIM tinggal baca lewat API getLoadedCartonsByContainer(),
+    //                 // bukan menyimpan mirror-nya sendiri di exportdt.
+    //                 $carton = $pack->carton;
+    //                 if (!array_key_exists($carton, $lastPartCache)) {
+    //                     $packsInCarton = $packs->where('carton', $carton);
+    //                     $popksInCarton = $packsInCarton->pluck('popk')->unique();
+
+    //                     $isFinalLoad = true;
+    //                     foreach ($popksInCarton as $p) {
+    //                         $info = $popkCartonInfo[$p];
+    //                         if (($info['loaded'] + $info['now']) < $info['total']) {
+    //                             $isFinalLoad = false;
+    //                             break;
+    //                         }
+    //                     }
+
+    //                     if ($isFinalLoad) {
+    //                         $lastPartCache[$carton] = 10;
+    //                     } else {
+    //                         $candidateParts = [];
+    //                         foreach ($popksInCarton as $p) {
+    //                             $existingPart = DB::connection($connName)->table('pack')
+    //                                 ->where('popk', $p)->where('exportpk', $validated['exportpk'])->value('part');
+    //                             if ($existingPart) {
+    //                                 $candidateParts[] = $existingPart;
+    //                             } else {
+    //                                 $maxPart = DB::connection($connName)->table('pack')
+    //                                     ->where('popk', $p)->where('part', '!=', 10)->max('part');
+    //                                 $candidateParts[] = ($maxPart ?? 0) + 1;
+    //                             }
+    //                         }
+    //                         $lastPartCache[$carton] = max($candidateParts);
+    //                     }
+    //                 }
+    //                 $part = $lastPartCache[$carton];
+
+    //                 DB::connection($connName)->table('pack')
+    //                     ->where('packpk', $pack->packpk)
+    //                     ->update([
+    //                         'exportpk' => $validated['exportpk'],
+    //                         'contpk'   => $validated['contpk'],
+    //                         'part'     => $part,
+    //                     ]);
+
+    //                 $insertColumns = ['packpk', 'popk', 'urut', 'carton', 'nobar', 'OP', 'POno', 'customer', 'material', 'nw', 'gw', 'meas', 'secsz'];
+    //                 for ($i = 1; $i <= 40; $i++) $insertColumns[] = "qtyp{$i}";
+    //                 $insertColumns[] = 'pcsp';
+    //                 for ($i = 1; $i <= 40; $i++) $insertColumns[] = "qty{$i}";
+    //                 $insertColumns = array_merge($insertColumns, ['pcs', 'jmlpcs', 'waktu', 'tanggal', 'status', 'part', 'keterangan', 'pinjam', 'kembali', 'fca']);
+
+    //                 DB::connection($connName)->table('ship')->insertUsing(
+    //                     $insertColumns,
+    //                     DB::connection($connName)->table('pack')->select($insertColumns)->where('packpk', $pack->packpk)
+    //                 );
+
+    //                 $allLoadedItems[] = [
+    //                     'exportdtpk' => null, // BARU -- sudah tidak ada exportdt, referensi cukup pakai packpk
+    //                     'packpk'     => $pack->packpk,
+    //                     'carton'     => $pack->carton,
+    //                     'pcsp'       => $pack->pcsp,
+    //                     't_cbm'      => $pack->t_cbm ?? 0,
+    //                 ];
+    //             }
+
+    //             DB::connection($connName)->commit();
+    //         } catch (\Throwable $e) {
+    //             DB::connection($connName)->rollBack();
+    //             $anyError = $e;
+    //             report($e);
+    //         }
+    //     }
+
+    //     if ($anyError && empty($allLoadedItems)) {
+    //         return response()->json(['message' => 'Terjadi kesalahan saat menyimpan data.'], 500);
+    //     }
+
+    //     $summary = $this->getContainerSummary($validated['exportpk'], $validated['contpk']);
+
+    //     return response()->json([
+    //         'message'      => count(collect($allLoadedItems)->pluck('carton')->unique()) . ' carton berhasil dimuat ke container.',
+    //         'loaded_items' => $allLoadedItems,
+    //         'totqty'       => $summary['totqty'],
+    //         'totctn'       => $summary['totctn'],
+    //     ]);
+    // }
+
     public function apiLoadCartonToContainer(Request $request)
     {
         $validated = $request->validate([
@@ -27,9 +172,6 @@ class PackingController extends Controller
             'packpk.*' => 'integer',
         ]);
 
-        // BARU -- FIX UTAMA: tentukan mif per packpk dengan CEK KEDUA
-        // koneksi (bukan asumsi semua packpk dari 1 mif seperti kode lama
-        // yang hardcode 'mysql_andon').
         $packpks = collect($validated['packpk'])->unique()->values();
         $packsByConn = [];
         foreach (['mysql_andon', 'mysql'] as $conn) {
@@ -45,11 +187,24 @@ class PackingController extends Controller
             return response()->json(['message' => 'Data carton tidak ditemukan.'], 404);
         }
 
+        $foundPackpks = collect();
+        foreach ($packsByConn as $found) {
+            $foundPackpks = $foundPackpks->merge($found->pluck('packpk'));
+        }
+        $missingPackpks = $packpks->diff($foundPackpks);
+        if ($missingPackpks->isNotEmpty()) {
+            return response()->json([
+                'message' => 'Sebagian carton tidak ditemukan di database: ' . $missingPackpks->implode(', '),
+            ], 404);
+        }
+
         $allLoadedItems = [];
-        $anyError = null;
+        $failedConnections = [];
 
         foreach ($packsByConn as $connName => $packs) {
             DB::connection($connName)->beginTransaction();
+            $connLoadedItems = [];
+
             try {
                 $packs->each(function ($pack) {
                     $pack->t_cbm = ($pack->panjang !== null && $pack->lebar !== null && $pack->tinggi !== null)
@@ -57,60 +212,35 @@ class PackingController extends Controller
                         : 0;
                 });
 
-                $popks = $packs->pluck('popk')->unique();
-                $popkCartonInfo = [];
-                foreach ($popks as $popk) {
-                    $totalCarton = DB::connection($connName)->table('pack')
-                        ->where('popk', $popk)->distinct()->count('carton');
-                    $loadedCarton = DB::connection($connName)->table('pack')
-                        ->where('popk', $popk)->whereNotNull('exportpk')->distinct()->count('carton');
-                    $loadingNowCarton = $packs->where('popk', $popk)->pluck('carton')->unique()->count();
-                    $popkCartonInfo[$popk] = [
-                        'total' => $totalCarton, 'loaded' => $loadedCarton, 'now' => $loadingNowCarton,
-                    ];
+                // GANTI: group berdasarkan POno (1 PO), BUKAN popk (bisa banyak popk per PO)
+                $poNos = $packs->pluck('POno')->unique();
+
+                /*
+                |------------------------------------------------------------
+                | TENTUKAN NOMOR PART BERJALAN PER PO (POno), BUKAN PER POPK
+                |------------------------------------------------------------
+                */
+                $poPartCache = [];
+                foreach ($poNos as $poNo) {
+                    $existingPart = DB::connection($connName)->table('pack')
+                        ->where('POno', $poNo)
+                        ->where('exportpk', $validated['exportpk'])
+                        ->value('part');
+
+                    if ($existingPart) {
+                        $poPartCache[$poNo] = $existingPart;
+                    } else {
+                        $maxPart = DB::connection($connName)->table('pack')
+                            ->where('POno', $poNo)
+                            ->where('part', '!=', 10)
+                            ->max('part');
+
+                        $poPartCache[$poNo] = ($maxPart ?? 0) + 1;
+                    }
                 }
 
-                $lastPartCache = [];
-
                 foreach ($packs as $pack) {
-                    // BARU -- FIX UTAMA: 'exportdt' TIDAK LAGI ditulis di sini.
-                    // pack.exportpk/pack.contpk/pack.part SUDAH CUKUP sebagai
-                    // sumber kebenaran "carton ini dimuat di container mana" --
-                    // EXIM tinggal baca lewat API getLoadedCartonsByContainer(),
-                    // bukan menyimpan mirror-nya sendiri di exportdt.
-                    $carton = $pack->carton;
-                    if (!array_key_exists($carton, $lastPartCache)) {
-                        $packsInCarton = $packs->where('carton', $carton);
-                        $popksInCarton = $packsInCarton->pluck('popk')->unique();
-
-                        $isFinalLoad = true;
-                        foreach ($popksInCarton as $p) {
-                            $info = $popkCartonInfo[$p];
-                            if (($info['loaded'] + $info['now']) < $info['total']) {
-                                $isFinalLoad = false;
-                                break;
-                            }
-                        }
-
-                        if ($isFinalLoad) {
-                            $lastPartCache[$carton] = 10;
-                        } else {
-                            $candidateParts = [];
-                            foreach ($popksInCarton as $p) {
-                                $existingPart = DB::connection($connName)->table('pack')
-                                    ->where('popk', $p)->where('exportpk', $validated['exportpk'])->value('part');
-                                if ($existingPart) {
-                                    $candidateParts[] = $existingPart;
-                                } else {
-                                    $maxPart = DB::connection($connName)->table('pack')
-                                        ->where('popk', $p)->where('part', '!=', 10)->max('part');
-                                    $candidateParts[] = ($maxPart ?? 0) + 1;
-                                }
-                            }
-                            $lastPartCache[$carton] = max($candidateParts);
-                        }
-                    }
-                    $part = $lastPartCache[$carton];
+                    $part = $poPartCache[$pack->POno];
 
                     DB::connection($connName)->table('pack')
                         ->where('packpk', $pack->packpk)
@@ -131,8 +261,8 @@ class PackingController extends Controller
                         DB::connection($connName)->table('pack')->select($insertColumns)->where('packpk', $pack->packpk)
                     );
 
-                    $allLoadedItems[] = [
-                        'exportdtpk' => null, // BARU -- sudah tidak ada exportdt, referensi cukup pakai packpk
+                    $connLoadedItems[] = [
+                        'exportdtpk' => null,
                         'packpk'     => $pack->packpk,
                         'carton'     => $pack->carton,
                         'pcsp'       => $pack->pcsp,
@@ -140,16 +270,61 @@ class PackingController extends Controller
                     ];
                 }
 
+                /*
+                |------------------------------------------------------------
+                | RECALCULATION: cek complete per PO (POno), BUKAN per popk
+                |------------------------------------------------------------
+                */
+                foreach ($poNos as $poNo) {
+                    $totalCarton = DB::connection($connName)->table('pack')
+                        ->where('POno', $poNo)
+                        ->distinct()
+                        ->count('carton');
+
+                    $totalLoadedNow = DB::connection($connName)->table('pack')
+                        ->where('POno', $poNo)
+                        ->whereNotNull('exportpk')
+                        ->distinct()
+                        ->count('carton');
+
+                    if ($totalLoadedNow >= $totalCarton) {
+                        $packpksToFinalize = DB::connection($connName)->table('pack')
+                            ->where('POno', $poNo)
+                            ->where('exportpk', $validated['exportpk'])
+                            ->pluck('packpk');
+
+                        DB::connection($connName)->table('pack')
+                            ->whereIn('packpk', $packpksToFinalize)
+                            ->update(['part' => 10]);
+
+                        DB::connection($connName)->table('ship')
+                            ->whereIn('packpk', $packpksToFinalize)
+                            ->update(['part' => 10]);
+                    }
+                }
+
                 DB::connection($connName)->commit();
+                $allLoadedItems = array_merge($allLoadedItems, $connLoadedItems);
+
             } catch (\Throwable $e) {
                 DB::connection($connName)->rollBack();
-                $anyError = $e;
+                $failedConnections[$connName] = $e->getMessage() . ' | ' . $e->getFile() . ':' . $e->getLine();
                 report($e);
             }
         }
 
-        if ($anyError && empty($allLoadedItems)) {
-            return response()->json(['message' => 'Terjadi kesalahan saat menyimpan data.'], 500);
+        if (!empty($failedConnections)) {
+            return response()->json([
+                'message' => 'Sebagian carton GAGAL dimuat (koneksi: ' . implode(', ', array_keys($failedConnections)) . '). '
+                    . 'Carton yang berhasil dimuat: ' . count($allLoadedItems) . ' dari ' . $packpks->count() . '.',
+                'partial_success' => !empty($allLoadedItems),
+                'loaded_items'    => $allLoadedItems,
+                'failed_details'  => $failedConnections,
+            ], 500);
+        }
+
+        if (empty($allLoadedItems)) {
+            return response()->json(['message' => 'Tidak ada carton yang berhasil dimuat.'], 500);
         }
 
         $summary = $this->getContainerSummary($validated['exportpk'], $validated['contpk']);

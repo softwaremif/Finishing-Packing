@@ -299,23 +299,33 @@
         currentModalMif      = mif;
         currentModalMaterial = material || null;
         currentModalSecsz    = secsz || null;
- 
+
         const poLabel = (po === null || po === undefined || po === '') ? '' : po;
         $('#detailModalPO').text(poLabel);
         $('#detailModalOP').text(op);
         $('#detailModalBuyer').text('');
- 
+
         const modalEl = document.getElementById('detailModal');
         new bootstrap.Modal(modalEl).show();
- 
+
         $(modalEl).one('shown.bs.modal', function () {
             $('#dgDetailModal').datagrid('resize');
         });
- 
+
         if (!$('#dgDetailModal').data('datagrid')) {
-            $('#dgDetailModal').datagrid();
+            $('#dgDetailModal').datagrid({
+                method: 'get', 
+                rownumbers: false,
+                singleSelect: true,
+                fitColumns: false,
+                border: false,
+                loadMsg: 'Memuat data...',
+                onLoadSuccess: onDetailModalLoad
+            });
         }
- 
+
+        $('#dgDetailModal').datagrid('options').url = "{{ route('tf_finishing.detail-by-po-op') }}";
+
         $('#dgDetailModal').datagrid('load', {
             po: po ?? '',
             op: op,

@@ -16,6 +16,7 @@ use App\Http\Controllers\Laporan\PembayaranCGController;
 use App\Http\Controllers\Laporan\PembelianCTController;
 use App\Http\Controllers\LO\LoController;
 use App\Http\Controllers\MasterController;
+use App\Http\Controllers\OrderImageController;
 use App\Http\Controllers\OrderListController;
 use App\Http\Controllers\Packing\PackingController;
 use App\Http\Controllers\Purchase\PoOrderController;
@@ -60,6 +61,9 @@ Route::post('/sisa-sample-keluar/email-approve/{outpk}/{level}/do-reject', [Sisa
 
 Route::post('/exim/lock-shipment', [SegelPackingController::class, 'handleEximLockShipment'])->name('exim.lock-shipment');
 Route::get('/lpb/verify-posting', [SegelPackingController::class, 'verifyLpbPosting'])->name('lpb.verify-posting');
+
+Route::get('/order-images', [OrderImageController::class, 'index'])->name('order-images.index');
+Route::get('/order-image/{ordpk}', [OrderImageController::class, 'show'])->name('order-images.show');
 
 
 Route::middleware(['check', 'db.pos'])->group(function () {

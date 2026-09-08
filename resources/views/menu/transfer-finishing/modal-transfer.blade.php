@@ -299,6 +299,7 @@
             data: {
                 tfpbpk: $('#tfpbpk').val(),
                 popk: {{ $popk }},
+                mif: currentMif,
                 tanggal: tanggal,
                 linepk: linepk,
                 sizes: collectSizesPayload()

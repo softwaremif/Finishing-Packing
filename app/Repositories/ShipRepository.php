@@ -108,292 +108,16 @@ class ShipRepository
      |  LIST (grid finished goods / stuffing)
      ===================================================== */
 
-    /**
-     * GROUPING POno + OP + poref (License PO Ref):
-     * - $ship di-derive dulu lewat join ke po (via popk) supaya setiap
-     *   baris ship punya nilai poref (kolom itu asli milik po, ship tidak
-     *   punya poref sendiri) -- baru diagregasi per POno+OP+poref.
-     * - $po diagregasi dengan kunci yang SAMA (POno+OP+poref); kolom
-     *   multi-nilai (customer/place, material/color, secsz) digabung
-     *   GROUP_CONCAT karena satu poref bisa mencakup banyak place/color.
-     * - Join outer memakai TRIM(...) di kedua sisi supaya kebal spasi,
-     *   dan COALESCE(...,'') untuk poref supaya PO tanpa poref (NULL)
-     *   tetap match (NULL = NULL selalu false di SQL).
-     */
-    // public function getShipList($offset, $rows, array $params)
-    // {
-    //     $db = $this->conn();
 
-    //     $ship = $db->table('ship')
-    //         ->join('po as po_ref', 'po_ref.popk', '=', 'ship.popk')
-    //         ->selectRaw("
-    //             TRIM(ship.POno) AS POno,
-    //             TRIM(ship.OP) AS OP,
-    //             COALESCE(TRIM(po_ref.poref), '') AS poref,
-
-    //             MAX(ship.popk) AS popk,
-    //             MIN(ship.part) AS part,
-
-    //             SUM(CASE WHEN ship.status <= 7 THEN ship.pcs ELSE 0 END) AS pcs_stuff,
-    //             SUM(CASE WHEN ship.fca = 1 THEN ship.pcs ELSE 0 END) AS pcs_inspect,
-    //             SUM(CASE WHEN ship.status = 7 THEN ship.pcs ELSE 0 END) AS pcs_ship,
-
-    //             SUM(CASE WHEN ship.status <= 7 THEN ship.jmlpcs ELSE 0 END) AS ctn_stuff,
-    //             SUM(CASE WHEN ship.fca = 1 THEN ship.jmlpcs ELSE 0 END) AS ctn_inspect,
-    //             SUM(CASE WHEN ship.status = 7 THEN ship.jmlpcs ELSE 0 END) AS ctn_ship,
-
-    //             MAX(ship.pinjam) AS pinjam,
-    //             MAX(ship.kembali) AS kembali,
-
-    //             MIN(ship.status) AS min_status,
-
-    //             COUNT(*) AS total_carton,
-
-    //             SUM(
-    //                 CASE
-    //                     WHEN ship.pinjam IS NOT NULL
-    //                     AND ship.pinjam <> ''
-    //                     AND ship.pinjam <> '0000-00-00 00:00:00'
-    //                     THEN 1
-    //                     ELSE 0
-    //                 END
-    //             ) AS pinjam_count,
-
-    //             SUM(CASE WHEN ship.fca = 1 THEN 1 ELSE 0 END) AS borrowed_count
-    //         ")
-    //         ->groupByRaw("TRIM(ship.POno), TRIM(ship.OP), COALESCE(TRIM(po_ref.poref), '')");
-
-    //     $poShipCols = [];
-    //     for ($i = 1; $i <= 10; $i++) {
-    //         $poShipCols[] = "MAX(ship{$i}) AS ship{$i}";
-    //     }
-
-    //     $po = $db->table('po')
-    //         ->selectRaw("
-    //             TRIM(POno) AS POno,
-    //             TRIM(OP) AS OP,
-    //             COALESCE(TRIM(poref), '') AS poref,
-    //             MAX(popk) AS popk,
-    //             MAX(buyer) AS buyer,
-    //             MAX(season) AS season,
-    //             MAX(style) AS style,
-    //             MAX(silhouette) AS silhouette,
-    //             MAX(mif) AS mif,
-    //             MAX(gabung) AS gabung,
-    //             MAX(GAC) AS GAC,
-    //             MAX(qty) AS qty,
-    //             MAX(ordpk) AS ordpk,
-    //             GROUP_CONCAT(DISTINCT customer SEPARATOR ', ') AS customer,
-    //             GROUP_CONCAT(DISTINCT material SEPARATOR ', ') AS material,
-    //             GROUP_CONCAT(DISTINCT secsz SEPARATOR ', ') AS secsz,
-    //             " . implode(', ', $poShipCols) . "
-    //         ")
-    //         ->groupByRaw("TRIM(POno), TRIM(OP), COALESCE(TRIM(poref), '')");
-
-    //     $shipdateCase = 'CASE ship.part';
-    //     for ($i = 1; $i <= 10; $i++) {
-    //         $shipdateCase .= " WHEN {$i} THEN po.ship{$i}";
-    //     }
-    //     $shipdateCase .= ' ELSE NULL END AS shipdate';
-
-    //     $query = $db->query()
-    //         ->fromSub($po, 'po')
-    //         ->joinSub($ship, 'ship', function ($join) {
-    //             $join->on('po.POno', '=', 'ship.POno')
-    //                 ->on('po.OP', '=', 'ship.OP')
-    //                 ->on('po.poref', '=', 'ship.poref');
-    //         })
-    //         ->selectRaw("
-    //             ship.popk,
-    //             ship.part,
-
-    //             po.POno,
-    //             po.OP,
-    //             po.customer,
-    //             po.material,
-    //             po.secsz,
-    //             po.poref,
-
-    //             po.buyer,
-    //             po.season,
-    //             po.style,
-    //             po.silhouette,
-    //             po.mif,
-    //             po.gabung,
-    //             po.GAC,
-    //             po.qty,
-    //             po.ordpk,
-
-    //             {$shipdateCase},
-
-    //             ship.pcs_stuff,
-    //             ship.pcs_inspect,
-    //             ship.pcs_ship,
-
-    //             ship.ctn_stuff,
-    //             ship.ctn_inspect,
-    //             ship.ctn_ship,
-
-    //             ship.pinjam,
-    //             ship.kembali,
-
-    //             ship.min_status,
-
-    //             ship.total_carton,
-    //             ship.pinjam_count,
-    //             ship.borrowed_count,
-
-    //             (ship.pinjam_count - ship.borrowed_count) AS returned_count,
-
-    //             CASE
-    //                 WHEN ship.pinjam_count > 0
-    //                     AND ship.borrowed_count = 0
-    //                     THEN 'complete'
-
-    //                 WHEN ship.pinjam_count > 0
-    //                     THEN 'partial'
-
-    //                 ELSE ''
-    //             END AS inspect_status,
-
-    //             (
-    //                 ship.pcs_stuff
-    //                 - ship.pcs_inspect
-    //                 - ship.pcs_ship
-    //             ) AS balance_pcs,
-
-    //             (
-    //                 ship.ctn_stuff
-    //                 - ship.ctn_inspect
-    //                 - ship.ctn_ship
-    //             ) AS balance_ctn
-    //         ");
-
-    //     if (!empty($params['search'])) {
-    //         $search = trim($params['search']);
-
-    //         $query->where(function ($q) use ($search) {
-    //             $q->where('po.POno', 'like', "%{$search}%")
-    //                 ->orWhere('po.OP', 'like', "%{$search}%")
-    //                 ->orWhere('po.customer', 'like', "%{$search}%")
-    //                 ->orWhere('po.season', 'like', "%{$search}%")
-    //                 ->orWhere('po.style', 'like', "%{$search}%");
-    //         });
-    //     }
-
-    //     if (!empty($params['buyer'])) {
-    //         $query->where('po.buyer', $params['buyer']);
-    //     }
-
-    //     if (!empty($params['year'])) {
-    //         $year      = (int) $params['year'];
-    //         $shortYear = $year - 2000;
-
-    //         $query->whereRaw(
-    //             'LEFT(TRIM(po.OP), 2) = ?',
-    //             [sprintf('%02d', $shortYear)]
-    //         );
-    //     }
-
-    //     if (!empty($params['only_pinjam'])) {
-    //         $query->where('ship.pinjam_count', '>', 0);
-    //     }
-
-    //     if (!empty($params['status'])) {
-    //         switch ($params['status']) {
-    //             case 'finished':
-    //                 $query->where('ship.min_status', '<', 7);
-    //                 break;
-    //             case 'inspect':
-    //                 $query->where('ship.borrowed_count', '>', 0);
-    //                 break;
-    //             case 'shipment':
-    //                 $query->where('ship.min_status', '>=', 7);
-    //                 break;
-    //         }
-    //     }
-
-    //     // BARU: filter Ex Factory (po.GAC) berdasarkan preset rentang tanggal,
-    //     // SAMA PERSIS logic dengan PackingController.
-    //     if (!empty($params['ex_factory'])) {
-    //         $range = $this->resolveExFactoryRange($params['ex_factory']);
-    //         if ($range) {
-    //             $query->whereBetween('po.GAC', [
-    //                 $range['start']->format('Y-m-d 00:00:00'),
-    //                 $range['end']->format('Y-m-d 23:59:59'),
-    //             ]);
-    //         }
-    //     }
-
-    //     // $total = $db->query()
-    //     //     ->fromSub(clone $query, 'x')
-    //     //     ->count();
-
-    //     // $sortDir = (isset($params['sort']) && strtolower((string) $params['sort']) === 'asc')
-    //     //     ? 'asc'
-    //     //     : 'desc';
-
-    //     // $data = $query
-    //     //     // ->orderBy('ship.popk', $sortDir)
-    //     //     // ->orderBy('po.OP')
-    //     //     ->offset($offset)
-    //     //     ->limit($rows)
-    //     //     ->get();
-
-    //     // // BARU: normalisasi GAC jadi timestamp lalu sort di collection,
-    //     // // SAMA PERSIS pola dengan PackingController::getList().
-    //     // foreach ($data as $r) {
-    //     //     $r->gac_sort_ts = $this->normalizeGacForSort($r->GAC);
-    //     // }
-
-    //     // $data = $sortDir === 'asc'
-    //     //     ? $data->sortBy('gac_sort_ts')->values()
-    //     //     : $data->sortByDesc('gac_sort_ts')->values();
-
-    //     // return [
-    //     //     'total' => $total,
-    //     //     'data'  => $data,
-    //     // ];
-    //     $total = $db->query()
-    //         ->fromSub(clone $query, 'x')
-    //         ->count();
-
-    //     $sortDir = (isset($params['sort']) && strtolower((string) $params['sort']) === 'asc')
-    //         ? 'asc'
-    //         : 'desc';
-
-    //     // Ambil SEMUA row (tanpa offset/limit dulu) supaya sort GAC valid
-    //     // untuk seluruh dataset, SAMA pola dengan PackingController::getList().
-    //     $allData = $query->get();
-
-    //     foreach ($allData as $r) {
-    //         $r->gac_sort_ts = $this->normalizeGacForSort($r->GAC);
-    //     }
-
-    //     $sorted = $sortDir === 'asc'
-    //         ? $allData->sortBy('gac_sort_ts')->values()
-    //         : $allData->sortByDesc('gac_sort_ts')->values();
-
-    //     // BARU potong per halaman SETELAH full-sort.
-    //     $data = $sorted->slice($offset, $rows)->values();
-
-    //     return [
-    //         'total' => $total,
-    //         'data'  => $data,
-    //     ];
-    // }
-    public function getShipList($offset, $rows, array $params)
+    private function resolveConnection($mif): string
     {
-        $db = $this->conn();
+        return ((int) $mif) === 1 ? 'mysql_andon' : 'mysql';
+    }
 
-        // ============================================================
-        // BARU -- FIX UTAMA: level agregasi TAMBAHAN, per NOMOR CARTON
-        // FISIK (bukan per baris ship/popk). Satu nomor carton bisa
-        // muncul di BEBERAPA baris ship (mixed carton, beda popk) --
-        // level ini menggabungkannya jadi SATU baris per carton, supaya
-        // level berikutnya (per PO+OP) menghitung carton yang BENAR,
-        // bukan carton yang keitung dobel/tripel gara-gara jumlah baris.
-        // ============================================================
+    private function fetchAll(string $connection, int $mif, array $params)
+    {
+        $db = DB::connection($connection);
+
         $cartonLevel = $db->table('ship')
             ->join('po as po_ref', 'po_ref.popk', '=', 'ship.popk')
             ->selectRaw("
@@ -412,10 +136,6 @@ class ShipRepository
             ")
             ->groupByRaw("TRIM(ship.POno), TRIM(ship.OP), COALESCE(TRIM(po_ref.poref), ''), ship.carton");
 
-        // ============================================================
-        // Level PO+OP -- SEKARANG diagregasi dari $cartonLevel (1 baris =
-        // 1 carton fisik), BUKAN lagi langsung dari baris ship.
-        // ============================================================
         $ship = $db->query()
             ->fromSub($cartonLevel, 'c')
             ->selectRaw("
@@ -538,6 +258,8 @@ class ShipRepository
                 ) AS balance_ctn
             ");
 
+        $query->where('po.mif', $mif);
+
         if (!empty($params['search'])) {
             $search = trim($params['search']);
             $query->where(function ($q) use ($search) {
@@ -585,21 +307,38 @@ class ShipRepository
             }
         }
 
-        $total = $db->query()
-            ->fromSub(clone $query, 'x')
-            ->count();
+        $rowsData = $query->get();
+        foreach ($rowsData as $r) {
+            $r->mif = $mif; // BARU -- tandai asal koneksi, berguna setelah digabung
+            $r->gac_sort_ts = $this->normalizeGacForSort($r->GAC);
+        }
+
+        return $rowsData;
+    }
+
+    public function getShipList($offset, $rows, array $params)
+    {
+        $isSuper = session('guserpk') == 34;
+
+        if ($isSuper) {
+            $rowsAndon = $this->fetchAll('mysql_andon', 1, $params);
+            $rowsMysql = $this->fetchAll('mysql', 2, $params);
+            $combined  = $rowsAndon->concat($rowsMysql);
+        } else {
+            $mif        = session('pos') == 1 ? 1 : 2;
+            $connection = $this->resolveConnection($mif);
+            $combined   = $this->fetchAll($connection, $mif, $params);
+        }
+
+        $total = $combined->count();
 
         $sortDir = (isset($params['sort']) && strtolower((string) $params['sort']) === 'asc')
             ? 'asc'
             : 'desc';
 
-        $allData = $query->get();
-        foreach ($allData as $r) {
-            $r->gac_sort_ts = $this->normalizeGacForSort($r->GAC);
-        }
         $sorted = $sortDir === 'asc'
-            ? $allData->sortBy('gac_sort_ts')->values()
-            : $allData->sortByDesc('gac_sort_ts')->values();
+            ? $combined->sortBy('gac_sort_ts')->values()
+            : $combined->sortByDesc('gac_sort_ts')->values();
 
         $data = $sorted->slice($offset, $rows)->values();
 
@@ -608,6 +347,232 @@ class ShipRepository
             'data'  => $data,
         ];
     }
+    // public function getShipList($offset, $rows, array $params)
+    // {
+    //     $db = $this->conn();
+
+    //     // ============================================================
+    //     // BARU -- FIX UTAMA: level agregasi TAMBAHAN, per NOMOR CARTON
+    //     // FISIK (bukan per baris ship/popk). Satu nomor carton bisa
+    //     // muncul di BEBERAPA baris ship (mixed carton, beda popk) --
+    //     // level ini menggabungkannya jadi SATU baris per carton, supaya
+    //     // level berikutnya (per PO+OP) menghitung carton yang BENAR,
+    //     // bukan carton yang keitung dobel/tripel gara-gara jumlah baris.
+    //     // ============================================================
+    //     $cartonLevel = $db->table('ship')
+    //         ->join('po as po_ref', 'po_ref.popk', '=', 'ship.popk')
+    //         ->selectRaw("
+    //             TRIM(ship.POno) AS POno,
+    //             TRIM(ship.OP) AS OP,
+    //             COALESCE(TRIM(po_ref.poref), '') AS poref,
+    //             ship.carton,
+    //             MAX(ship.popk) AS popk,
+    //             MIN(ship.part) AS part,
+    //             SUM(ship.pcs) AS pcs,
+    //             MAX(ship.jmlpcs) AS jmlpcs,
+    //             MAX(ship.fca) AS fca,
+    //             MIN(ship.status) AS status,
+    //             MAX(ship.pinjam) AS pinjam,
+    //             MAX(ship.kembali) AS kembali
+    //         ")
+    //         ->groupByRaw("TRIM(ship.POno), TRIM(ship.OP), COALESCE(TRIM(po_ref.poref), ''), ship.carton");
+
+    //     // ============================================================
+    //     // Level PO+OP -- SEKARANG diagregasi dari $cartonLevel (1 baris =
+    //     // 1 carton fisik), BUKAN lagi langsung dari baris ship.
+    //     // ============================================================
+    //     $ship = $db->query()
+    //         ->fromSub($cartonLevel, 'c')
+    //         ->selectRaw("
+    //             c.POno,
+    //             c.OP,
+    //             c.poref,
+    //             MAX(c.popk) AS popk,
+    //             MIN(c.part) AS part,
+    //             SUM(CASE WHEN c.status <= 7 THEN c.pcs ELSE 0 END) AS pcs_stuff,
+    //             SUM(CASE WHEN c.fca = 1 THEN c.pcs ELSE 0 END) AS pcs_inspect,
+    //             SUM(CASE WHEN c.status = 7 THEN c.pcs ELSE 0 END) AS pcs_ship,
+    //             SUM(CASE WHEN c.status <= 7 THEN c.jmlpcs ELSE 0 END) AS ctn_stuff,
+    //             SUM(CASE WHEN c.fca = 1 THEN c.jmlpcs ELSE 0 END) AS ctn_inspect,
+    //             SUM(CASE WHEN c.status = 7 THEN c.jmlpcs ELSE 0 END) AS ctn_ship,
+    //             MAX(c.pinjam) AS pinjam,
+    //             MAX(c.kembali) AS kembali,
+    //             MIN(c.status) AS min_status,
+    //             COUNT(*) AS total_carton,
+    //             SUM(
+    //                 CASE
+    //                     WHEN c.pinjam IS NOT NULL
+    //                     AND c.pinjam <> ''
+    //                     AND c.pinjam <> '0000-00-00 00:00:00'
+    //                     THEN c.jmlpcs
+    //                     ELSE 0
+    //                 END
+    //             ) AS pinjam_count,
+    //             SUM(CASE WHEN c.fca = 1 THEN c.jmlpcs ELSE 0 END) AS borrowed_count
+    //         ")
+    //         ->groupByRaw("c.POno, c.OP, c.poref");
+
+    //     $poShipCols = [];
+    //     for ($i = 1; $i <= 10; $i++) {
+    //         $poShipCols[] = "MAX(ship{$i}) AS ship{$i}";
+    //     }
+    //     $po = $db->table('po')
+    //         ->selectRaw("
+    //             TRIM(POno) AS POno,
+    //             TRIM(OP) AS OP,
+    //             COALESCE(TRIM(poref), '') AS poref,
+    //             MAX(popk) AS popk,
+    //             MAX(buyer) AS buyer,
+    //             MAX(season) AS season,
+    //             MAX(style) AS style,
+    //             MAX(silhouette) AS silhouette,
+    //             MAX(mif) AS mif,
+    //             MAX(gabung) AS gabung,
+    //             MAX(GAC) AS GAC,
+    //             MAX(qty) AS qty,
+    //             MAX(ordpk) AS ordpk,
+    //             GROUP_CONCAT(DISTINCT customer SEPARATOR ', ') AS customer,
+    //             GROUP_CONCAT(DISTINCT material SEPARATOR ', ') AS material,
+    //             GROUP_CONCAT(DISTINCT secsz SEPARATOR ', ') AS secsz,
+    //             " . implode(', ', $poShipCols) . "
+    //         ")
+    //         ->groupByRaw("TRIM(POno), TRIM(OP), COALESCE(TRIM(poref), '')");
+
+    //     $shipdateCase = 'CASE ship.part';
+    //     for ($i = 1; $i <= 10; $i++) {
+    //         $shipdateCase .= " WHEN {$i} THEN po.ship{$i}";
+    //     }
+    //     $shipdateCase .= ' ELSE NULL END AS shipdate';
+
+    //     $query = $db->query()
+    //         ->fromSub($po, 'po')
+    //         ->joinSub($ship, 'ship', function ($join) {
+    //             $join->on('po.POno', '=', 'ship.POno')
+    //                 ->on('po.OP', '=', 'ship.OP')
+    //                 ->on('po.poref', '=', 'ship.poref');
+    //         })
+    //         ->selectRaw("
+    //             ship.popk,
+    //             ship.part,
+    //             po.POno,
+    //             po.OP,
+    //             po.customer,
+    //             po.material,
+    //             po.secsz,
+    //             po.poref,
+    //             po.buyer,
+    //             po.season,
+    //             po.style,
+    //             po.silhouette,
+    //             po.mif,
+    //             po.gabung,
+    //             po.GAC,
+    //             po.qty,
+    //             po.ordpk,
+    //             {$shipdateCase},
+    //             ship.pcs_stuff,
+    //             ship.pcs_inspect,
+    //             ship.pcs_ship,
+    //             ship.ctn_stuff,
+    //             ship.ctn_inspect,
+    //             ship.ctn_ship,
+    //             ship.pinjam,
+    //             ship.kembali,
+    //             ship.min_status,
+    //             ship.total_carton,
+    //             ship.pinjam_count,
+    //             ship.borrowed_count,
+    //             (ship.pinjam_count - ship.borrowed_count) AS returned_count,
+    //             CASE
+    //                 WHEN ship.pinjam_count > 0
+    //                     AND ship.borrowed_count = 0
+    //                     THEN 'complete'
+    //                 WHEN ship.pinjam_count > 0
+    //                     THEN 'partial'
+    //                 ELSE ''
+    //             END AS inspect_status,
+    //             (
+    //                 ship.pcs_stuff
+    //                 - ship.pcs_inspect
+    //                 - ship.pcs_ship
+    //             ) AS balance_pcs,
+    //             (
+    //                 ship.ctn_stuff
+    //                 - ship.ctn_inspect
+    //                 - ship.ctn_ship
+    //             ) AS balance_ctn
+    //         ");
+
+    //     if (!empty($params['search'])) {
+    //         $search = trim($params['search']);
+    //         $query->where(function ($q) use ($search) {
+    //             $q->where('po.POno', 'like', "%{$search}%")
+    //                 ->orWhere('po.OP', 'like', "%{$search}%")
+    //                 ->orWhere('po.customer', 'like', "%{$search}%")
+    //                 ->orWhere('po.season', 'like', "%{$search}%")
+    //                 ->orWhere('po.style', 'like', "%{$search}%");
+    //         });
+    //     }
+    //     if (!empty($params['buyer'])) {
+    //         $query->where('po.buyer', $params['buyer']);
+    //     }
+    //     if (!empty($params['year'])) {
+    //         $year      = (int) $params['year'];
+    //         $shortYear = $year - 2000;
+    //         $query->whereRaw(
+    //             'LEFT(TRIM(po.OP), 2) = ?',
+    //             [sprintf('%02d', $shortYear)]
+    //         );
+    //     }
+    //     if (!empty($params['only_pinjam'])) {
+    //         $query->where('ship.pinjam_count', '>', 0);
+    //     }
+    //     if (!empty($params['status'])) {
+    //         switch ($params['status']) {
+    //             case 'finished':
+    //                 $query->where('ship.min_status', '<', 7);
+    //                 break;
+    //             case 'inspect':
+    //                 $query->where('ship.borrowed_count', '>', 0);
+    //                 break;
+    //             case 'shipment':
+    //                 $query->where('ship.min_status', '>=', 7);
+    //                 break;
+    //         }
+    //     }
+    //     if (!empty($params['ex_factory'])) {
+    //         $range = $this->resolveExFactoryRange($params['ex_factory']);
+    //         if ($range) {
+    //             $query->whereBetween('po.GAC', [
+    //                 $range['start']->format('Y-m-d 00:00:00'),
+    //                 $range['end']->format('Y-m-d 23:59:59'),
+    //             ]);
+    //         }
+    //     }
+
+    //     $total = $db->query()
+    //         ->fromSub(clone $query, 'x')
+    //         ->count();
+
+    //     $sortDir = (isset($params['sort']) && strtolower((string) $params['sort']) === 'asc')
+    //         ? 'asc'
+    //         : 'desc';
+
+    //     $allData = $query->get();
+    //     foreach ($allData as $r) {
+    //         $r->gac_sort_ts = $this->normalizeGacForSort($r->GAC);
+    //     }
+    //     $sorted = $sortDir === 'asc'
+    //         ? $allData->sortBy('gac_sort_ts')->values()
+    //         : $allData->sortByDesc('gac_sort_ts')->values();
+
+    //     $data = $sorted->slice($offset, $rows)->values();
+
+    //     return [
+    //         'total' => $total,
+    //         'data'  => $data,
+    //     ];
+    // }
 
     private function resolveExFactoryRange(string $preset): ?array
     {

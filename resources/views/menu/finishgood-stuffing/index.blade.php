@@ -425,27 +425,78 @@
             font-size: 11px;
             color: #94a3b8;
         }
+
+        /* GANTI/TAMBAH di section css_custom, setelah style yang sudah ada */
+
+.segmented-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: #f1f5f9;
+    border-radius: 12px;
+    padding: 4px;
+    border: none;
+    margin-bottom: 0 !important;
+}
+.segmented-tabs .nav-item {
+    margin: 0;
+}
+.segmented-tabs .nav-link {
+    border: none !important;
+    border-radius: 9px !important;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    background: transparent;
+    transition: all .15s ease;
+    white-space: nowrap;
+}
+.segmented-tabs .nav-link:hover {
+    color: #334155;
+}
+.segmented-tabs .nav-link.active {
+    background: #fff !important;
+    color: #0f172a !important;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .12);
+}
+.segmented-tabs .nav-link .badge {
+    font-size: 9.5px;
+    vertical-align: 1px;
+}
+
+/* Wrapper baris tab -- rata kanan seperti contoh, kasih jarak bawah */
+.segmented-tabs-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+}
     </style>
 @endsection
 @section('content')
     <div class="page-wrap">
         {{-- BARU -- FIX UTAMA: 2 tab -- "Daftar Data OP" (isi LAMA, tidak
              berubah) dan "Container" (BARU). --}}
-        <ul class="nav nav-tabs mb-3 justify-content-end" id="stuffingIndexTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="tabBtnDaftarOp" data-bs-toggle="tab" data-bs-target="#tabPaneDaftarOp"
-                    type="button" role="tab">
-                    <i class="fas fa-list me-1"></i> Daftar Data OP
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tabBtnContainer" data-bs-toggle="tab" data-bs-target="#tabPaneContainer"
-                    type="button" role="tab" onclick="loadContainerTabIfNeeded()">
-                    <i class="fas fa-box me-1"></i> Container
-                    <span id="containerTabCount" class="badge bg-secondary ms-1 d-none">0</span>
-                </button>
-            </li>
-        </ul>
+        <div class="segmented-tabs-row">
+            <ul class="nav segmented-tabs" id="stuffingIndexTabs" role="tablist">
+                @if (session('guserpk') == 35)
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="tabBtnDaftarOp" data-bs-toggle="tab" data-bs-target="#tabPaneDaftarOp"
+                            type="button" role="tab">
+                            <i class="fas fa-list me-1"></i> Daftar Data OP
+                        </button>
+                    </li>
+                
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tabBtnContainer" data-bs-toggle="tab" data-bs-target="#tabPaneContainer"
+                            type="button" role="tab" onclick="loadContainerTabIfNeeded()">
+                            <i class="fas fa-truck-fast me-1"></i> Container
+                            <span id="containerTabCount" class="badge bg-secondary ms-1 d-none">0</span>
+                        </button>
+                    </li>
+                @endif
+            </ul>
+        </div>
 
         <div class="tab-content" id="stuffingIndexTabContent">
             {{-- ============================================================
@@ -519,6 +570,7 @@
             {{-- ============================================================
                  TAB 2 -- BARU -- daftar Container dari EXIM.
                  ============================================================ --}}
+            @if (session('guserpk') == 35)
             <div class="tab-pane fade" id="tabPaneContainer" role="tabpanel">
                 <div id="containerListEmpty" class="text-center text-muted py-5 d-none">
                     <img src="{{ asset('public/css/images/no-data-6.svg') }}" width="160">
@@ -527,6 +579,7 @@
                 <div id="containerListLoading" class="text-center text-muted py-5">Memuat container...</div>
                 <div id="containerListGrid" class="row g-3"></div>
             </div>
+            @endif
         </div>
     </div>
 
@@ -595,14 +648,16 @@
 
 
         // GANTI bagian restore filter di $(function() {...}) -- tambah baris baru:
-
+        window.canSeeContainerTab = @json(session('guserpk') == 35);
         $(function() {
             loadCardsSummaryGlobal();
 
             // BARU -- FIX UTAMA: muat daftar container di awal (buat badge count),
             // tandai sudah loaded supaya klik tab "Container" tidak fetch ulang.
-            containerTabLoaded = true;
-            loadContainerList();
+            if (window.canSeeContainerTab) {
+                containerTabLoaded = true;
+                loadContainerList();
+            }
 
             let saved = getSavedListState();
             if (saved) {
@@ -777,32 +832,18 @@
 
         function formatPackingPlanStatus(value) {
             const map = {
-                pending: {
-                    label: 'Pending',
-                    bg: '#f1f5f9',
-                    color: '#64748b'
-                },
-                partial: {
-                    label: 'Partial',
-                    bg: '#FFEBDD',
-                    color: '#f97316'
-                },
-                complete: {
-                    label: 'Complete',
-                    bg: '#dcfce7',
-                    color: '#8bc63f'
-                },
+                pending: { label: 'Pending', bg: '#f1f5f9', color: '#475569' },
+                partial: { label: 'Partial', bg: '#FFEBDD', color: '#f97316' },
+                complete: { label: 'Complete', bg: '#dcfce7', color: '#16a34a' },
             };
             const s = map[value] || map.pending;
-
             return `
-                <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;
-                    font-size:11px;font-weight:700;background:${s.bg};color:${s.color};">
+                <span style="display:inline-flex;align-items:center;padding:5px 14px;border-radius:999px;
+                    font-size:11.5px;font-weight:700;background:${s.bg};color:${s.color};">
                     ${s.label}
                 </span>
             `;
         }
-
         // ============================================================
         // FORMATTER UMUM
         // ============================================================
@@ -1029,7 +1070,7 @@
             <div class="col-12 col-md-6 col-xl-4">
                 <div class="container-card" onclick="openContainerPoOpModal(${idx})">
                     <div class="cc-title">
-                        <i class="fas fa-box text-secondary"></i>
+                        <i class="fas fa-truck-fast me-1"></i>
                         <span>${c.contno ?? '-'}</span>
                         ${statusBadge}
                     </div>
