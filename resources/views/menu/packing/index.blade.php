@@ -275,33 +275,29 @@
                 ]'
                     data-dg-default="" style="width:190px">
             </x-slot>
-            <table id="dgOrder" class="easyui-datagrid" style="width:100%;height:600px" url="{{ route('packing.list') }}"
-                method="get" pagination="true" pageSize="50" pageList="[25,50,100,200,500]" rownumbers="false"
-                singleSelect="true" fitColumns="false" border="false">
+            <table id="dgOrder" style="width:100%;height:600px" pagination="true" pageSize="50"
+                pageList="[25,50,100,200,500]" rownumbers="false" singleSelect="true" fitColumns="false"
+                border="false">
                 <thead frozen="true">
                     <tr>
                         <th field="action" width="90" formatter="formatAction" align="center" rowspan="2">Aksi</th>
                         <th field="OP" width="230" formatter="formatOrderInfo" rowspan="2">Order Information</th>
                         <th field="POno" width="150" formatter="formatPOno" rowspan="2">PO No</th>
-                        <th field="GAC" width="100" align="center" formatter="formatExFactory" rowspan="2">Ex
-                            Factory</th>
+                        <th field="GAC" width="100" align="center" formatter="formatExFactory" rowspan="2">Ex Factory</th>
                     </tr>
                     <tr></tr>
                 </thead>
                 <thead>
                     <tr>
                         <th field="poref" width="150" rowspan="2">License<br>PO Ref</th>
-                        <th field="packing_plan_status" width="120" align="center" rowspan="2"
-                            formatter="formatPackingPlanStatus">Packing Plan</th>
+                        <th field="packing_plan_status" width="120" align="center" rowspan="2" formatter="formatPackingPlanStatus">Packing Plan</th>
                         <th width="90" colspan="3" align="right">Packing /Pcs</th>
-                        <th field="ctn_summary" width="250" align="left" rowspan="2" formatter="formatCtnSummary">
-                            CTN</th>
+                        <th field="ctn_summary" width="250" align="left" rowspan="2" formatter="formatCtnSummary">CTN</th>
                     </tr>
                     <tr>
                         <th field="packing_qty_plan" width="80" align="right" formatter="formatNumber">Plan</th>
                         <th field="packing_qty" width="80" align="right" formatter="formatNumber">Actual</th>
-                        <th field="packing_qty_balance" width="80" align="right" formatter="formatBalanceCell">Balance
-                        </th>
+                        <th field="packing_qty_balance" width="80" align="right" formatter="formatBalanceCell">Balance</th>
                     </tr>
                 </thead>
             </table>
@@ -343,38 +339,49 @@
             sessionStorage.setItem('packingListState', JSON.stringify(state));
         }
 
-
-        // GANTI bagian restore filter di $(function() {...}) -- tambah baris baru:
-
-        $(function() {
+        $(function () {
             let saved = getSavedListState();
 
             if (saved) {
                 $('#dgOrder_filterbar [data-dg-filter="search"]').val(saved.search || '');
                 $('#dgOrder_filterbar [data-dg-filter="buyer"]').combobox('setValue', saved.buyer || '');
-                $('#dgOrder_filterbar [data-dg-filter="year"]').combobox('setValue', saved.year ?? new Date()
-                    .getFullYear());
+                $('#dgOrder_filterbar [data-dg-filter="year"]').combobox('setValue', saved.year ?? new Date().getFullYear());
                 if (saved.exFactory) {
                     $('#dgOrder_filterbar [data-dg-filter="ex_factory"]').combobox('setValue', saved.exFactory);
                 }
-                // BARU
                 if (saved.planStatus) {
-                    $('#dgOrder_filterbar [data-dg-filter="packing_plan_status"]').combobox('setValue', saved
-                        .planStatus);
+                    $('#dgOrder_filterbar [data-dg-filter="packing_plan_status"]').combobox('setValue', saved.planStatus);
                 }
             }
 
+            // GANTI -- FIX UTAMA: inisialisasi TANPA 'url' -- mencegah auto-fetch
+            // SAAT INI JUGA (EasyUI langsung fetch begitu 'url' di-set saat
+            // create). 'url' di-set BELAKANGAN lewat options, baru SATU load
+            // eksplisit dipanggil setelahnya.
             $('#dgOrder').datagrid({
+                method: 'get',
+                pagination: true,
+                pageSize: 50,
+                pageList: [25, 50, 100, 200, 500],
+                rownumbers: false,
+                singleSelect: true,
+                fitColumns: false,
+                border: false,
                 onLoadSuccess: onLoadTable
             });
 
+            $('#dgOrder').datagrid('options').url = "{{ route('packing.list') }}";
+
+            // BARU -- FIX UTAMA: HANYA SATU jalur load total.
             if (saved?.modalOp) {
                 restoredDgOrderPage = saved.page || 1;
                 openPackingDetailModal(null, saved.modalPo, saved.modalOp, saved.modalPoref, saved.modalMif);
-            } else if (window.EasyuiDG) {
-                window.EasyuiDG.reload('dgOrder', saved?.page || 1);
+                // modal detail akan reload dgOrder sendiri saat ditutup.
+            } else {
+                window.EasyuiDG?.reload('dgOrder', saved?.page || 1);
             }
         });
+
         window.addEventListener('pageshow', function(event) {
             if (!event.persisted) return;
 

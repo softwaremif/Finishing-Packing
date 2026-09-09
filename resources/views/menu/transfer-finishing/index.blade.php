@@ -118,7 +118,7 @@
             sort-asc-label="Awal Ex-Factory"
             sort-desc-label="Akhir Ex-Factory"
         >
-            <table id="dgOrder" class="easyui-datagrid" style="width:100%;height:600px"
+            <table id="dgOrder" style="width:100%;height:600px"
                 url="{{ route('tf_finishing.list') }}" method="get" pagination="true" pageSize="50"
                 pageList="[25,50,100,200,500]" rownumbers="false" singleSelect="true" checkOnSelect="true"
                 selectOnCheck="true" fitColumns="false" border="false">
@@ -212,13 +212,13 @@
     // BARU: PO No + Line digabung 1 cell (Line jadi sub-text kecil).
     // ============================================================
     function formatPOno(value, row) {
-    return `
-        <div class="cell-stack">
-            <div class="cs-main">${value ?? '-'}</div>
-            <div class="cs-sub">${row.customer ?? '-'}</div>
-        </div>
-    `;
-}
+        return `
+            <div class="cell-stack">
+                <div class="cs-main">${value ?? '-'}</div>
+                <div class="cs-sub">${row.customer ?? '-'}</div>
+            </div>
+        `;
+    }
 
     // ============================================================
     // BARU: Order Information -- OP, Buyer, Season, Qty digabung 1 cell.
@@ -341,14 +341,6 @@
         $('#detailModalDesc').text(rows.length ? (rows[0].silhouette ?? '-') : '-');
     }
 
-    // Tutup modal (klik X, klik luar, atau Esc) -> reload tabel index,
-    // supaya qty/transfer/balance ikut update kalau baru saja input.
-    document.getElementById('detailModal').addEventListener('hidden.bs.modal', function () {
-        if (window.EasyuiDG) {
-            window.EasyuiDG.reload('dgOrder');
-        }
-    });
-
     function formatDashModal(value) {
         return (value === null || value === undefined || value === '') ? '-' : value;
     }
@@ -402,10 +394,10 @@
     // INIT — restore filter + modal setelah Back dari Input Transfer.
     // ============================================================
     let restoredDgOrderPage = null;
-
+    
     document.getElementById('detailModal').addEventListener('hidden.bs.modal', function () {
         if (!window.EasyuiDG) return;
-
+    
         if (restoredDgOrderPage) {
             window.EasyuiDG.reload('dgOrder', restoredDgOrderPage);
             restoredDgOrderPage = null;

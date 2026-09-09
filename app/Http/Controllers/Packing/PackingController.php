@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Packing;
 
 use App\Http\Controllers\Controller;
+use App\Services\OrderImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -93,82 +94,7 @@ class PackingController extends Controller
     // asset LOKAL aplikasi ini. SAMA PERSIS logic dengan TF Finishing/Polibag.
     private function addOrderImageToRows($rows): void
     {
-        if ($rows->isEmpty()) {
-            return;
-        }
-
-        $gisFotoBase        = rtrim(config('services.foto.gis_base'), '/');
-        $productionFotoBase = rtrim(config('services.foto.production_base'), '/');
-        $sampleFotoBase     = rtrim(config('services.foto.sample_base'), '/');
-
-        $noImageUrl = asset('public/css/images/no-img.png');
-
-        foreach ($rows as $r) {
-            $r->order_image = $noImageUrl;
-        }
-
-        $ordpks = $rows->pluck('ordpk')->filter()->unique()->values()->all();
-        if (empty($ordpks)) {
-            return;
-        }
-
-        $ordRows = DB::connection('mysql_gis')->table('ord')
-            ->whereIn('ordpk', $ordpks)
-            ->get(['ordpk', 'srno', 'foto', 'foto2', 'stsfoto']);
-
-        $ordByOrdpk = $ordRows->keyBy('ordpk');
-
-        $srnos = $ordRows->pluck('srno')->filter()->unique()->values()->all();
-
-        $srpkBySrno = [];
-        $fotoBySrpk = [];
-
-        if (!empty($srnos)) {
-            $reqRows = DB::connection('mysql_sample')->table('request')
-                ->whereIn('srno', $srnos)
-                ->get(['srno', 'srpk']);
-
-            foreach ($reqRows as $r) {
-                $srpkBySrno[$r->srno] = $r->srpk;
-            }
-
-            $srpks = array_values(array_unique(array_values($srpkBySrno)));
-
-            if (!empty($srpks)) {
-                $statusRows = DB::connection('mysql_sample')->table('status')
-                    ->whereIn('srpk', $srpks)
-                    ->orderByDesc('statuspk')
-                    ->get(['srpk', 'foto', 'statuspk']);
-
-                foreach ($statusRows as $r) {
-                    if (!isset($fotoBySrpk[$r->srpk])) {
-                        $fotoBySrpk[$r->srpk] = $r->foto;
-                    }
-                }
-            }
-        }
-
-        foreach ($rows as $r) {
-            $ord = $ordByOrdpk->get($r->ordpk);
-            if (!$ord) {
-                continue;
-            }
-
-            $stsfoto = $ord->stsfoto ?? null;
-            $foto1   = $ord->foto ?? null;
-            $srno    = $ord->srno ?? null;
-
-            $srpk  = $srno ? ($srpkBySrno[$srno] ?? null) : null;
-            $foto2 = $srpk ? ($fotoBySrpk[$srpk] ?? null) : ($ord->foto2 ?? null);
-
-            if ($stsfoto == 1) {
-                $r->order_image = !empty($foto1) ? "{$gisFotoBase}/{$foto1}" : $noImageUrl;
-            } elseif ($stsfoto == 2) {
-                $r->order_image = !empty($foto1) ? "{$productionFotoBase}/{$foto1}" : $noImageUrl;
-            } else {
-                $r->order_image = !empty($foto2) ? "{$sampleFotoBase}/{$foto2}" : $noImageUrl;
-            }
-        }
+        app(OrderImageService::class)->attachToRows($rows, 'ordpk', 'order_image');
     }
 
     // Penjumlahan nilai kolom QTY, Packing /Pcs, CTN per PO+OP.
@@ -352,18 +278,18 @@ class PackingController extends Controller
             ->where('po.OP', '<>', '')
             ->where('po.mif', $mif);
 
-        // FIX UTAMA: tambah po.ordpk (utk addOrderImageToRows) dan po.GAC
-        // (Ex Factory) -- sebelumnya TIDAK ada di select, jadi kolom Ex
-        // Factory & foto tidak bisa ditampilkan.
-        $selectFields = "po.popk, po.ordpk, po.sts, po.gabung, po.shipdate1, po.shipdate2,
-        po.customer, po.season, po.POno, po.OP, po.poref, po.mif, po.GAC,
-        po.buyer, po.style, po.qty, po.silhouette, po.ctn AS ctn,
-        COALESCE(pkp.packing_qty_plan,0) AS packing_qty_plan,
-        COALESCE(pk.packing_qty,0)       AS packing_qty,
-        (COALESCE(pk.packing_qty,0) - COALESCE(pkp.packing_qty_plan,0)) AS packing_qty_balance,
-        COALESCE(pctn.packing_ctn,0) AS packing_ctn,
-        (COALESCE(pctn.packing_ctn,0) - po.ctn) AS ctn_balance
-    ";
+            // FIX UTAMA: tambah po.ordpk (utk addOrderImageToRows) dan po.GAC
+            // (Ex Factory) -- sebelumnya TIDAK ada di select, jadi kolom Ex
+            // Factory & foto tidak bisa ditampilkan.
+            $selectFields = "po.popk, po.ordpk, po.sts, po.gabung, po.shipdate1, po.shipdate2,
+            po.customer, po.season, po.POno, po.OP, po.poref, po.mif, po.GAC,
+            po.buyer, po.style, po.qty, po.silhouette, po.ctn AS ctn,
+            COALESCE(pkp.packing_qty_plan,0) AS packing_qty_plan,
+            COALESCE(pk.packing_qty,0)       AS packing_qty,
+            (COALESCE(pk.packing_qty,0) - COALESCE(pkp.packing_qty_plan,0)) AS packing_qty_balance,
+            COALESCE(pctn.packing_ctn,0) AS packing_ctn,
+            (COALESCE(pctn.packing_ctn,0) - po.ctn) AS ctn_balance
+        ";
 
         if ($isDetailCall) {
             $transfer = $db->table('bj')
@@ -498,12 +424,6 @@ class PackingController extends Controller
         }
     }
 
-    /**
-     * Hitung rentang tanggal [start, end] untuk preset filter Ex Factory.
-     * SAMA PERSIS logic dengan TF Finishing/Polibag.
-     *
-     * @return array{start: \Carbon\Carbon, end: \Carbon\Carbon}|null
-     */
     private function resolveExFactoryRange(string $preset): ?array
     {
         $today = \Carbon\Carbon::today();

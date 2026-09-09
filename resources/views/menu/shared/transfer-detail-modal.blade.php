@@ -16,13 +16,11 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <table id="dgDetailModal" class="easyui-datagrid" style="width:100%;height:350px"
-                    url="{{ $cfg['routes']['detailByPoOp'] }}" method="get"
-                    rownumbers="false" singleSelect="true" fitColumns="false" border="false"
-                    data-options="
-                        loadMsg: 'Memuat data...',
-                        onLoadSuccess: onDetailModalLoad
-                    ">
+                {{-- GANTI -- HAPUS class="easyui-datagrid", url, dan method
+                     (semuanya sekarang dikendalikan lewat JS
+                     openDetailModal() di file induk). --}}
+                <table id="dgDetailModal" style="width:100%;height:350px"
+                    rownumbers="false" singleSelect="true" fitColumns="false" border="false">
                     <thead>
                         <tr>
                             <th field="action" width="50" align="center" formatter="formatActionModal">Aksi</th>
@@ -43,7 +41,6 @@
                             @if ($cfg['showKeluarColumn'])
                                 <th field="keluar" width="90" align="right">Keluar</th>
                             @endif
-                            {{-- <th field="silhouette" width="160" align="left" formatter="formatDashModal">Description</th> --}}
                         </tr>
                     </thead>
                 </table>

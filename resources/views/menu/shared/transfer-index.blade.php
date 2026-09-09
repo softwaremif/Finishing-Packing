@@ -110,7 +110,7 @@
                 </x-slot>
             @endif
 
-            <table id="dgOrder" class="easyui-datagrid" style="width:100%;height:600px"
+            <table id="dgOrder" style="width:100%;height:600px"
                 url="{{ $cfg['routes']['list'] }}" method="get" pagination="true" pageSize="50"
                 pageList="[25,50,100,200,500]" rownumbers="false" singleSelect="true" fitColumns="false"
                 border="false">
@@ -265,8 +265,19 @@
             $(modalEl).one('shown.bs.modal', function () { $('#dgDetailModal').datagrid('resize'); });
 
             if (!$('#dgDetailModal').data('datagrid')) {
-                $('#dgDetailModal').datagrid();
+                $('#dgDetailModal').datagrid({
+                    method: 'get',
+                    rownumbers: false,
+                    singleSelect: true,
+                    fitColumns: false,
+                    border: false,
+                    loadMsg: 'Memuat data...',
+                    onLoadSuccess: onDetailModalLoad
+                });
             }
+
+            $('#dgDetailModal').datagrid('options').url = R.detailByPoOp;
+
             $('#dgDetailModal').datagrid('load', { po: po ?? '', op: op, mif: mif });
         }
 

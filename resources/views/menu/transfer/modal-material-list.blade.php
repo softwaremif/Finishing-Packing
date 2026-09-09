@@ -15,13 +15,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <table id="dgDetailModal" class="easyui-datagrid" style="width:100%;height:350px"
-                    url="{{ route('transfer.detail-by-po-op') }}" method="get"
-                    rownumbers="false" singleSelect="true" fitColumns="false" border="false"
-                    data-options="
-                        loadMsg: 'Memuat data...',
-                        onLoadSuccess: onDetailModalLoad
-                    ">
+                <table id="dgDetailModal" style="width:100%;height:350px"
+                    rownumbers="false" singleSelect="true" fitColumns="false" border="false">
                     <thead>
                         <tr>
                             <th field="action" width="50" align="center" formatter="formatActionModal">Aksi</th>
