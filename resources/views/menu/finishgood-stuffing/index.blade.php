@@ -428,49 +428,49 @@
 
         /* GANTI/TAMBAH di section css_custom, setelah style yang sudah ada */
 
-.segmented-tabs {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    background: #f1f5f9;
-    border-radius: 12px;
-    padding: 4px;
-    border: none;
-    margin-bottom: 0 !important;
-}
-.segmented-tabs .nav-item {
-    margin: 0;
-}
-.segmented-tabs .nav-link {
-    border: none !important;
-    border-radius: 9px !important;
-    padding: 8px 18px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #64748b;
-    background: transparent;
-    transition: all .15s ease;
-    white-space: nowrap;
-}
-.segmented-tabs .nav-link:hover {
-    color: #334155;
-}
-.segmented-tabs .nav-link.active {
-    background: #fff !important;
-    color: #0f172a !important;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, .12);
-}
-.segmented-tabs .nav-link .badge {
-    font-size: 9.5px;
-    vertical-align: 1px;
-}
+        .segmented-tabs {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            background: #f1f5f9;
+            border-radius: 12px;
+            padding: 4px;
+            border: none;
+            margin-bottom: 0 !important;
+        }
+        .segmented-tabs .nav-item {
+            margin: 0;
+        }
+        .segmented-tabs .nav-link {
+            border: none !important;
+            border-radius: 9px !important;
+            padding: 8px 18px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #64748b;
+            background: transparent;
+            transition: all .15s ease;
+            white-space: nowrap;
+        }
+        .segmented-tabs .nav-link:hover {
+            color: #334155;
+        }
+        .segmented-tabs .nav-link.active {
+            background: #fff !important;
+            color: #0f172a !important;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, .12);
+        }
+        .segmented-tabs .nav-link .badge {
+            font-size: 9.5px;
+            vertical-align: 1px;
+        }
 
-/* Wrapper baris tab -- rata kanan seperti contoh, kasih jarak bawah */
-.segmented-tabs-row {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 16px;
-}
+        /* Wrapper baris tab -- rata kanan seperti contoh, kasih jarak bawah */
+        .segmented-tabs-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 16px;
+        }
     </style>
 @endsection
 @section('content')
@@ -539,7 +539,7 @@
                     exfactory exfactory-name="ex_factory" sort-dropdown sort-asc-label="Awal Ex-Factory"
                     sort-desc-label="Akhir Ex-Factory">
 
-                    <table id="dgOrder" class="easyui-datagrid" style="width:100%;height:600px"
+                    <table id="dgOrder" style="width:100%;height:600px"
                         url="{{ route('finish-good-stuffing.list') }}" method="get" pagination="true" pageSize="50"
                         pageList="[25,50,100,200,500]" rownumbers="false" singleSelect="true" fitColumns="false"
                         border="false">
@@ -646,14 +646,18 @@
             });
         }
 
-
-        // GANTI bagian restore filter di $(function() {...}) -- tambah baris baru:
+        let lastCardsRefreshAt = 0;
+        function loadCardsSummaryGlobalThrottled() {
+            const now = Date.now();
+            if (now - lastCardsRefreshAt < 800) return;
+            lastCardsRefreshAt = now;
+            loadCardsSummaryGlobal();
+        }
+        
         window.canSeeContainerTab = @json(session('guserpk') == 35);
         $(function() {
-            loadCardsSummaryGlobal();
+            loadCardsSummaryGlobalThrottled();
 
-            // BARU -- FIX UTAMA: muat daftar container di awal (buat badge count),
-            // tandai sudah loaded supaya klik tab "Container" tidak fetch ulang.
             if (window.canSeeContainerTab) {
                 containerTabLoaded = true;
                 loadContainerList();
@@ -663,28 +667,25 @@
             if (saved) {
                 $('#dgOrder_filterbar [data-dg-filter="search"]').val(saved.search || '');
                 $('#dgOrder_filterbar [data-dg-filter="buyer"]').combobox('setValue', saved.buyer || '');
-                $('#dgOrder_filterbar [data-dg-filter="year"]').combobox('setValue', saved.year ?? new Date()
-                    .getFullYear());
+                $('#dgOrder_filterbar [data-dg-filter="year"]').combobox('setValue', saved.year ?? new Date().getFullYear());
                 if (saved.exFactory) {
                     $('#dgOrder_filterbar [data-dg-filter="ex_factory"]').combobox('setValue', saved.exFactory);
                 }
             }
-            $('#dgOrder').datagrid({
-                onLoadSuccess: onLoadTable
-            });
+
+            $('#dgOrder').datagrid('options').onLoadSuccess = onLoadTable;
+
             if (saved?.modalOp) {
                 restoredDgOrderPage = saved.page || 1;
                 openPackingDetailModal(null, saved.modalPo, saved.modalOp, saved.modalPoref, saved.modalMif);
-            } else if (window.EasyuiDG) {
-                window.EasyuiDG.reload('dgOrder', saved?.page || 1);
+            } else if (saved?.page) {
+                window.EasyuiDG.reload('dgOrder', saved.page);
             }
         });
-
+        
         window.addEventListener('pageshow', function(event) {
             if (!event.persisted) return;
-
-            loadCardsSummaryGlobal();
-
+            loadCardsSummaryGlobalThrottled();
             if (window.EasyuiDG) {
                 window.EasyuiDG.reload('dgOrder');
             }
@@ -692,19 +693,10 @@
                 reloadPackingDetailModal();
             }
         });
-
-        let lastCardsRefreshAt = 0;
-
+        
         document.addEventListener('visibilitychange', function() {
             if (document.visibilityState !== 'visible') return;
-
-            // Throttle sederhana -- hindari refresh berkali-kali kalau
-            // visibilitychange fire beruntun dalam waktu singkat.
-            const now = Date.now();
-            if (now - lastCardsRefreshAt < 800) return;
-            lastCardsRefreshAt = now;
-
-            loadCardsSummaryGlobal();
+            loadCardsSummaryGlobalThrottled(); // GANTI -- sama fungsi, throttle konsisten
             if (window.EasyuiDG) {
                 window.EasyuiDG.reload('dgOrder');
             }

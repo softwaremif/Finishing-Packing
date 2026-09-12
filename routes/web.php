@@ -66,7 +66,7 @@ Route::get('/order-images', [OrderImageController::class, 'index'])->name('order
 Route::get('/order-image/{ordpk}', [OrderImageController::class, 'show'])->name('order-images.show');
 
 
-Route::middleware(['check', 'db.pos'])->group(function () {
+Route::middleware(['check'])->group(function () {
     Route::post('updtpswdb', [LoginController::class, 'updtpswdb'])->name('updtpswdb');
     Route::get('password', [LoginController::class, 'password'])->name('password');
 
@@ -102,8 +102,6 @@ Route::middleware(['check', 'db.pos'])->group(function () {
         Route::get('tf-finishing/{popk}/breakdown-summary', [TransferFinishingController::class, 'breakdownSummary'])->name('tf_finishing.breakdown-summary');
 
         Route::get('/tf-finishing/debug/size-format', [TransferFinishingController::class, 'debugSizeFormat']);
-
-        Route::get('/tf-finishing/api/output-by-op', [TransferFinishingController::class, 'outputByOp'])->name('tf_finishing.output_by_op');
 
         // MENU POLIBAG
         Route::get('/polibag', [TransferController::class, 'index'])->name('transfer.index');
@@ -153,9 +151,18 @@ Route::middleware(['check', 'db.pos'])->group(function () {
         Route::get('/packing/distinct-dimensi-ctn', [PackingController::class, 'distinctDimensiCtn'])->name('packing.distinct-dimensi-ctn');
         Route::post('/packing/bulk-update-dimensi-ctn', [PackingController::class, 'bulkUpdateDimensiCtn'])->name('packing.bulk-update-dimensi-ctn');
 
-        Route::get('/polibag/check-finishing', [TransferController::class, 'checkFinishing'])->name('transfer.check-finishing');
-        Route::get('/polibag/check-finishing-list', [TransferController::class, 'checkFinishingList'])->name('transfer.check-finishing-list');
-        Route::get('/polibag/check-bj/{popk}', [TransferController::class, 'checkBjRows']);
+        // Packing Polibag mix PO/OP
+        Route::get('/packing/cross-po-op-lookup', [PackingController::class, 'crossPoOpLookup'])->name('packing.crossPoOpLookup');
+        Route::get('/packing/cross-po-combo-lookup', [PackingController::class, 'crossPoComboLookup'])->name('packing.crossPoComboLookup');
+        Route::get('/packing/cross-po-carton-list', [PackingController::class, 'crossPoCartonList'])->name('packing.crossPoCartonList');
+        Route::get('/packing/cross-po-combo-info', [PackingController::class, 'crossPoComboInfo'])->name('packing.crossPoComboInfo');
+
+        // Packing mix PO/OP, mix carton inner outer
+        Route::get('/packing/bundle-op-lookup', [PackingController::class, 'bundleOpLookup'])->name('packing.bundleOpLookup');
+        Route::get('/packing/bundle-carton-list', [PackingController::class, 'bundleCartonList'])->name('packing.bundleCartonList');
+        Route::post('/packing/bundle-carton-store', [PackingController::class, 'storeCartonBundle'])->name('packing.storeCartonBundle');
+        Route::get('/packing/bundle-detail', [PackingController::class, 'bundleDetail'])->name('packing.bundleDetail');
+
 
         // MENU STOK SISA(GRADE)
         Route::get('/stok-sisa', [StokSisaController::class, 'index'])->name('stok-sisa.index');

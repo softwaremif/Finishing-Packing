@@ -276,9 +276,12 @@
                                 <tr>
                                     <td class="text-start sticky-col-start">
                                         <span class="matrix-color-dot" data-name="{{ $group['material'] ?? '-' }}"></span>
-                                        <strong>{{ $group['material'] ?? '-' }}</strong>
+                                        <strong style="font-size:14px;">{{ $group['material'] ?? '-' }}</strong>
                                         @if (!empty($group['secsz']))
                                             <div class="text-muted" style="font-size:11px;">{{ $group['secsz'] }}</div>
+                                        @endif
+                                        @if (!empty($group['customer']))
+                                            <div class="text-muted" style="font-size:10.5px;">{{ $group['customer'] }}</div>
                                         @endif
                                     </td>
                                     @foreach ($activeSizes as $i => $sz)

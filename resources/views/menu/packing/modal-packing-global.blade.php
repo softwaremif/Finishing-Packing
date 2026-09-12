@@ -15,21 +15,24 @@
         color: #fff;
         border-color: #0f172a;
     }
-    #pgBreakdownTable select,
-    #pgBreakdownTable input {
+    .pg-breakdown-style select,
+    .pg-breakdown-style input {
         border-radius: 6px;
         font-size: 12.5px;
     }
-    #pgBreakdownTable .pg-qty-plan,
-    #pgBreakdownTable .pg-qty-actual {
+    .pg-breakdown-style .pg-qty-plan,
+    .pg-breakdown-style .pg-qty-actual,
+    .pg-breakdown-style .pg-crosspo-plan,
+    .pg-breakdown-style .pg-crosspo-actual {
         max-width: 65px;
         margin: 0 auto;
         text-align: center;
     }
-    #pgBreakdownTable .pg-qty-actual {
+    .pg-breakdown-style .pg-qty-actual,
+    .pg-breakdown-style .pg-crosspo-actual {
         background: #fffbeb;
     }
-    #pgBreakdownTable tr[data-role="plan"] {
+    .pg-breakdown-style tr[data-role="plan"] {
         border-bottom: 1px dashed #e2e8f0;
     }
     .pg-remove-line {
@@ -48,6 +51,13 @@
                     <h5 class="fw-bold text-dark mb-0" id="pgModalTitle">New carton</h5>
                     <div class="text-secondary" style="font-size: 13px;">
                         Add color/sec size lines, isi Qty Plan &amp; Actual langsung per size.
+                    </div>
+                    <div class="text-secondary mt-1" style="font-size: 12px;">
+                        <i class="fas fa-circle-info me-1"></i>
+                        OP <strong>{{ $op }}</strong>
+                        &middot; PO <strong>{{ $po ?: '-' }}</strong>
+                        &middot; Buyer: <strong>{{ $dt2->buyer ?? '-' }}</strong>
+                        &middot; Customer: <strong>{{ $dt2->customer ?? '-' }}</strong>
                     </div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -103,9 +113,18 @@
                         <tbody id="pgBreakdownLines"></tbody>
                     </table>
                 </div>
-                <button type="button" class="btn btn-link btn-sm px-0 text-decoration-none mt-2" onclick="addBreakdownLine()">
-                    <i class="fas fa-plus me-1"></i> Add breakdown line
-                </button>
+                <div class="d-flex align-items-center justify-content-between mt-2">
+                    <button type="button" class="btn btn-link btn-sm px-0 text-decoration-none" onclick="addBreakdownLine()">
+                        <i class="fas fa-plus me-1"></i> Add breakdown line
+                    </button>
+                    <button type="button" class="btn btn-outline-dark btn-sm" onclick="openCrossPoMixModal()">
+                        <i class="fas fa-shuffle me-1"></i> Campur Polibag dari PO Lain
+                    </button>
+                </div>
+
+                <hr class="my-3">
+ 
+                <div id="pgCrossPoBlocksWrap" class="mt-3"></div>
 
                 <hr class="my-3">
 
@@ -176,24 +195,37 @@
     window.lastPackingRows = window.lastPackingRows || [];
     window.pgOldActualByPackpk = window.pgOldActualByPackpk || {};
     window.pgOldPlanByPackpk = window.pgOldPlanByPackpk || {};
+    window.pgCurrentBuyer = @json($dt2->buyer ?? '');
 
     function pgComboOptions(selected) {
         let html = '<option value="">Pilih Color / Sec Size</option>';
         (window.pgCombos || []).forEach(function (c) {
             let value = `${c.material}||${c.secsz ?? ''}||${c.popk}`;
-    
-            // kalau ada duplicateMarker, tempel angkanya LANGSUNG
-            // setelah nama material -- "BLACK 1", "BLACK 2".
-            let materialLabel = c.duplicateMarker
-                ? `${c.material} ${c.duplicateMarker}`
-                : c.material;
-    
+            let materialLabel = c.duplicateMarker ? `${c.material} ${c.duplicateMarker}` : c.material;
             let label = c.secsz ? `${materialLabel} - ${c.secsz}` : materialLabel;
-    
+
+            // tambahkan Customer ke label combo.
+            if (c.customer) {
+                label += ` &middot; ${c.customer}`;
+            }
+
+            if (c.crossPo) {
+                label += ` [${c.crossPoLabel}]`;
+                if (c.activeSizes && !pgSizeSchemeMatches(c.activeSizes)) {
+                    label += ' ⚠️ skema size beda';
+                }
+            }
             let sel = (selected === value) ? 'selected' : '';
             html += `<option value="${value}" ${sel}>${label}</option>`;
         });
         return html;
+    }
+
+    function pgSizeSchemeMatches(comboActiveSizes) {
+        const pageSizes = window.pgSizes || {};
+        return Object.keys(comboActiveSizes).every(function (i) {
+            return pageSizes[i] === comboActiveSizes[i];
+        });
     }
 
     function pgGetOrderQtyForCombo(comboValue) {
@@ -267,7 +299,7 @@
         const html = `
             <tr class="pg-breakdown-line" data-line="${lineId}" data-role="plan" data-packpk="${packpk}">
                 <td class="text-start align-middle">
-                    <select class="form-select form-select-sm pg-combo" onchange="onPgComboChangeGlobal(this)">${pgComboOptions(prefill.combo)}</select>
+                    <select class="form-select form-select-sm pg-combo" style="font-size:14px;" onchange="onPgComboChangeGlobal(this)">${pgComboOptions(prefill.combo)}</select>
                 </td>
                 <td class="bg-light fw-bold" style="font-size:11px;">P</td>
                 ${planCells}
@@ -493,6 +525,7 @@
 
     function openPackingGlobalModal() {
         window.pgIsEditMode = false;
+        
         window.pgOldActualByPackpk = {};
         window.pgOldPlanByPackpk = {}; 
         window.pgOriginalPackpks = [];
@@ -504,13 +537,14 @@
         $('#pgModalTitle').text('New carton');
         $('#btnAddCartonGlobal').text('Add carton');
         pgHideAlert();
+        pgResetCrossPoBlocks();
         addBreakdownLine();
         bootstrap.Modal.getOrCreateInstance(document.getElementById('packingGlobalModal')).show();
     }
 
     function editCartonGlobal(packpksCsv) {
         const packpks = packpksCsv.split(',').map(Number);
-        const groupRows = (window.lastPackingRows || []).filter(r => packpks.includes(r.packpk));
+        let groupRows = (window.lastPackingRows || []).filter(r => packpks.includes(r.packpk));
     
         if (!groupRows.length) {
             showToast('error', 'Data carton tidak ditemukan, coba refresh halaman.');
@@ -519,48 +553,97 @@
     
         window.pgIsEditMode = true;
         window.pgOldActualByPackpk = {};
-        window.pgOldPlanByPackpk = {}; // BARU
+        window.pgOldPlanByPackpk = {};
         window.pgOriginalPackpks = groupRows.map(r => r.packpk);
     
         $('#pgBreakdownLines').empty();
         $('#pgAutoSplitWrapper').addClass('d-none');
         pgHideAlert();
+        pgResetCrossPoBlocks();
+    
+        const nativeRows  = groupRows.filter(r => r.POno === PO && r.OP === OP);
+        const crossPoRows = groupRows.filter(r => !(r.POno === PO && r.OP === OP));
     
         const first = groupRows[0];
         $('#pgCarton').val(first.carton || '');
         $('#pgNobar').val(first.nobar || '');
         $('#pgNw').val(first.nw || '');
         $('#pgGw').val(first.gw || '');
-        // $('#pgMeas').val(first.meas || '');
         $('#pgPanjang').val(first.panjang || '');
         $('#pgLebar').val(first.lebar || '');
         $('#pgTinggi').val(first.tinggi || '');
         $('#pgKet2').val(first.keterangan || '');
     
-        groupRows.forEach(function (row) {
+        nativeRows.forEach(function (row) {
             const combo = `${row.material}||${row.secsz ?? ''}||${row.popk}`;
-            const plan = {};
-            const actual = {};
-            const oldActual = {};
-            const oldPlan = {}; // BARU
-    
+            const plan = {}, actual = {}, oldActual = {}, oldPlan = {};
             Object.keys(window.pgSizes || {}).forEach(function (i) {
                 plan[i]      = row[`qtyp${i}`] || '';
                 actual[i]    = row[`qty${i}`]  || '';
                 oldActual[i] = Number(row[`qty${i}`] || 0);
-                oldPlan[i]   = Number(row[`qtyp${i}`] || 0); // BARU
+                oldPlan[i]   = Number(row[`qtyp${i}`] || 0);
             });
-    
             window.pgOldActualByPackpk[row.packpk] = oldActual;
-            window.pgOldPlanByPackpk[row.packpk] = oldPlan; // BARU
-    
+            window.pgOldPlanByPackpk[row.packpk] = oldPlan;
             addBreakdownLine({ combo: combo, plan: plan, actual: actual, packpk: row.packpk });
         });
     
-        $('#pgModalTitle').text('Edit carton');
-        $('#btnAddCartonGlobal').text('Simpan Perubahan');
+        function finishOpenModal() {
+            $('#pgModalTitle').text('Edit carton');
+            $('#btnAddCartonGlobal').text('Simpan Perubahan');
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('packingGlobalModal')).show();
+            recalcPackTypeGlobal();
+        }
     
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('packingGlobalModal')).show();
+        // ---- Baris dari PO LAIN -- masuk ke pgCrossPoBlocks (BUKAN tabel
+        // utama), lengkap dengan activeSizes/orderQty/planQtyAll/readyQtyAll
+        // MILIK PO ASALNYA SENDIRI (dari crossPoComboInfo()). ----
+        if (crossPoRows.length) {
+            const otherPopks = [...new Set(crossPoRows.map(r => r.popk))];
+            $.get(R.crossPoComboInfo, { popks: otherPopks.join(',') }, function (data) {
+                const infoList = data.rows || [];
+    
+                crossPoRows.forEach(function (row) {
+                    const info = infoList.find(c => String(c.popk) === String(row.popk)) || {};
+                    const activeSizes = info.activeSizes || {};
+    
+                    const planQty = {}, actualQty = {};
+                    Object.keys(activeSizes).forEach(function (i) {
+                        planQty[i]   = Number(row[`qtyp${i}`] || 0);
+                        actualQty[i] = Number(row[`qty${i}`] || 0);
+                    });
+    
+                    window.pgCrossPoBlocks.push({
+                        packpk:        row.packpk,
+                        popk:          row.popk,
+                        POno:          row.POno,
+                        OP:            row.OP,
+                        customer:      info.customer, 
+                        material:      row.material,
+                        secsz:         row.secsz,
+                        activeSizes:   activeSizes,
+                        orderQty:      info.orderQty || {},
+                        planQtyAll:    info.planQtyAll || {},
+                        readyQtyAll:   info.readyQtyAll || {},
+                        transQtyAll:   info.transQtyAll || {},
+                        planQty:       planQty,
+                        actualQty:     actualQty,
+                        // snapshot NILAI AWAL (sebelum admin edit apa pun
+                        // di sesi ini) -- dipakai validasi supaya kontribusi carton
+                        // INI SENDIRI dikeluarkan dulu dari total sebelum dicek
+                        // ulang terhadap Order Qty/Transfer.
+                        originalPlanQty:   { ...planQty },
+                        originalActualQty: { ...actualQty },
+                        sourceCarton: row.carton,
+                    });
+                });
+    
+                renderPgCrossPoBlocks();
+                finishOpenModal();
+            });
+        } else {
+            finishOpenModal();
+        }
     }
 
     function pgShowAlert(msg) {
@@ -582,7 +665,7 @@
         $('.pg-breakdown-line[data-role="plan"]').each(function () {
             const combo = $(this).find('.pg-combo').val();
             if (!combo) return;
-            const [material, secsz, comboPopk] = combo.split('||'); // BARU: comboPopk
+            const [material, secsz, comboPopk] = combo.split('||');
             const lineId  = $(this).data('line');
             const packpk  = $(this).data('packpk') || null;
             const actualRow = $(`.pg-breakdown-line[data-line="${lineId}"][data-role="actual"]`);
@@ -591,17 +674,33 @@
                 const plan   = parseInt($(this).val()) || 0;
                 const actual = parseInt(actualRow.find(`.pg-qty-actual[data-size="${size}"]`).val()) || 0;
                 if (plan > 0 || actual > 0) {
-                    // BARU: sertakan target_popk -- backend PAKAI ini kalau ada,
-                    // supaya TIDAK re-query material+secsz yang ambigu.
                     breakdown.push({ material, secsz, size, plan, actual, packpk, target_popk: comboPopk || null });
                 }
             });
         });
+    
+        (window.pgCrossPoBlocks || []).forEach(function (block) {
+            Object.keys(block.activeSizes).forEach(function (size) {
+                const plan   = Number(block.planQty[size] || 0);
+                const actual = Number(block.actualQty[size] || 0);
+                if (plan <= 0 && actual <= 0) return;
+                breakdown.push({
+                    material: block.material,
+                    secsz: block.secsz,
+                    size: size,
+                    plan: plan,
+                    actual: actual,
+                    packpk: block.packpk,       
+                    target_popk: block.popk,
+                });
+            });
+        });
+    
         if (!breakdown.length) {
             pgShowAlert('Minimal satu Qty (Plan atau Actual) harus diisi.');
             return;
         }
-       $.ajax({
+        $.ajax({
             url: "{{ route('packing.store.global') }}",
             method: 'POST',
             data: {
@@ -613,9 +712,9 @@
                 nobar: $('#pgNobar').val(),
                 nw: $('#pgNw').val(),
                 gw: $('#pgGw').val(),
-                panjang: $('#pgPanjang').val(), 
-                lebar: $('#pgLebar').val(),     
-                tinggi: $('#pgTinggi').val(),   
+                panjang: $('#pgPanjang').val(),
+                lebar: $('#pgLebar').val(),
+                tinggi: $('#pgTinggi').val(),
                 ket2: $('#pgKet2').val(),
                 breakdown: breakdown,
                 check: $('#pgAutoSplit').is(':checked') ? 1 : 0,
@@ -639,3 +738,231 @@
         });
     }
 </script>
+
+<script>
+    // ============================================================
+    // State blok "Mix Polibag Lintas PO" -- TERPISAH dari
+    // window.pgCombos/tabel breakdown utama. Tiap blok = 1 combo dari
+    // carton PO lain, lengkap dengan activeSizes MILIK SENDIRI (supaya
+    // label kolom size SELALU benar, tidak tercampur skema PO yang
+    // sedang dibuka).
+    // ============================================================
+    window.pgCrossPoBlocks = window.pgCrossPoBlocks || [];
+ 
+    function pgResetCrossPoBlocks() {
+        window.pgCrossPoBlocks = [];
+        $('#pgCrossPoBlocksWrap').empty();
+    }
+ 
+    function pgRemoveCrossPoBlock(packpk) {
+        window.pgCrossPoBlocks = window.pgCrossPoBlocks.filter(b => b.packpk !== packpk);
+        renderPgCrossPoBlocks();
+        recalcPackTypeGlobal();
+    }
+ 
+    // GANTI TOTAL -- FIX UTAMA: tiap blok render TABEL SENDIRI dengan
+    // kolom size MILIK COMBO ITU SENDIRI (block.activeSizes) -- BUKAN
+    // window.pgSizes (skema PO yang sedang dibuka). Input SUDAH terisi
+    // (pre-filled) dari block.planQty/actualQty yang dibawa dari data
+    // carton sumbernya -- admin BOLEH edit kalau perlu, tapi TIDAK WAJIB.
+    function renderPgCrossPoBlocks() {
+        const wrap = $('#pgCrossPoBlocksWrap');
+        wrap.empty();
+
+        if (!window.pgCrossPoBlocks.length) return;
+
+        wrap.append(`
+            <label class="text-secondary d-block mb-2" style="font-size: 12px;">
+                Polibag Campuran dari PO Lain
+            </label>
+        `);
+
+        window.pgCrossPoBlocks.forEach(function (block) {
+            const sizeHeaderCells = Object.keys(block.activeSizes)
+                .map(i => `<th style="min-width:70px;">${block.activeSizes[i]}</th>`).join('');
+
+            const planCells = Object.keys(block.activeSizes).map(function (i) {
+                const orderQtyForSize = Number(block.orderQty[i] || 0);
+                if (orderQtyForSize <= 0) {
+                    return `<td class="pg-empty-cell text-muted" data-size="${i}">-</td>`;
+                }
+                const val = block.planQty[i] || '';
+                return `
+                    <td data-size="${i}">
+                        <input type="number" min="0" class="form-control form-control-sm pg-crosspo-plan"
+                            data-packpk="${block.packpk}" data-size="${i}" value="${val}" placeholder="0"
+                            oninput="pgOnCrossPoPlanInput(this)">
+                    </td>
+                `;
+            }).join('');
+
+            const actualCells = Object.keys(block.activeSizes).map(function (i) {
+                const orderQtyForSize = Number(block.orderQty[i] || 0);
+                if (orderQtyForSize <= 0) {
+                    return `<td class="pg-empty-cell text-muted" data-size="${i}">-</td>`;
+                }
+                const val = block.actualQty[i] || '';
+                const hasPlan = Number(block.planQty[i] || 0) > 0;
+                return `
+                    <td data-size="${i}" style="${hasPlan ? '' : 'visibility:hidden;'}">
+                        <input type="number" min="0" class="form-control form-control-sm pg-crosspo-actual"
+                            data-packpk="${block.packpk}" data-size="${i}" value="${val}" placeholder="0" ${hasPlan ? '' : 'disabled'}
+                            oninput="pgOnCrossPoActualInput(this)">
+                    </td>
+                `;
+            }).join('');
+
+            const secszTag = block.secsz ? ` - ${block.secsz}` : '';
+            // BARU -- tampilkan Customer juga di subtitle, kalau ada datanya.
+            const customerTag = block.customer ? ` &middot; ${block.customer}` : '';
+
+            wrap.append(`
+                <div class="table-responsive border rounded-3 mb-2">
+                    <table class="table table-sm align-middle mb-0 text-center pg-breakdown-style">
+                        <thead style="font-size: 0.8rem; background:#f8fafc;">
+                            <tr>
+                                <th class="text-start px-2" style="min-width:220px;">Color / Sec Size</th>
+                                <th width="36" class="bg-light">P/A</th>
+                                ${sizeHeaderCells}
+                                <th width="40"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr data-role="plan">
+                                <td class="text-start align-middle">
+                                    <div style="font-size:14px;">${block.material ?? '-'}${secszTag} ${customerTag}</div>
+                                    <div class="text-muted" style="font-size:10.5px;">
+                                        <i class="fas fa-shuffle me-1"></i>${block.POno ?? '-'} &middot; ${block.OP ?? '-'} &middot; Carton ${block.sourceCarton ?? '-'}
+                                    </div>
+                                </td>
+                                <td class="bg-light fw-bold" style="font-size:11px;">P</td>
+                                ${planCells}
+                                <td class="align-middle">
+                                    <span class="pg-remove-line" onclick="pgRemoveCrossPoBlock(${block.packpk})" title="Hapus dari campuran">
+                                        <i class="fas fa-minus-circle"></i>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr data-role="actual">
+                                <td class="pg-empty-cell"></td>
+                                <td class="bg-light fw-bold" style="font-size:11px;">A</td>
+                                ${actualCells}
+                                <td class="pg-empty-cell"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `);
+        });
+    }
+ 
+    // Validasi -- SAMA konsepnya dengan onPgPlanInput() di tabel utama,
+    // TAPI cap-nya pakai block.orderQty MILIK COMBO INI SENDIRI (dari PO
+    // asalnya), BUKAN window.pgCombos milik PO yang sedang dibuka.
+    function pgOnCrossPoPlanInput(el) {
+        const $el = $(el);
+        const packpk = Number($el.data('packpk'));
+        const size = $el.data('size');
+        const block = window.pgCrossPoBlocks.find(b => b.packpk === packpk);
+        if (!block) return;
+    
+        pgHideAlert();
+    
+        let planBaru = parseInt($el.val()) || 0;
+    
+        const orderQty       = Number(block.orderQty[size] || 0);
+        const planAllExisting = Number(block.planQtyAll?.[size] || 0);
+        const planLama         = Number(block.originalPlanQty?.[size] || 0);
+    
+        // Total kalau planBaru diterapkan = (total semua carton lain, TIDAK
+        // termasuk kontribusi lama carton ini) + nilai baru.
+        const totalIfApplied = (planAllExisting - planLama) + planBaru;
+    
+        if (totalIfApplied > orderQty) {
+            const sisa = Math.max(0, orderQty - (planAllExisting - planLama));
+            pgShowAlert(
+                `<b>Qty Plan tidak dapat disimpan.</b><br>` +
+                `Total Plan untuk size ini di PO <b>${block.POno ?? '-'}</b> (carton lain + carton ini) akan melebihi Order Qty (<b>${orderQty}</b>).<br>` +
+                `Maksimal yang bisa diisi di carton ini: <b>${sisa}</b>.`
+            );
+            planBaru = Math.max(0, Math.min(planBaru, sisa));
+            $el.val(planBaru || '');
+        }
+    
+        block.planQty[size] = planBaru;
+    
+        // Toggle visibility Actual cell -- SAMA pola dengan tabel utama.
+        const actualCell = $el.closest('table').find(`tbody tr:eq(1) td[data-size="${size}"]`);
+        const actualInput = actualCell.find('.pg-crosspo-actual');
+        if (planBaru > 0) {
+            actualCell.css('visibility', 'visible');
+            actualInput.prop('disabled', false);
+        } else {
+            actualCell.css('visibility', 'hidden');
+            actualInput.prop('disabled', true).val('');
+            block.actualQty[size] = 0;
+        }
+    
+        recalcPackTypeGlobal();
+    }
+ 
+    function pgOnCrossPoActualInput(el) {
+        const $el = $(el);
+        const packpk = Number($el.data('packpk'));
+        const size = $el.data('size');
+        const block = window.pgCrossPoBlocks.find(b => b.packpk === packpk);
+        if (!block) return;
+    
+        pgHideAlert();
+    
+        let actualBaru = parseInt($el.val()) || 0;
+        const planVal = Number(block.planQty[size] || 0);
+    
+        if (actualBaru > planVal) {
+            pgShowAlert(`<b>Qty Actual tidak dapat disimpan.</b><br>Qty Actual yang diinput (<b>${actualBaru}</b>) melebihi Plan Qty pada carton ini (<b>${planVal}</b>).`);
+            actualBaru = planVal;
+            $el.val(actualBaru || '');
+        }
+    
+        const readyAllExisting = Number(block.readyQtyAll?.[size] || 0);
+        const actualLama       = Number(block.originalActualQty?.[size] || 0);
+        const transfer         = Number(block.transQtyAll?.[size] || 0);
+    
+        const totalIfApplied = (readyAllExisting - actualLama) + actualBaru;
+    
+        if (totalIfApplied > transfer) {
+            const sisa = Math.max(0, transfer - (readyAllExisting - actualLama));
+            pgShowAlert(
+                `<b>Qty Actual tidak dapat disimpan.</b><br>` +
+                `Total Actual untuk size ini di PO <b>${block.POno ?? '-'}</b> akan melebihi Qty Polibag/Transfer (<b>${transfer}</b>).<br>` +
+                `Maksimal yang bisa diisi di carton ini: <b>${sisa}</b>.`
+            );
+            actualBaru = Math.max(0, Math.min(actualBaru, sisa));
+            $el.val(actualBaru || '');
+        }
+    
+        block.actualQty[size] = actualBaru;
+        recalcPackTypeGlobal();
+    }
+ 
+    // ikutkan total Plan/Actual dari blok cross-PO ke footer
+    // "Total Plan"/"Total Actual" modal, supaya angkanya utuh (gabungan
+    // breakdown utama + blok cross-PO). Dipanggil dari AKHIR
+    // recalcPackTypeGlobal() yang SUDAH ADA -- TAMBAHKAN pemanggilan
+    // pgAddCrossPoTotals() di baris PALING BAWAH fungsi itu (sebelum
+    // penutup function), BUKAN menggantikan logic yang sudah ada.
+    function pgAddCrossPoTotals() {
+        let extraPlan = 0, extraActual = 0;
+        window.pgCrossPoBlocks.forEach(function (block) {
+            Object.values(block.planQty).forEach(v => extraPlan += Number(v) || 0);
+            Object.values(block.actualQty).forEach(v => extraActual += Number(v) || 0);
+        });
+        if (extraPlan > 0 || extraActual > 0) {
+            const currentPlan = parseInt($('#pgTotal').text()) || 0;
+            const currentActual = parseInt($('#pgTotalActual').text()) || 0;
+            $('#pgTotal').text(currentPlan + extraPlan);
+            $('#pgTotalActual').text(currentActual + extraActual);
+        }
+    }
+</script>
+ 

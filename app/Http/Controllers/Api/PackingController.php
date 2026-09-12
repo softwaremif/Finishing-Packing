@@ -337,68 +337,159 @@ class PackingController extends Controller
         ]);
     }
 
+    // public function apiGetLoadedCartonsByContainer(Request $request)
+    // {
+    //     $contpk   = (int) $request->query('contpk');
+    //     $exportpk = (int) $request->query('exportpk');
+
+    //     $rows = collect();
+    //     foreach (['mysql_andon', 'mysql'] as $conn) {
+    //         $found = DB::connection($conn)->table('pack')
+    //             ->where('contpk', $contpk)
+    //             ->where('exportpk', $exportpk)
+    //             ->get();
+    //         $rows = $rows->merge($found);
+    //     }
+
+    //     $rows = $rows->unique('packpk')->values();
+
+    //     // BARU -- FIX UTAMA: ambil status ship (utk deteksi "sudah Shipped",
+    //     // status = 6) per packpk, dicek di kedua koneksi.
+    //     $shipStatusByPackpk = collect();
+    //     foreach (['mysql_andon', 'mysql'] as $conn) {
+    //         $packpks = $rows->pluck('packpk')->unique()->values();
+    //         if ($packpks->isEmpty()) continue;
+    //         $shipRows = DB::connection($conn)->table('ship')
+    //             ->whereIn('packpk', $packpks)
+    //             ->get(['packpk', 'status']);
+    //         foreach ($shipRows as $sr) {
+    //             $shipStatusByPackpk->put($sr->packpk, (int) $sr->status);
+    //         }
+    //     }
+
+    //     $grouped = $rows->groupBy(function ($r) {
+    //         return $r->carton . '|' . $r->POno . '|' . $r->OP;
+    //     })->map(function ($items) use ($shipStatusByPackpk) {
+    //         $first = $items->first();
+
+    //         // BARU -- FIX UTAMA: shipped = true kalau SALAH SATU packpk di
+    //         // grup ini sudah berstatus 6 (Shipped) di tabel ship.
+    //         $shipped = $items->contains(function ($item) use ($shipStatusByPackpk) {
+    //             return $shipStatusByPackpk->get($item->packpk) === 6;
+    //         });
+
+    //         return [
+    //             'carton'  => $first->carton,
+    //             'POno'    => $first->POno,
+    //             'OP'      => $first->OP,
+    //             'pcsp'    => $items->sum('pcsp'),
+    //             't_cbm'   => $first->panjang && $first->lebar && $first->tinggi
+    //                 ? ($first->panjang * $first->lebar * $first->tinggi) / 1000000
+    //                 : 0,
+    //             'packpks' => $items->pluck('packpk')->unique()->values(),
+    //             'shipped' => $shipped, // BARU
+    //         ];
+    //     })->values();
+
+    //     return response()->json(['cartons' => $grouped]);
+    // }
+
+    
     public function apiGetLoadedCartonsByContainer(Request $request)
     {
         $contpk   = (int) $request->query('contpk');
         $exportpk = (int) $request->query('exportpk');
 
         $rows = collect();
+
         foreach (['mysql_andon', 'mysql'] as $conn) {
-            $found = DB::connection($conn)->table('pack')
+            $found = DB::connection($conn)
+                ->table('pack')
                 ->where('contpk', $contpk)
                 ->where('exportpk', $exportpk)
                 ->get();
+
             $rows = $rows->merge($found);
         }
 
         $rows = $rows->unique('packpk')->values();
 
-        // BARU -- FIX UTAMA: ambil status ship (utk deteksi "sudah Shipped",
-        // status = 6) per packpk, dicek di kedua koneksi.
+        // Ambil status ship berdasarkan packpk
         $shipStatusByPackpk = collect();
+
         foreach (['mysql_andon', 'mysql'] as $conn) {
             $packpks = $rows->pluck('packpk')->unique()->values();
-            if ($packpks->isEmpty()) continue;
-            $shipRows = DB::connection($conn)->table('ship')
+
+            if ($packpks->isEmpty()) {
+                continue;
+            }
+
+            $shipRows = DB::connection($conn)
+                ->table('ship')
                 ->whereIn('packpk', $packpks)
                 ->get(['packpk', 'status']);
+
             foreach ($shipRows as $sr) {
-                $shipStatusByPackpk->put($sr->packpk, (int) $sr->status);
+                $shipStatusByPackpk->put(
+                    $sr->packpk,
+                    (int) $sr->status
+                );
             }
         }
 
-        $grouped = $rows->groupBy(function ($r) {
-            return $r->carton . '|' . $r->POno . '|' . $r->OP;
-        })->map(function ($items) use ($shipStatusByPackpk) {
-            $first = $items->first();
+        $grouped = $rows
+            ->groupBy(function ($r) {
+                return $r->carton . '|' . $r->POno . '|' . $r->OP;
+            })
+            ->map(function ($items) use ($shipStatusByPackpk) {
 
-            // BARU -- FIX UTAMA: shipped = true kalau SALAH SATU packpk di
-            // grup ini sudah berstatus 6 (Shipped) di tabel ship.
-            $shipped = $items->contains(function ($item) use ($shipStatusByPackpk) {
-                return $shipStatusByPackpk->get($item->packpk) === 6;
-            });
+                $first = $items->first();
 
-            return [
-                'carton'  => $first->carton,
-                'POno'    => $first->POno,
-                'OP'      => $first->OP,
-                'pcsp'    => $items->sum('pcsp'),
-                't_cbm'   => $first->panjang && $first->lebar && $first->tinggi
-                    ? ($first->panjang * $first->lebar * $first->tinggi) / 1000000
-                    : 0,
-                'packpks' => $items->pluck('packpk')->unique()->values(),
-                'shipped' => $shipped, // BARU
-            ];
-        })->values();
+                // Ambil status tertinggi dari semua packpk dalam grup
+                $maxStatus = $items
+                    ->map(function ($item) use ($shipStatusByPackpk) {
+                        return $shipStatusByPackpk->get($item->packpk, 0);
+                    })
+                    ->max();
 
-        return response()->json(['cartons' => $grouped]);
+                // Tentukan progress
+                if ($maxStatus >= 8) {
+                    $shipStatus = 'shipped';
+                } elseif ($maxStatus >= 6) {
+                    $shipStatus = 'loading';
+                } elseif ($maxStatus >= 3) {
+                    $shipStatus = 'progress';
+                } else {
+                    $shipStatus = null;
+                }
+
+                return [
+                    'carton'     => $first->carton,
+                    'POno'       => $first->POno,
+                    'OP'         => $first->OP,
+                    'pcsp'       => $items->sum('pcsp'),
+
+                    't_cbm'      => $first->panjang && $first->lebar && $first->tinggi
+                        ? ($first->panjang * $first->lebar * $first->tinggi) / 1000000
+                        : 0,
+
+                    'packpks'    => $items->pluck('packpk')->unique()->values(),
+
+                    'ship_status' => $shipStatus,
+                    'ship_status_code' => $maxStatus,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'cartons' => $grouped
+        ]);
     }
-
     private function getContainerSummary(int $exportpk, int $contpk): array
     {
         $totqty = 0;
         $totctnCartons = collect();
-        foreach (['mysql_andon', 'mysql'] as $conn) {
+        foreach (['mysql'] as $conn) {
             $rows = DB::connection($conn)->table('pack')
                 ->where('exportpk', $exportpk)
                 ->where('contpk', $contpk)

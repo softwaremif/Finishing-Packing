@@ -1224,6 +1224,34 @@
                             @endif
                         </div>
                         <div class="d-flex align-items-center gap-2">
+                            @if ($cfg['showAddPacking'])
+                                <button class="btn btn-dark btn-sm d-flex align-items-center fw-semibold"
+                                    style="font-size:12px;border-radius:6px;background:#1e293b;border-color:#1e293b;"
+                                    onclick="openUrutkanCtnModal()">
+                                    <i class="fas fa-sort-numeric-down me-1"></i> Penomoran CTN
+                                </button>
+                        
+                                <div class="dropdown">
+                                    <button class="btn btn-dark btn-sm d-flex align-items-center fw-semibold dropdown-toggle"
+                                        style="font-size:12px;border-radius:6px;background:#1e293b;border-color:#1e293b;"
+                                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="fas fa-plus me-1"></i> Add Packing
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0)" onclick="openPackingGlobalModal()">
+                                                <i class="fas fa-box me-2 text-secondary"></i>Packing Biasa
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0)" onclick="openBundleCartonModal()">
+                                                <i class="fas fa-boxes-stacked me-2 text-secondary"></i>Gabung Carton Besar
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            @endif
+                        
                             <div class="btn-group btn-group-sm" role="group" id="viewToggleGlobal">
                                 <button type="button" class="btn btn-outline-secondary" id="viewModeCompactBtn"
                                     onclick="setViewModeGlobal('compact')" title="Tampilan Compact (banyak carton sekaligus)"><i class="fas fa-table-cells"></i></button>
@@ -1232,19 +1260,6 @@
                                 <button type="button" class="btn btn-outline-secondary" id="viewModeListBtn"
                                     onclick="setViewModeGlobal('list')" title="Tampilan List"><i class="fas fa-list"></i></button>
                             </div>
-                            
-                            @if ($cfg['showAddPacking'])
-                                <button class="btn btn-dark btn-sm d-flex align-items-center fw-semibold"
-                                    style="font-size:12px;border-radius:6px;background:#1e293b;border-color:#1e293b;"
-                                    onclick="openUrutkanCtnModal()">
-                                    <i class="fas fa-sort-numeric-down me-1"></i> Penomoran CTN
-                                </button>
-                                <button class="btn btn-dark btn-sm d-flex align-items-center fw-semibold"
-                                    style="font-size:12px;border-radius:6px;background:#1e293b;border-color:#1e293b;"
-                                    onclick="openPackingGlobalModal()">
-                                    <i class="fas fa-plus me-1"></i> Add Packing
-                                </button>
-                            @endif
                         </div>
                     </div>
                 </div>
@@ -1362,6 +1377,8 @@
         @include($cfg['routes']['modalCopyCtn'])
         @include($cfg['routes']['modalUrutkanCtn'])
         @include($cfg['routes']['modalBulkDimensiCtn'])
+        @include('menu.packing.modal-cross-po-mix')
+        @include('menu.packing.modal-bundle-carton')
     @endif
     @if ($cfg['showSealAction'])
         @include($cfg['routes']['modalSegelCtn'])
@@ -1672,7 +1689,7 @@
         }
         
         // ============================================================
-        // BARU -- bangun 1 tile Compact utk 1 grup carton (SAMA data source
+        // bangun 1 tile Compact utk 1 grup carton (SAMA data source
         // dgn buildPackingCard()/buildPackingListRow(), lewat computePackingGroupData()).
         // ============================================================
         function buildPackingCompactTile(groupRows) {
@@ -1684,14 +1701,44 @@
                 `${d.status.label} -- ${d.totalActual}/${d.totalPlan} pcs (${d.pct}%)`,
                 d.first.nobar ? `Barcode: ${d.first.nobar}` : 'Belum ada barcode',
             ];
+            if (d.isCrossPoMix) tooltipParts.push(`Mix PO: ${d.crossPoOrigins.join(', ')}`);
+            if (d.hasBundle) tooltipParts.push(`Dalam Carton Besar: ${d.bundleCartonName ?? '-'}`);
+            if (!d.canEdit) tooltipParts.push('Read-only (dibuat user/pos lain)');
             if (d.anyReject) tooltipParts.push('REJECT');
             if (d.shipStampKey === 'shipped') tooltipParts.push('Sudah Shipped');
         
-            // BARU -- FIX UTAMA: SAMA PERSIS kondisi dgn buildPackingCard()/
-            // buildPackingListRow() -- konsisten di seluruh mode tampilan.
-            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning) ?
+            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d.canEdit) ?
                 '' :
                 `<i class="fas fa-pen pc-edit-btn" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
+        
+            const mixIndicatorHtml = d.isCrossPoMix
+                ? `<span class="pc-mix-indicator" title="Mix PO/OP: ${d.crossPoOrigins.join(', ')}"
+                    style="position:absolute; top:22px; right:4px; width:17px; height:17px; border-radius:50%;
+                            background:#8b5cf6; color:#fff; display:flex; align-items:center; justify-content:center;
+                            font-size:9px; z-index:2; box-shadow:0 1px 3px rgba(0,0,0,.3); cursor:default;">
+                    <i class="fas fa-shuffle"></i>
+                </span>`
+                : '';
+        
+            const bundleIndicatorTop = d.isCrossPoMix ? 40 : 22;
+            const bundleIndicatorHtml = d.hasBundle
+                ? `<span class="pc-bundle-indicator" title="Klik untuk edit Carton Besar: ${d.bundleCartonName ?? '-'}"
+                    style="position:absolute; top:${bundleIndicatorTop}px; right:4px; width:17px; height:17px; border-radius:50%;
+                            background:#0284c7; color:#fff; display:flex; align-items:center; justify-content:center;
+                            font-size:9px; z-index:2; box-shadow:0 1px 3px rgba(0,0,0,.3); cursor:pointer;"
+                    onclick="event.stopPropagation(); editBundleCarton(${d.bundlepk})">
+                    <i class="fas fa-box-open"></i>
+                </span>`
+                : '';
+        
+            // BARU -- ikon gembok kecil di pojok KIRI-BAWAH (area lain masih
+            // kosong, tidak tabrakan dengan indikator Mix PO/Bundle di kanan-atas
+            // maupun ikon Edit).
+            const readonlyIndicatorHtml = !d.canEdit
+                ? `<span style="position:absolute; bottom:4px; left:4px; font-size:10px; opacity:.75;" title="Read-only (dibuat user/pos lain)">
+                    <i class="fas fa-lock"></i>
+                </span>`
+                : '';
         
             const badgesHtml = `
                 <div class="pc-badges">
@@ -1703,7 +1750,7 @@
             const progressColor = d.pct >= 100 ? '#8bc63f' : '#f97316';
         
             let tileBg, tileText;
-            
+        
             if (d.anyReject) {
                 tileBg = '#fee2e2'; tileText = '#7f1d1d';
             } else if (d.shipStampKey === 'shipped') {
@@ -1722,13 +1769,18 @@
                 tileBg = '#fff7ed'; tileText = '#9a3412';
             }
         
+            const compactOpacityStyle = !d.canEdit ? 'opacity:.65;' : '';
+        
             return `
                 <div class="packing-select-item packing-compact-tile pc-status-${d.status.key}"
-                    style="background:${tileBg}; color:${tileText};"
-                    data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}"
+                    style="background:${tileBg}; color:${tileText}; position:relative; ${compactOpacityStyle}"
+                    data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${d.canEdit?1:0}"
                     title="${tooltipParts.join(' | ').replace(/"/g, '&quot;')}"
                     onclick="onPackingItemClick(event, this)">
                     ${editButtonHtml}
+                    ${mixIndicatorHtml}
+                    ${bundleIndicatorHtml}
+                    ${readonlyIndicatorHtml}
                     ${badgesHtml}
                     <div class="pc-carton" style="color:${tileText};">${d.first.carton ?? '-'}</div>
                     <div class="pc-qty" style="color:${tileText}; opacity:.8;">${d.totalActual}/${d.totalPlan} &middot; ${d.pct}%</div>
@@ -1798,7 +1850,7 @@
             });
 
             // ============================================================
-            // BARU -- FIX UTAMA: buang dulu carton Shipped (SELALU tidak
+            //  buang dulu carton Shipped (SELALU tidak
             // eligible, apa pun keadaannya), baru hitung "kombinasi status"
             // (segel + session/part) TERBANYAK di antara sisanya -- itu yang
             // jadi baseline, BUKAN carton pertama yang ditemukan.
@@ -1806,10 +1858,18 @@
             let skippedShipped = 0;
             const eligible = []; // [{ cartonKey, groupRows, segelState, partState }]
 
+            let skippedReadonly = 0; // BARU -- deklarasikan di luar forEach, sejajar skippedShipped
+ 
             cartonOrder.forEach(function (cartonKey) {
                 const groupRows = cartonGroups[cartonKey];
                 if (groupRows.some(r => r.ship_shipped === true)) {
                     skippedShipped++;
+                    return;
+                }
+                // BARU -- carton read-only (bukan milik user/pos yang sedang login)
+                // TIDAK ikut "Pilih Semua".
+                if (groupRows.some(r => r.can_edit !== true)) {
+                    skippedReadonly++;
                     return;
                 }
                 const segelState = groupRows.some(r => Number(r.segel) === 1);
@@ -1870,6 +1930,7 @@
             const cartonCount = new Set(eligiblePackpks.map(pk => window.selectedRowsCache[pk]?.carton)).size;
             let msg = `${cartonCount} carton dipilih (mayoritas).`;
             if (skippedShipped > 0) msg += ` ${skippedShipped} dilewati (sudah Shipped).`;
+            if (skippedReadonly > 0) msg += ` ${skippedReadonly} dilewati (Read-only, bukan milik user/pos ini).`;
             if (skippedMinority > 0) msg += ` ${skippedMinority} dilewati (status Segel/Session beda dari mayoritas).`;
             showToast(skippedShipped || skippedMinority ? 'warning' : 'success', msg);
         }
@@ -2216,6 +2277,7 @@
             const rejectBadgeHtml = anyReject ?
                 `<span class="badge-soft" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;"><i class="fas fa-times-circle me-1"></i>Reject</span>` :
                 '';
+            const canEdit = groupRows.every(r => r.can_edit === true);
 
             const shipStampKey = getShipStampForGroup(groupRows);
             const shippedRow = groupRows.find(r => r.ship_shipped === true);
@@ -2243,17 +2305,26 @@
                     const sizePct = plan > 0 ? Math.round((actual / plan) * 100) : 0;
                     const miniColor = sizePct >= 100 ? '#8bc63f' : '#f97316';
                     const secszTag = row.secsz ? ` (${row.secsz})` : '';
+                    // BARU -- tambahkan Customer di akhir label baris size.
+                    const customerTag = row.customer ? ` &middot; ${row.customer}` : '';
                     sizeRows +=
-                        `<div class="size-row"><span class="dot"></span><span class="name">${materialLabel}${secszTag} &middot; ${window.activeSizesGlobal[i]??i}</span><span class="mini-progress"><span class="bar" style="width:${Math.min(100,sizePct)}%; background:${miniColor};"></span></span><span class="frac">${actual}/${plan}</span></div>`;
+                        `<div class="size-row"><span class="dot"></span><span class="name">${materialLabel}${secszTag} &middot; ${window.activeSizesGlobal[i]??i}${customerTag}</span><span class="mini-progress"><span class="bar" style="width:${Math.min(100,sizePct)}%; background:${miniColor};"></span></span><span class="frac">${actual}/${plan}</span></div>`;
                 });
             });
             const pct = totalPlan > 0 ? Math.round((totalActual / totalPlan) * 100) : 0;
             const barColor = status.key === 'sealed' ? '#8bc63f' : (pct >= 100 ? '#8bc63f' : '#f97316');
             let subline;
+            let sublineTitle = '';
             if (uniqueCombos.size === 1) {
                 const secszLabel = first.secsz ? ` &middot; Sec Size ${first.secsz}` : '';
-                subline = `${getComboLabel(first)}${secszLabel}`;
+                const customerLabel = first.customer ? ` &middot; ${first.customer}` : '';
+                subline = `${getComboLabel(first)}${secszLabel}${customerLabel}`;
             } else {
+                // BARU -- kalau Mixed (beberapa combo, bisa beda customer -- terutama
+                // untuk carton hasil Mix Polibag Lintas PO), kumpulkan SEMUA customer
+                // BERBEDA sebagai tooltip.
+                const distinctCustomers = [...new Set(groupRows.map(r => r.customer).filter(Boolean))];
+                sublineTitle = distinctCustomers.join(', ');
                 subline = `${uniqueCombos.size} kombinasi Color/Sec Size`;
             }
             const isSealed = status.key === 'sealed';
@@ -2263,6 +2334,33 @@
             const hasPart = groupRows.some(r =>
                 r.part !== null && r.part !== undefined && r.part !== '' && Number(r.part) !== 0
             );
+            const isCrossPoMix = groupRows.some(r => r.mixno !== null && r.mixno !== undefined && r.mixno !== '');
+            const crossPoOrigins = [...new Set(
+                groupRows
+                    .filter(r => !(r.POno === PO && r.OP === OP))
+                    .map(r => `${r.POno ?? '-'} &middot; ${r.OP ?? '-'}`)
+            )];
+            
+            const crossPoBadgeHtml = isCrossPoMix
+                ? `<span class="badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;"
+                    title="Carton ini digabung dengan: ${crossPoOrigins.join(', ') || 'PO/OP lain'}">
+                    <i class="fas fa-shuffle me-1"></i>Mix PO
+                </span>`
+                : '';
+
+
+            const hasBundle = groupRows.some(r => r.bundlepk !== null && r.bundlepk !== undefined && r.bundlepk !== '');
+            const bundleCartonName = groupRows.find(r => r.bundle_carton)?.bundle_carton || null;
+            const bundlepk = groupRows.find(r => r.bundlepk)?.bundlepk || null;
+            
+            const bundleBadgeHtml = hasBundle
+                ? `<span class="badge-soft" style="background:#e0f2fe;color:#0369a1;border-color:#bae6fd;cursor:pointer;"
+                    title="Klik untuk edit Carton Besar: ${bundleCartonName ?? '-'}"
+                    onclick="event.stopPropagation(); editBundleCarton(${bundlepk})">
+                    <i class="fas fa-box-open me-1"></i>Dalam ${bundleCartonName ?? 'Bundle'}
+                </span>`
+                : '';
+
             return {
                 first,
                 uniqueCombos,
@@ -2289,7 +2387,15 @@
                 shipDate,
                 anyInspecting,
                 anyReturning,
-                anyReject
+                anyReject,
+                isCrossPoMix,      
+                crossPoOrigins,    
+                crossPoBadgeHtml,
+                sublineTitle,
+                hasBundle,
+                bundleCartonName,
+                bundleBadgeHtml,
+                canEdit
             };
         }
 
@@ -2315,21 +2421,40 @@
         function buildPackingCard(groupRows) {
             const d = computePackingGroupData(groupRows);
             const ribbonHtml = d.allSegel ? '<div class="ribbon-segel">SEGEL</div>' : '';
-            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning) ?
+        
+            // GANTI -- tambahkan !d.canEdit ke kondisi yang menyembunyikan tombol Edit.
+            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d.canEdit) ?
                 '' :
                 `<i class="fas fa-pen icon-btn" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
-            const actionButtonHtml = buildActionButtonHtml(d);
-            return `<div class="col-12 col-md-6 col-xl-4"><div class="packing-select-item packing-card" data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" onclick="onPackingItemClick(event, this)">
+        
+            // BARU -- badge kecil supaya user paham KENAPA carton ini tidak
+            // bisa diapa-apakan (bukan sekadar hilang begitu saja tanpa penjelasan).
+            const readonlyBadgeHtml = !d.canEdit
+                ? `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Carton ini dibuat oleh MIF lain - hanya bisa dilihat">
+                    <i class="fas fa-lock me-1"></i>Read-only
+                </span>`
+                : '';
+        
+            const actionButtonHtml = d.canEdit ? buildActionButtonHtml(d) : '';
+        
+            // BARU -- kartu jadi sedikit redup (opacity) kalau read-only, supaya
+            // langsung kelihatan sekilas TANPA harus baca badge dulu.
+            const cardOpacityStyle = !d.canEdit ? 'opacity:.7;' : '';
+        
+            return `<div class="col-12 col-md-6 col-xl-4"><div class="packing-select-item packing-card" style="${cardOpacityStyle}" data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${d.canEdit?1:0}" onclick="onPackingItemClick(event, this)">
                 ${ribbonHtml}
                 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                     <span class="ctn-code">${d.first.carton??'-'}</span>
                     <span class="badge-soft ${d.compositionClass}">${d.compositionLabel}</span>
                     <span class="badge-status ${d.status.key}">${d.status.label}</span>
                     ${d.partBadgeHtml}
+                    ${d.crossPoBadgeHtml}
+                    ${d.bundleBadgeHtml}
                     ${d.rejectBadgeHtml}
+                    ${readonlyBadgeHtml}
                     ${editButtonHtml}
                 </div>
-                <div class="subline mb-1">${d.subline}</div>
+                <div class="subline mb-1" title="${d.sublineTitle}">${d.subline}</div>
                 <div class="d-flex align-items-center gap-2 mb-2">
                     <div class="progress-main flex-grow-1"><span class="bar" style="width:${Math.min(100,d.pct)}%; background:${d.barColor};"></span></div>
                     <div class="text-nowrap" style="font-size:12.5px;"><strong>${d.totalActual}</strong> / ${d.totalPlan} pcs <span class="text-muted">${d.pct}%</span></div>
@@ -2343,16 +2468,22 @@
 
         function buildPackingListRow(groupRows) {
             const d = computePackingGroupData(groupRows);
-            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning) ?
+        
+            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d.canEdit) ?
                 '<span class="text-muted small">-</span>' :
                 `<i class="fas fa-pen icon-btn" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
-            const actionButtonHtml = buildActionButtonHtml(d).replace('btn ', 'btn btn-sm ');
+        
+            const actionButtonHtml = d.canEdit ? buildActionButtonHtml(d).replace('btn ', 'btn btn-sm ') : '';
             const segelIcon = d.allSegel ? '<i class="fas fa-lock text-danger ms-1" title="Sudah Segel"></i>' : '';
-
-            // FIX UTAMA: SEBELUMNYA ada 2 <td> barcode (satu versi lama tanpa
-            // badge, satu versi baru dengan badge) -- SEKARANG cuma 1 <td>.
-            return `<tr class="packing-select-item packing-list-row" data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" onclick="onPackingItemClick(event, this)">
-                <td class="text-start"><strong>${d.first.carton??'-'}</strong>${segelIcon}<div><span class="badge-soft ${d.compositionClass}" style="font-size:10px;">${d.compositionLabel}</span>${d.partBadgeHtml}${d.rejectBadgeHtml}</div></td>
+        
+            const readonlyBadgeHtml = !d.canEdit
+                ? `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Dibuat user/pos lain"><i class="fas fa-lock me-1"></i>Read-only</span>`
+                : '';
+        
+            const rowOpacityStyle = !d.canEdit ? 'style="opacity:.7;"' : '';
+        
+            return `<tr class="packing-select-item packing-list-row" ${rowOpacityStyle} data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${d.canEdit?1:0}" onclick="onPackingItemClick(event, this)">
+                <td class="text-start"><strong>${d.first.carton??'-'}</strong>${segelIcon}<div><span class="badge-soft ${d.compositionClass}" style="font-size:10px;">${d.compositionLabel}</span>${d.partBadgeHtml}${d.crossPoBadgeHtml}${d.bundleBadgeHtml}${d.rejectBadgeHtml}${readonlyBadgeHtml}</div></td>
                 <td class="text-start" style="font-size:12.5px; color:#475569;">
                     <div class="d-flex align-items-center gap-2">
                         <span>${d.first.nobar ? d.first.nobar : '<span class="text-muted">-</span>'}</span>
@@ -2360,7 +2491,7 @@
                     </div>
                     ${d.inspecDocBadgeHtml}
                 </td>
-                <td class="text-start" style="font-size:12.5px;">${d.subline}</td>
+                <td class="text-start" style="font-size:12.5px;" title="${d.sublineTitle}">${d.subline}</td>
                 <td class="text-center"><span class="badge-status ${d.status.key}">${d.status.label}</span></td>
                 <td style="min-width:160px;"><div class="d-flex align-items-center gap-2"><div class="progress-main flex-grow-1"><span class="bar" style="width:${Math.min(100,d.pct)}%; background:${d.barColor};"></span></div><div class="text-nowrap" style="font-size:11.5px; min-width:70px;"><strong>${d.totalActual}</strong>/${d.totalPlan} <span class="text-muted">(${d.pct}%)</span></div></div></td>
                 <td class="text-center"><div class="d-flex justify-content-center gap-2">${editButtonHtml}${actionButtonHtml}</div></td>
@@ -2397,6 +2528,7 @@
                         if (!groupRows.length) return;
 
                         if (groupRows.some(r => r.ship_shipped === true)) { skippedShipped++; return; }
+                        if (groupRows.some(r => r.can_edit !== true)) { skippedInconsistent++; return; } 
 
                         const segelState = groupRows.some(r => Number(r.segel) === 1);
                         const partState = groupRows.map(r => r.part).find(p =>
@@ -2436,7 +2568,7 @@
             }
 
             // ============================================================
-            // BARU -- FIX UTAMA: validasi SEBELUM menyentuh DOM/cache sama
+            //  validasi SEBELUM menyentuh DOM/cache sama
             // sekali, dibandingkan terhadap SELEKSI YANG SUDAH ADA
             // (window.selectedRowsCache) -- bukan scrape ulang dari DOM
             // setelah class ditoggle. Ini penyebab bug lama: item yang
@@ -2445,6 +2577,11 @@
             // ============================================================
             const rowsForThisItem = (window.lastPackingRows || []).filter(r => packpksArr.includes(r.packpk));
             if (!rowsForThisItem.length) return;
+
+            if (rowsForThisItem.some(r => r.can_edit !== true)) {
+                showToast('warning', 'Carton ini dibuat oleh MIF lain - hanya bisa dilihat, tidak bisa dipilih/diedit.');
+                return; // TIDAK ADA perubahan ke seleksi yang sudah ada
+            }
 
             if (rowsForThisItem.some(r => r.ship_shipped === true)) {
                 showToast('warning', 'Carton yang sudah Shipment tidak dapat dipilih/diproses lagi.');
@@ -2507,7 +2644,7 @@
                 window.selectedRowsCache = {};
                 $('#selectedCountGlobal').text('0');
                 $('#stickTopBarGlobal').hide();
-                // BARU -- FIX UTAMA: abortSelection() juga mengosongkan seleksi total,
+                //  abortSelection() juga mengosongkan seleksi total,
                 // sinkronkan tombol di sini juga.
                 if (window.pgSelectAllActive) {
                     window.pgSelectAllActive = false;
@@ -2665,7 +2802,7 @@
                 bar.style.top = top + 'px';
             }
         
-            // BARU -- FIX UTAMA: offset utk card Shipment Plan yang di-sticky-kan
+            //  offset utk card Shipment Plan yang di-sticky-kan
             // (.shipment-plan-card.is-active) -- ikut turun kalau sticky bar carton
             // sedang tampil (supaya tidak numpuk), ikut naik kalau sticky bar
             // disembunyikan.
@@ -3018,7 +3155,7 @@
                 spdContainersCache = containers;
                 spdActivePoOpFilter = null;
             
-                // BARU -- FIX UTAMA: chip sekarang KLIK-ABLE, gabung Factory + MIF,
+                //  chip sekarang KLIK-ABLE, gabung Factory + MIF,
                 // dan tag data-poop supaya bisa dipakai filter visualisasi.
                 const poOpChipsHtml = poOpList.length
                     ? poOpList.map((p, idx) => `
@@ -3153,14 +3290,14 @@
                     return;
                 }
             
-                // BARU -- FIX UTAMA: natural sort di sisi klien juga, jaga-jaga.
+                //  natural sort di sisi klien juga, jaga-jaga.
                 const sortedCartons = naturalSortCartons(container.cartons);
             
                 sortedCartons.forEach((c, i) => {
                     const matchesFilter = !spdActivePoOpFilter
                         || (c.POno === spdActivePoOpFilter.POno && c.OP === spdActivePoOpFilter.OP);
                     const dimmedClass = matchesFilter ? '' : ' dimmed';
-                    // BARU -- FIX UTAMA: kelas 'shipped' -- biru kalau carton ini SUDAH
+                    //  kelas 'shipped' -- biru kalau carton ini SUDAH
                     // masuk (ship.status >= 6).
                     const shippedClass = c.shipped ? ' shipped' : '';
                     const cartonLabel = c.carton ?? '-';
@@ -3172,12 +3309,12 @@
                 });
             }
             
-            // BARU -- dipanggil saat dropdown container berubah.
+            // dipanggil saat dropdown container berubah.
             function onSpdContainerChange() {
                 renderSpdContainerBox();
             }
             
-            // BARU -- toggle filter PO/OP: klik chip yang sama lagi -> lepas filter
+            // toggle filter PO/OP: klik chip yang sama lagi -> lepas filter
             // (tampilkan semua carton di container).
             function toggleSpdPoOpFilter(pono, op, idx) {
                 const isSame = spdActivePoOpFilter && spdActivePoOpFilter.POno === pono && spdActivePoOpFilter.OP === op;
@@ -3366,7 +3503,7 @@
 
 
             // ============================================================
-            // 2) BARU -- load & render dokumen inspect, dikelompokkan per Part/Session.
+            // 2) load & render dokumen inspect, dikelompokkan per Part/Session.
             // ============================================================
             function loadInspectDocuments() {
                 $('#packingCardsGrid').removeClass('d-none').html(
@@ -3392,7 +3529,7 @@
                     return;
                 }
 
-                // BARU -- kelompokkan per Part/Session (satu dokumen bisa "tanpa
+                // kelompokkan per Part/Session (satu dokumen bisa "tanpa
                 // part" kalau carton-nya belum punya session, ditaruh grup terpisah).
                 const groups = {};
                 const groupOrder = [];
@@ -3469,7 +3606,7 @@
                 `;
             }
 
-            // BARU -- buka laporan PDF di tab baru (browser Print > Save as PDF,
+            // buka laporan PDF di tab baru (browser Print > Save as PDF,
             // SAMA konvensi dengan link Print PDF lain di sistem ini).
             function printInspectPdf(inspecpk) {
                 window.open(`${R.inspectPdfBase}/${inspecpk}?mif=${MIF}`, '_blank');
@@ -3667,7 +3804,7 @@
                 $('#inspecRejectWarning').addClass('d-none');
                 renderInspecCart();
             
-                // BARU -- FIX UTAMA: ambil part dari carton yang sedang dipilih di
+                //  ambil part dari carton yang sedang dipilih di
                 // halaman (SUDAH pasti seragam, divalidasi updateSelectionGlobal()).
                 const packpks = window.selectedPackpksGlobal || [];
                 const selectedRows = packpks.map(pk => window.selectedRowsCache[pk]).filter(Boolean);
@@ -3810,7 +3947,7 @@
                     color: row.material,
                     secsz: row.secsz,
                     qty: 1,
-                    stspass: 1, // BARU -- default Pass
+                    stspass: 1, // default Pass
                     defects: [], // BARU
                 });
 
@@ -3991,7 +4128,7 @@
                     `Anda akan mengembalikan <strong>${cartonCount}</strong> carton ke FinishGood.`
                 );
 
-                // BARU -- FIX UTAMA: semua carton yang bisa sampai ke modal ini
+                //  semua carton yang bisa sampai ke modal ini
                 // SEHARUSNYA sudah punya dokumen (tombol ini baru muncul kalau
                 // allHaveInspecDoc === true di updateSelectionGlobal()), tapi tetap
                 // divalidasi ulang di sini utk jaga-jaga.
@@ -4084,7 +4221,7 @@
 
 
             // ============================================================
-            // 4) BARU -- picker defect (grouped per sub kategori, TANPA canvas).
+            // 4) picker defect (grouped per sub kategori, TANPA canvas).
             // ============================================================
             function loadDefectSubDataIfNeeded(callback) {
                 if (inspecDefectSubCache.defects.length) {
@@ -4184,7 +4321,7 @@
 
 
             // ============================================================
-            // 5) BARU -- hitung & tampilkan hasil OTOMATIS (live), SAMA logic
+            // 5) hitung & tampilkan hasil OTOMATIS (live), SAMA logic
             // dgn yang dihitung ulang di server saat submit.
             // ============================================================
             function recomputeHasilDisplay() {

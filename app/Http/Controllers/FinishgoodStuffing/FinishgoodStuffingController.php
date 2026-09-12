@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\FinishgoodStuffing;
 
 use App\Http\Controllers\Controller;
+use App\Services\OrderImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -164,7 +165,7 @@ class FinishgoodStuffingController extends Controller
         $rows   = max(1, (int) $request->rows);
         $offset = ($page - 1) * $rows;
         $sortDir = $request->input('sort', 'desc') === 'asc' ? 'asc' : 'desc';
-    
+
         $isSuper = session('guserpk') == 34;
         if ($isSuper) {
             $rowsAndon = $this->fetchAll('mysql_andon', 1, $request);
@@ -175,28 +176,14 @@ class FinishgoodStuffingController extends Controller
             $connection = $this->resolveConnection($mif);
             $combined   = $this->fetchAll($connection, $mif, $request);
         }
-    
-        // Ambil URL gambar order dari mysql_gis (+ fallback mysql_sample).
-        $this->addOrderImageToRows($combined);
-    
-        // Agregasi per PO+OP, lalu validasi ULANG semua filter aktif.
+
         $aggregated = $this->applyPostAggregationFilters(
             $this->aggregateByPoOp($combined),
             $request
         )->values();
-    
-        //  hitung breakdown CTN (ctn_full_count/ctn_partial_count/
-        // ctn_sealed_count/ctn_shipped_count/ctn_inspect_count) utk SEMUA
-        // baris hasil agregasi -- SEBELUM filter status & SEBELUM pagination.
-        // WAJIB di sini (bukan setelah slice) supaya filter status di bawah
-        // bisa mengecek nilai-nilai ini.
+
         $this->addCtnBreakdownToRows($aggregated);
-    
-        //  SEBELUMNYA hanya tampilkan status Complete. SEKARANG
-        // Partial JUGA ditampilkan, TAPI HANYA kalau sudah ada progres
-        // Actual di carton-nya (Full ATAU Partial) -- SAMA kriteria dengan
-        // menu index Packing biasa. Pending TETAP disembunyikan (belum ada
-        // plan sama sekali, tidak relevan utk FG/Stuffing).
+
         $aggregated = $aggregated->filter(function ($r) {
             if ($r->packing_plan_status === 'complete') {
                 return true;
@@ -206,30 +193,31 @@ class FinishgoodStuffingController extends Controller
             }
             return false;
         })->values();
-    
-        // Normalisasi GAC (Ex Factory) jadi timestamp SEBELUM sort.
+
         foreach ($aggregated as $r) {
             $r->gac_sort_ts = $this->normalizeGacForSort($r->GAC);
         }
-    
+
         $aggregated = $aggregated
             ->when(
                 $sortDir === 'asc',
-                fn($c) => $c->sortBy('gac_sort_ts'),
-                fn($c) => $c->sortByDesc('gac_sort_ts')
+                fn ($c) => $c->sortBy('gac_sort_ts'),
+                fn ($c) => $c->sortByDesc('gac_sort_ts')
             )
             ->values();
-    
+
         $total = $aggregated->count();
         $data  = $aggregated->slice($offset, $rows)->values();
-    
-        // TIDAK PERLU lagi panggil addCtnBreakdownToRows($data) di sini --
-        // sudah dihitung di atas utk SELURUH $aggregated sebelum di-slice.
+
+        // BARU -- FIX UTAMA (PERFORMA): foto order SEKARANG dilookup di sini,
+        // HANYA untuk 50 baris final ini.
+        $this->addOrderImageToRows($data);
+
         foreach ($data as $i => $row) {
             $row->no = $offset + $i + 1;
-            unset($row->_popks); // field internal, tidak perlu dikirim ke frontend
+            unset($row->_popks);
         }
-    
+
         return response()->json([
             'total' => $total,
             'rows'  => $data,
@@ -241,82 +229,7 @@ class FinishgoodStuffingController extends Controller
     // asset LOKAL aplikasi ini. SAMA PERSIS logic dengan TF Finishing/Polibag.
     private function addOrderImageToRows($rows): void
     {
-        if ($rows->isEmpty()) {
-            return;
-        }
-
-        $gisFotoBase        = rtrim(config('services.foto.gis_base'), '/');
-        $productionFotoBase = rtrim(config('services.foto.production_base'), '/');
-        $sampleFotoBase     = rtrim(config('services.foto.sample_base'), '/');
-
-        $noImageUrl = asset('public/css/images/no-img.png');
-
-        foreach ($rows as $r) {
-            $r->order_image = $noImageUrl;
-        }
-
-        $ordpks = $rows->pluck('ordpk')->filter()->unique()->values()->all();
-        if (empty($ordpks)) {
-            return;
-        }
-
-        $ordRows = DB::connection('mysql_gis')->table('ord')
-            ->whereIn('ordpk', $ordpks)
-            ->get(['ordpk', 'srno', 'foto', 'foto2', 'stsfoto']);
-
-        $ordByOrdpk = $ordRows->keyBy('ordpk');
-
-        $srnos = $ordRows->pluck('srno')->filter()->unique()->values()->all();
-
-        $srpkBySrno = [];
-        $fotoBySrpk = [];
-
-        if (!empty($srnos)) {
-            $reqRows = DB::connection('mysql_sample')->table('request')
-                ->whereIn('srno', $srnos)
-                ->get(['srno', 'srpk']);
-
-            foreach ($reqRows as $r) {
-                $srpkBySrno[$r->srno] = $r->srpk;
-            }
-
-            $srpks = array_values(array_unique(array_values($srpkBySrno)));
-
-            if (!empty($srpks)) {
-                $statusRows = DB::connection('mysql_sample')->table('status')
-                    ->whereIn('srpk', $srpks)
-                    ->orderByDesc('statuspk')
-                    ->get(['srpk', 'foto', 'statuspk']);
-
-                foreach ($statusRows as $r) {
-                    if (!isset($fotoBySrpk[$r->srpk])) {
-                        $fotoBySrpk[$r->srpk] = $r->foto;
-                    }
-                }
-            }
-        }
-
-        foreach ($rows as $r) {
-            $ord = $ordByOrdpk->get($r->ordpk);
-            if (!$ord) {
-                continue;
-            }
-
-            $stsfoto = $ord->stsfoto ?? null;
-            $foto1   = $ord->foto ?? null;
-            $srno    = $ord->srno ?? null;
-
-            $srpk  = $srno ? ($srpkBySrno[$srno] ?? null) : null;
-            $foto2 = $srpk ? ($fotoBySrpk[$srpk] ?? null) : ($ord->foto2 ?? null);
-
-            if ($stsfoto == 1) {
-                $r->order_image = !empty($foto1) ? "{$gisFotoBase}/{$foto1}" : $noImageUrl;
-            } elseif ($stsfoto == 2) {
-                $r->order_image = !empty($foto1) ? "{$productionFotoBase}/{$foto1}" : $noImageUrl;
-            } else {
-                $r->order_image = !empty($foto2) ? "{$sampleFotoBase}/{$foto2}" : $noImageUrl;
-            }
-        }
+        app(OrderImageService::class)->attachToRows($rows, 'ordpk', 'order_image');
     }
 
     // Penjumlahan nilai kolom QTY, Packing /Pcs, CTN per PO+OP.
@@ -420,65 +333,80 @@ class FinishgoodStuffingController extends Controller
         if ($rows->isEmpty()) {
             return;
         }
-    
+
         foreach ($rows as $r) {
             $r->ctn_plan_count    = 0;
             $r->ctn_partial_count = 0;
             $r->ctn_full_count    = 0;
             $r->ctn_sealed_count  = 0;
-            $r->ctn_shipped_count = 0; 
+            $r->ctn_shipped_count = 0;
             $r->ctn_inspect_count = 0;
         }
-    
+
         $rowsByMif = $rows->groupBy(fn ($r) => (int) ($r->mif ?? 0));
-    
+
         foreach ($rowsByMif as $mif => $rowsForMif) {
             $connection = $this->resolveConnection($mif);
             $db = DB::connection($connection);
-    
+
             $allPopks = $rowsForMif
                 ->flatMap(fn ($r) => $r->_popks ?? [$r->popk])
                 ->unique()
                 ->values()
                 ->all();
-    
+
             if (empty($allPopks)) {
                 continue;
             }
-    
-            $packRows = $db->table('pack')->whereIn('popk', $allPopks)->get();
-            $packRowsByPopk = $packRows->groupBy('popk');
-    
-            // cek status shipment (ship.status IN [6,7]) per packpk --
-            // SAMA kriteria dengan 'shipped' di listDetailGlobal()/getShipStampForGroup().
-            $allPackpks = $packRows->pluck('packpk')->unique()->values()->all();
-            $shippedPackpkSet = $db->table('ship')
-                ->whereIn('packpk', $allPackpks)
-                ->whereIn('status', [6, 7])
-                ->pluck('packpk')
-                ->flip();
 
-            $inspectingPackpkSet = $db->table('ship')
-                ->whereIn('packpk', $allPackpks)
-                ->where('fca', 1)
-                ->pluck('packpk')
-                ->flip();
-    
+            // GANTI -- FIX UTAMA: chunk popks (bisa ribuan) saat query 'pack',
+            // supaya TIDAK kena limit placeholder MySQL ("too many placeholders").
+            $packRows = collect();
+            foreach (array_chunk($allPopks, 1000) as $popkChunk) {
+                $packRows = $packRows->concat(
+                    $db->table('pack')->whereIn('popk', $popkChunk)->get()
+                );
+            }
+            $packRowsByPopk = $packRows->groupBy('popk');
+
+            $allPackpks = $packRows->pluck('packpk')->unique()->values()->all();
+
+            // GANTI -- FIX UTAMA: chunk packpks juga saat query 'ship' --
+            // INI sumber error 1390 (packpk bisa puluhan ribu).
+            $shippedPackpkSet = collect();
+            $inspectingPackpkSet = collect();
+            foreach (array_chunk($allPackpks, 1000) as $packpkChunk) {
+                $shippedPackpkSet = $shippedPackpkSet->concat(
+                    $db->table('ship')
+                        ->whereIn('packpk', $packpkChunk)
+                        ->whereIn('status', [6, 7])
+                        ->pluck('packpk')
+                );
+                $inspectingPackpkSet = $inspectingPackpkSet->concat(
+                    $db->table('ship')
+                        ->whereIn('packpk', $packpkChunk)
+                        ->where('fca', 1)
+                        ->pluck('packpk')
+                );
+            }
+            $shippedPackpkSet = $shippedPackpkSet->unique()->flip();
+            $inspectingPackpkSet = $inspectingPackpkSet->unique()->flip();
+
             foreach ($rowsForMif as $r) {
                 $popksForGroup = $r->_popks ?? [$r->popk];
-    
+
                 $groupPackRows = collect();
                 foreach ($popksForGroup as $pk) {
                     $groupPackRows = $groupPackRows->concat($packRowsByPopk->get($pk, collect()));
                 }
-    
+
                 $byCarton = $groupPackRows->groupBy('carton');
-    
+
                 $r->ctn_plan_count = $byCarton->count();
-    
+
                 foreach ($byCarton as $cartonRows) {
                     $status = $this->getCtnGroupStatus($cartonRows);
-    
+
                     if ($status === 'packing') {
                         $r->ctn_partial_count++;
                     } elseif ($status === 'complete') {
@@ -486,10 +414,7 @@ class FinishgoodStuffingController extends Controller
                     } elseif ($status === 'sealed') {
                         $r->ctn_sealed_count++;
                     }
-    
-                    // carton dianggap "Shipped" kalau SALAH SATU packpk
-                    // di dalamnya (carton Mixed bisa >1 packpk) sudah shipped --
-                    // dihitung TERLEPAS dari status Pack di atas.
+
                     $isShipped = $cartonRows->contains(fn ($cr) => isset($shippedPackpkSet[$cr->packpk]));
                     if ($isShipped) {
                         $r->ctn_shipped_count++;
@@ -510,96 +435,83 @@ class FinishgoodStuffingController extends Controller
         $db = DB::connection($connection);
         $isDetailCall = $op !== null;
 
-        $packing = $db->table('pack')
-            ->selectRaw('popk, SUM(pcs) as packing_qty')
-            ->groupBy('popk');
-        $packingPlan = $db->table('pack')
-            ->selectRaw('popk, SUM(pcsp) as packing_qty_plan')
-            ->groupBy('popk');
-        $packingCtn = $db->table('pack')
-            ->selectRaw("popk, SUM(jmlpcs) as packing_ctn")
-            ->where('status', '>=', 4)
+        $packSelect = "
+            popk,
+            SUM(pcs) as packing_qty,
+            SUM(pcsp) as packing_qty_plan,
+            SUM(CASE WHEN status >= 4 THEN jmlpcs ELSE 0 END) as packing_ctn
+        ";
+        if ($isDetailCall) {
+            $packSelect .= ",
+            MAX(status) as status,
+            MAX(CASE WHEN status = 5 AND part = '10' THEN 1 ELSE 0 END) as segel_complete,
+            GROUP_CONCAT(
+                DISTINCT CASE WHEN status = 5 AND part <> '10' THEN part END
+                ORDER BY CAST(part AS UNSIGNED)
+                SEPARATOR ', '
+            ) as segel_partial_no
+            ";
+        }
+        $packAgg = $db->table('pack')
+            ->selectRaw($packSelect)
             ->groupBy('popk');
 
         $query = $db->table('po')
-            ->leftJoinSub($packing, 'pk', fn($join) => $join->on('po.popk', '=', 'pk.popk'))
-            ->leftJoinSub($packingPlan, 'pkp', fn($join) => $join->on('po.popk', '=', 'pkp.popk'))
-            ->leftJoinSub($packingCtn, 'pctn', fn($join) => $join->on('po.popk', '=', 'pctn.popk'))
+            ->leftJoinSub($packAgg, 'pk', fn ($join) => $join->on('po.popk', '=', 'pk.popk'))
             ->where('po.qty', '>', 0)
             ->where('po.OP', '<>', '')
             ->where('po.mif', $mif);
 
-            //  tambah po.ordpk (utk addOrderImageToRows) dan po.GAC
-            // (Ex Factory) -- sebelumnya TIDAK ada di select, jadi kolom Ex
-            // Factory & foto tidak bisa ditampilkan.
-            $selectFields = "po.popk, po.ordpk, po.sts, po.gabung, po.shipdate1, po.shipdate2,
+        $selectFields = "po.popk, po.ordpk, po.sts, po.gabung, po.shipdate1, po.shipdate2,
             po.customer, po.season, po.POno, po.OP, po.poref, po.mif, po.GAC,
             po.buyer, po.style, po.qty, po.silhouette, po.ctn AS ctn,
-            COALESCE(pkp.packing_qty_plan,0) AS packing_qty_plan,
+            COALESCE(pk.packing_qty_plan,0) AS packing_qty_plan,
             COALESCE(pk.packing_qty,0)       AS packing_qty,
-            (COALESCE(pk.packing_qty,0) - COALESCE(pkp.packing_qty_plan,0)) AS packing_qty_balance,
-            COALESCE(pctn.packing_ctn,0) AS packing_ctn,
-            (COALESCE(pctn.packing_ctn,0) - po.ctn) AS ctn_balance
+            (COALESCE(pk.packing_qty,0) - COALESCE(pk.packing_qty_plan,0)) AS packing_qty_balance,
+            COALESCE(pk.packing_ctn,0) AS packing_ctn,
+            (COALESCE(pk.packing_ctn,0) - po.ctn) AS ctn_balance
         ";
 
         if ($isDetailCall) {
-            $transfer = $db->table('bj')
-                ->selectRaw('popk, SUM(pcs) as transfer')
-                ->where('check2', 0)
-                ->groupBy('popk');
-            $checked = $db->table('bj')
-                ->selectRaw('popk, SUM(pcs) as checked_qty')
-                ->where('check2', 1)
-                ->groupBy('popk');
-            $packStatus = $db->table('pack')
-                ->selectRaw('popk, MAX(status) as status')
-                ->groupBy('popk');
-            $segel = $db->table('pack')
+            $bjAgg = $db->table('bj')
                 ->selectRaw("
-                popk,
-                MAX(CASE WHEN part = '10' THEN 1 ELSE 0 END) as segel_complete,
-                GROUP_CONCAT(
-                    DISTINCT CASE WHEN part <> '10' THEN part END
-                    ORDER BY CAST(part AS UNSIGNED)
-                    SEPARATOR ', '
-                ) as segel_partial_no
-            ")
-                ->where('status', 5)
+                    popk,
+                    SUM(CASE WHEN check2 = 0 THEN pcs ELSE 0 END) as transfer,
+                    SUM(CASE WHEN check2 = 1 THEN pcs ELSE 0 END) as checked_qty
+                ")
                 ->groupBy('popk');
+
             $lineInfo = $db->table('bj')
                 ->leftJoin('line', 'line.linepk', '=', 'bj.linepk')
                 ->selectRaw("
-                bj.popk,
-                GROUP_CONCAT(
-                    DISTINCT TRIM(SUBSTRING(line.linenm,6,3))
-                    ORDER BY line.linenm
-                    SEPARATOR ';'
-                ) AS linenm
-            ")
+                    bj.popk,
+                    GROUP_CONCAT(
+                        DISTINCT TRIM(SUBSTRING(line.linenm,6,3))
+                        ORDER BY line.linenm
+                        SEPARATOR ';'
+                    ) AS linenm
+                ")
                 ->groupBy('bj.popk');
 
             $query
-                ->leftJoinSub($transfer, 'trf', fn($join) => $join->on('po.popk', '=', 'trf.popk'))
-                ->leftJoinSub($checked, 'chk', fn($join) => $join->on('po.popk', '=', 'chk.popk'))
-                ->leftJoinSub($packStatus, 'pst', fn($join) => $join->on('po.popk', '=', 'pst.popk'))
-                ->leftJoinSub($segel, 'sgl', fn($join) => $join->on('po.popk', '=', 'sgl.popk'))
-                ->leftJoinSub($lineInfo, 'li', fn($join) => $join->on('po.popk', '=', 'li.popk'));
+                ->leftJoinSub($bjAgg, 'bja', fn ($join) => $join->on('po.popk', '=', 'bja.popk'))
+                ->leftJoinSub($lineInfo, 'li', fn ($join) => $join->on('po.popk', '=', 'li.popk'));
 
             $selectFields .= ",
-            COALESCE(trf.transfer,0) AS transfer,
-            COALESCE(chk.checked_qty,0) AS checked_qty,
-            COALESCE(pst.status, 0)           AS status,
-            COALESCE(sgl.segel_complete, 0)   AS segel_complete,
-            sgl.segel_partial_no              AS segel_partial_no,
-            (
-                COALESCE(trf.transfer,0)
-                - COALESCE(chk.checked_qty,0)
-                - COALESCE(pk.packing_qty,0)
-            ) AS balance,
-            po.material,
-            po.secsz,
-            li.linenm
-        ";
+                COALESCE(bja.transfer,0) AS transfer,
+                COALESCE(bja.checked_qty,0) AS checked_qty,
+                COALESCE(pk.status, 0)           AS status,
+                COALESCE(pk.segel_complete, 0)   AS segel_complete,
+                pk.segel_partial_no              AS segel_partial_no,
+                (
+                    COALESCE(bja.transfer,0)
+                    - COALESCE(bja.checked_qty,0)
+                    - COALESCE(pk.packing_qty,0)
+                ) AS balance,
+                po.material,
+                po.secsz,
+                li.linenm
+            ";
         }
 
         if ($po !== null) {
@@ -2469,7 +2381,6 @@ class FinishgoodStuffingController extends Controller
     }
 
 
-    // ===============  PACKING NEW V2 HALAMAN INPUT TRANSFER/POLIBAG 
     // ===============  HALAMAN INPUT FG/Stuffing
     public function inputPackingGlobal(Request $request)
     {

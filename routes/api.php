@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/buyer-list', [TransferController::class, 'buyerList'])->name('api.buyer-list');
 
+// Exim load data
 Route::post('/packing/load-carton-to-container', [PackingController::class, 'apiLoadCartonToContainer'])->name('api.packing.loadCartonToContainer');
 Route::get('/packing/loaded-cartons-by-container', [PackingController::class, 'apiGetLoadedCartonsByContainer'])->name('api.packing.loadedCartonsByContainer');
 

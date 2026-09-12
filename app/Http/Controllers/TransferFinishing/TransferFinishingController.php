@@ -19,90 +19,34 @@ class TransferFinishingController extends Controller
         return view('menu.transfer-finishing.index');
     }
 
-    // Memisahkan koneksi database sesuai mif user yang login (1=mysql_andon, 2=mysql).
-    private function resolveConnection($mif): string
-    {
-        return ((int) $mif) === 1 ? 'mysql_andon' : 'mysql';
-    }
-
-    private function resolveCanonicalPopks(array $mif1Popks): array
-    {
-        if (empty($mif1Popks)) {
-            return [];
-        }
-    
-        $bdownpkByPopk = DB::connection('mysql_andon')->table('po')
-            ->whereIn('popk', $mif1Popks)
-            ->pluck('bdownpk', 'popk');
-    
-        $bdownpks = $bdownpkByPopk->filter()->unique()->values()->all();
-        if (empty($bdownpks)) {
-            return [];
-        }
-    
-        $canonicalByBdownpk = DB::connection('mysql')->table('po')
-            ->whereIn('bdownpk', $bdownpks)
-            ->pluck('popk', 'bdownpk');
-    
-        $result = [];
-        foreach ($bdownpkByPopk as $mif1Popk => $bdownpk) {
-            if ($bdownpk !== null && isset($canonicalByBdownpk[$bdownpk])) {
-                $result[$mif1Popk] = $canonicalByBdownpk[$bdownpk];
-            }
-        }
-    
-        return $result;
-    }
-
-        // Daftar Data OP index.blade.php -- endpoint utama datagrid. Alur:
-        // fetch mentah per-mif -> hitung R+Q & Transfer to Finishing -> ambil
-        // foto order -> agregasi per PO+OP -> filter (safety-net + R+Q>0) ->
-        // sort berdasarkan Ex Factory -> paginasi.
+    // Daftar Data OP index.blade.php -- endpoint utama datagrid. Alur:
+    // fetch mentah per-mif -> hitung R+Q & Transfer to Finishing -> ambil
+    // foto order -> agregasi per PO+OP -> filter (safety-net + R+Q>0) ->
+    // sort berdasarkan Ex Factory -> paginasi.
     public function getList(Request $request)
     {
         $page   = (int) ($request->page ?? 1);
         $rows   = (int) ($request->rows ?? 50);
         $offset = ($page - 1) * $rows;
         $sortDir = $request->input('sort', 'desc') === 'asc' ? 'asc' : 'desc';
-        $isSuper = session('guserpk') == 34;
-
-        if ($isSuper) {
-            // Super user melihat GABUNGAN 2 mif sekaligus (mysql_andon + mysql).
-            $rowsAndon = $this->fetchAll('mysql_andon', 1, $request);
-            $rowsMysql = $this->fetchAll('mysql', 2, $request);
-            $this->addRQToRows($rowsAndon);
-            $this->addRQToRows($rowsMysql);
-            $combined = $rowsAndon->concat($rowsMysql);
-        } else {
-            // GANTI TOTAL -- FIX UTAMA: user biasa TETAP query KEDUA koneksi
-            // (mysql_andon DAN mysql), TAPI filter 'mif' sesuai session('pos')
-            // miliknya di KEDUANYA -- karena baris dengan mif=1 BISA ADA di
-            // KEDUA host (data tidak murni terpisah per host, sudah
-            // dikonfirmasi ada di database.11 MAUPUN database.19), bukan cuma
-            // di satu host tertentu seperti asumsi lama.
-            $mif = session('pos') == 1 ? 1 : 2;
-
-            $rowsAndon = $this->fetchAll('mysql_andon', $mif, $request);
-            $rowsMysql = $this->fetchAll('mysql', $mif, $request);
-            $this->addRQToRows($rowsAndon);
-            $this->addRQToRows($rowsMysql);
-            $combined = $rowsAndon->concat($rowsMysql);
-        }
-
+    
+        $combined = $this->fetchAll('mysql', $request);
+        $this->addRQToRows($combined);
+    
         $this->addTransferFinishingToRows($combined);
         $this->addOrderImageToRows($combined);
-
+    
         $aggregated = $this->applyPostAggregationFilters(
             $this->aggregateByPoOp($combined),
             $request
         )
             ->filter(fn($r) => (float) ($r->transfer ?? 0) > 0)
             ->values();
-
+    
         foreach ($aggregated as $r) {
             $r->gac_sort_ts = $this->normalizeGacForSort($r->GAC);
         }
-
+    
         $aggregated = $aggregated
             ->when(
                 $sortDir === 'asc',
@@ -110,14 +54,14 @@ class TransferFinishingController extends Controller
                 fn($c) => $c->sortByDesc('gac_sort_ts')
             )
             ->values();
-
+    
         $total = $aggregated->count();
         $data  = $aggregated->slice($offset, $rows)->values();
-
+    
         foreach ($data as $i => $row) {
             $row->no = $offset + $i + 1;
         }
-
+    
         return response()->json([
             'total' => $total,
             'rows'  => $data,
@@ -277,14 +221,13 @@ class TransferFinishingController extends Controller
     // filter search/buyer/year/ex_factory di level SQL. Dipanggil oleh
     // getList() (index) dan detailByPoOp() (modal) supaya kedua endpoint
     // otomatis konsisten satu sama lain.
-    private function fetchAll(string $connection, int $mif, Request $request)
+    private function fetchAll(string $connection, Request $request)
     {
         $query = DB::connection($connection)->table('po')
             ->leftJoin('bj as bj_line', 'bj_line.popk', '=', 'po.popk')
             ->leftJoin('line', 'line.linepk', '=', 'bj_line.linepk')
             ->where('po.sts', 0)
             ->where('po.qty', '>', 0)
-            ->where('po.mif', $mif)
             ->selectRaw("
             po.popk, po.ordpk, po.moppk, po.POno, po.poref, po.OP, po.customer, po.season,
             po.style, po.material, po.buyer, po.qty, po.mif, po.secsz, po.GAC, po.silhouette,
@@ -345,23 +288,14 @@ class TransferFinishingController extends Controller
         }
         $sortDir = $request->input('sort', 'desc') === 'asc' ? 'asc' : 'desc';
         $rows = $query->orderBy('po.popk', $sortDir)->get();
-
-        // BARU -- FIX UTAMA: tempel canonical_popk. Untuk mif=1 (mysql_andon),
-        // terjemahkan popk-nya ke versi 'mysql' (database 19) lewat bdownpk --
-        // popk kanonik inilah yang dipakai output/tfpb (via popk mentah).
-        // Untuk mif=2 (mysql), popk-nya SENDIRI SUDAH kanonik.
-        if ($connection === 'mysql_andon') {
-            $popks = $rows->pluck('popk')->unique()->values()->all();
-            $canonicalMap = $this->resolveCanonicalPopks($popks);
-            foreach ($rows as $r) {
-                $r->canonical_popk = $canonicalMap[$r->popk] ?? null;
-            }
-        } else {
-            foreach ($rows as $r) {
-                $r->canonical_popk = $r->popk;
-            }
+    
+        // GANTI TOTAL -- FIX UTAMA: connection SEKARANG SELALU 'mysql', jadi
+        // popk-nya SUDAH kanonik dengan sendirinya -- translasi lewat bdownpk
+        // (resolveCanonicalPopks) TIDAK LAGI DIPERLUKAN di sini.
+        foreach ($rows as $r) {
+            $r->canonical_popk = $r->popk;
         }
-
+    
         return $this->filterRowsWithMop($rows);
     }
 
@@ -504,49 +438,44 @@ class TransferFinishingController extends Controller
             'material' => 'nullable',
             'secsz'    => 'nullable',
         ]);
-
+    
         $po       = $validated['po'] ?? null;
         $op       = $validated['op'];
         $material = $validated['material'] ?? null;
         $secsz    = $validated['secsz'] ?? null;
-
-        $mif        = $validated['mif'] ?? session('pos');
-        $connection = $this->resolveConnection($mif);
-
-        $rows = $this->fetchAll($connection, (int) $mif, $request)
+    
+        $connection = 'mysql';
+    
+        $rows = $this->fetchAll($connection, $request)
             ->where('POno', $po)
             ->where('OP', $op)
             ->values();
-
-        // BARU: kalau material dikirim (klik dari kombinasi spesifik di
-        // index), filter HANYA popk yang cocok kombinasi Color+SecSize itu.
+    
         if ($material !== null && $material !== '') {
             $rows = $rows->where('material', $material)->values();
-
+    
             if ($secsz !== null && $secsz !== '') {
                 $rows = $rows->where('secsz', $secsz)->values();
             } else {
-                // Kombinasi ini memang tidak punya secsz -- cocokkan yang
-                // secsz-nya kosong/null saja, bukan yang punya secsz lain.
                 $rows = $rows->filter(fn($r) => empty($r->secsz))->values();
             }
         }
-
+    
         $this->addRQToRowsViaBreakdown($rows, $connection);
         $this->addTransferFinishingToRows($rows);
-
+    
         foreach ($rows as $r) {
             $r->balance = (int) ($r->transfer_finishing ?? 0) - (int) ($r->qty ?? 0);
         }
-
+    
         $rows = $rows
             ->sortBy(fn($r) => ($r->customer ?? '') . '|' . ($r->poref ?? ''))
             ->values();
-
+    
         foreach ($rows as $i => $row) {
             $row->no = $i + 1;
         }
-
+    
         return response()->json([
             'total' => $rows->count(),
             'rows'  => $rows,
@@ -1158,28 +1087,13 @@ class TransferFinishingController extends Controller
     private function resolvePoAndMop($popk, ?int $mif): array
     {
         $fin = DB::connection('mysql_finance_mif');
+        $connection = 'mysql';
     
-        if ($mif !== null) {
-            // Path BENAR -- mif dikirim eksplisit (dari frontend, row.mif).
-            $connection = $this->resolveConnection($mif);
-            $dt = DB::connection($connection)->table('po')->where('popk', $popk)->first();
-            abort_unless($dt, 404, "Data po untuk popk {$popk} (mif={$mif}) tidak ditemukan.");
-    
-            $mop = $fin->table('mop')->where('moppk', $dt->moppk)->first();
-            abort_unless($mop, 404, "Data mop untuk moppk {$dt->moppk} tidak ditemukan.");
-    
-            return [$dt, $mop, $connection];
-        }
-    
-        // Fallback -- TIDAK ADA mif dikirim (link lama/belum diupdate).
-        // HANYA BEKERJA untuk mif=2 (mysql), karena mop.popk cuma valid di situ.
-        $mop = $fin->table('mop')->where('popk', $popk)->first();
-        abort_unless($mop, 404, "Data mop untuk popk {$popk} tidak ditemukan (parameter 'mif' tidak dikirim -- kalau ini PO mif=1, WAJIB kirim 'mif' di request).");
-    
-        $mifGuess   = str_contains((string) $mop->noop, 'MIF1') ? 1 : 2;
-        $connection = $this->resolveConnection($mifGuess);
         $dt = DB::connection($connection)->table('po')->where('popk', $popk)->first();
         abort_unless($dt, 404, "Data po untuk popk {$popk} tidak ditemukan.");
+    
+        $mop = $fin->table('mop')->where('moppk', $dt->moppk)->first();
+        abort_unless($mop, 404, "Data mop untuk moppk {$dt->moppk} tidak ditemukan.");
     
         return [$dt, $mop, $connection];
     }
@@ -1225,24 +1139,14 @@ class TransferFinishingController extends Controller
         if (!$current) {
             return [$popk];
         }
-        $popks = $db->table('po')
+    
+        return $db->table('po')
             ->where('ordpk', $current->ordpk)
             ->where('OP', $current->OP)
             ->where('POno', $current->POno)
             ->pluck('popk')
             ->values()
             ->all();
-
-        // GANTI -- FIX UTAMA: fungsi ini SELALU dipakai buat query ke
-        // 'mysql_polibag' (output) selanjutnya -- yang popk-nya SELALU versi
-        // kanonik (database 19). Kalau koneksi asalnya mysql_andon (mif=1),
-        // terjemahkan dulu semua sibling popk ke versi kanonik.
-        if ($connection === 'mysql_andon') {
-            $canonicalMap = $this->resolveCanonicalPopks($popks);
-            return array_values(array_unique(array_values($canonicalMap)));
-        }
-
-        return $popks;
     }
 
     // Filter Buyer
@@ -1275,262 +1179,4 @@ class TransferFinishingController extends Controller
 
         return response()->json($buyers);
     }
-
-    // API CHECK
-    public function checkFinishing(Request $request)
-    {
-        $op = trim((string) $request->query('op', ''));
-
-        if ($op === '') {
-            return response()->json([
-                'error' => 'Parameter "op" wajib diisi. Contoh: ?op=26-0835',
-            ], 422);
-        }
-
-        $result = [
-            'op_dicari' => $op,
-        ];
-
-        // ---- STEP 1: cari baris po di KEDUA koneksi (mysql & mysql_andon) ----
-        $poRowsMysql = DB::connection('mysql')->table('po')
-            ->where('OP', $op)
-            ->get(['popk', 'POno', 'OP', 'mif', 'material', 'secsz']);
-
-        $poRowsAndon = DB::connection('mysql_andon')->table('po')
-            ->where('OP', $op)
-            ->get(['popk', 'POno', 'OP', 'mif', 'material', 'secsz']);
-
-        $result['step1_po_mysql']       = $poRowsMysql->toArray();
-        $result['step1_po_mysql_andon'] = $poRowsAndon->toArray();
-
-        $allPoRows = $poRowsMysql->concat($poRowsAndon);
-
-        if ($allPoRows->isEmpty()) {
-            $result['kesimpulan'] = "STOP di Step 1 -- tidak ada baris 'po' dengan OP = '{$op}' di kedua koneksi. Cek lagi penulisan No OP-nya.";
-            return response()->json($result);
-        }
-
-        // ---- STEP 2: ambil SEMUA popk dari baris po tadi ----
-        // FIX: sekarang pakai popk (BUKAN ordpk) -- 1 moppk = 1 popk, jadi
-        // ini yang jadi kunci penghubung ke mop, bukan ordpk lagi.
-        $popks = $allPoRows->pluck('popk')->unique()->values();
-
-        $result['step2_popk_ditemukan'] = $popks->all();
-
-        // ---- STEP 3: cari baris mop yang popk-nya cocok ----
-        $mopRows = DB::connection('mysql_finance_mif')->table('mop')
-            ->whereIn('popk', $popks)
-            ->get(['moppk', 'popk', 'ordpk', 'noop', 'material', 'secsz']);
-
-        $result['step3_mop'] = $mopRows->toArray();
-
-        if ($mopRows->isEmpty()) {
-            $result['kesimpulan'] = "STOP di Step 3 -- popk ditemukan (" . implode(',', $popks->all()) . "), tapi TIDAK ADA baris 'mop' di mysql_finance_mif yang punya popk itu. Cek apakah nilai popk di po benar-benar sama persis dengan mop.popk.";
-            return response()->json($result);
-        }
-
-        // ---- STEP 4: cari baris tfpb yang moppk-nya cocok ----
-        $moppks = $mopRows->pluck('moppk')->unique()->values();
-
-        $tfpbRows = DB::connection('mysql_finance_mif')->table('tfpb')
-            ->whereIn('moppk', $moppks)
-            ->get(['tfpbpk', 'moppk', 'linepk', 'tot']);
-
-        $result['step4_tfpb'] = $tfpbRows->toArray();
-
-        if ($tfpbRows->isEmpty()) {
-            $result['kesimpulan'] = "STOP di Step 4 -- mop ditemukan, tapi TIDAK ADA baris 'tfpb' yang moppk-nya cocok. Berarti belum ada transaksi Transfer to Finishing untuk popk-popk ini.";
-            return response()->json($result);
-        }
-
-        // ---- STEP 5: rincian per POPK -- moppk mana yang punya tfpb, dan
-        //      berapa totalnya masing-masing (SUDAH benar per popk, TIDAK
-        //      dibagi/diduplikasi ke popk lain). ----
-        $tfpbByMoppk = $tfpbRows->groupBy('moppk')->map(fn($g) => $g->sum('tot'));
-
-        $rincianPerPopk = [];
-        foreach ($mopRows as $mop) {
-            $totalMop = (int) ($tfpbByMoppk[$mop->moppk] ?? 0);
-            $rincianPerPopk[] = [
-                'popk'      => $mop->popk,
-                'moppk'     => $mop->moppk,
-                'material'  => $mop->material,
-                'secsz'     => $mop->secsz,
-                'total_tfpb' => $totalMop,
-            ];
-        }
-
-        $result['step5_rincian_per_popk'] = $rincianPerPopk;
-
-        $grandTotal = collect($rincianPerPopk)->sum('total_tfpb');
-        $result['total_transfer_finishing_seharusnya'] = (int) $grandTotal;
-
-        if ($grandTotal == 0) {
-            $result['kesimpulan'] = "Ada baris 'mop' & 'tfpb', tapi semua moppk untuk OP ini totalnya 0 (belum ada transaksi nyata). Lihat step5_rincian_per_popk untuk detail per Color/Sec Size.";
-        } else {
-            $result['kesimpulan'] = "DATA LENGKAP DAN VALID -- total_transfer_finishing_seharusnya = {$grandTotal} (lihat step5_rincian_per_popk untuk breakdown per Color/Sec Size, karena nilai ini SEKARANG per popk, bukan dibagi rata per ordpk lagi). Kalau di getList()/modal masih beda, masalahnya di logic PHP, bukan di data database.";
-        }
-
-        return response()->json($result);
-    }
-
-    public function outputByOp(Request $request)
-    {
-        $op   = $request->get('op');
-        $pono = $request->get('pono');
-
-        if (!$op) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Parameter OP wajib diisi.',
-            ], 422);
-        }
-
-        if (!$pono) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Parameter POno wajib diisi.',
-            ], 422);
-        }
-
-        $rows = DB::connection('mysql_andon')->select("
-        SELECT
-            po.OP,
-            po.POno,
-            o.material,
-            o.size,
-            SUM(o.jmlpcs) AS qty
-
-        FROM po
-
-        INNER JOIN status s
-            ON s.OP = po.OP
-            AND s.popk = po.popk
-
-        INNER JOIN output o
-            ON o.statuspk = s.statuspk
-
-        WHERE po.OP = ?
-          AND po.POno = ?
-          AND o.jnspk IN (2, 6)
-
-        GROUP BY
-            po.OP,
-            po.POno,
-            o.material,
-            o.size
-
-        ORDER BY
-            o.material,
-            o.size
-        ", [$op, $pono]);
-
-        /*
-        |--------------------------------------------------------------------------
-        | Ambil semua size yang ditemukan
-        |--------------------------------------------------------------------------
-        */
-        $sizes = collect($rows)
-            ->pluck('size')
-            ->filter()
-            ->unique()
-            ->values();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Pivot:
-        | material -> size -> qty
-        |--------------------------------------------------------------------------
-        */
-        $result = [];
-
-        foreach ($rows as $row) {
-
-            $material = $row->material;
-
-            if (!isset($result[$material])) {
-
-                $result[$material] = [
-                    'OP'       => $row->OP,
-                    'POno'     => $row->POno,
-                    'material' => $material,
-                    'sizes'    => [],
-                    'total'    => 0,
-                ];
-
-                foreach ($sizes as $size) {
-                    $result[$material]['sizes'][$size] = 0;
-                }
-            }
-
-            $qty = (float) $row->qty;
-
-            $result[$material]['sizes'][$row->size] += $qty;
-
-            $result[$material]['total'] += $qty;
-        }
-
-        return response()->json([
-            'success' => true,
-            'op'      => $op,
-            'pono'    => $pono,
-            'sizes'   => $sizes,
-            'data'    => array_values($result),
-        ]);
-    }
-
-    public function debugSizeFormat(Request $request)
-    {
-        $moppk = $request->query('moppk');
-
-        if (!$moppk) {
-            return response()->json(['error' => 'Parameter ?moppk=... wajib diisi.'], 422);
-        }
-
-        $fin = DB::connection('mysql_finance_mif');
-
-        // 1. Semua ukuran + qty order di mopdt
-        $mopdt = $fin->table('mopdt')
-            ->where('moppk', $moppk)
-            ->orderBy('mopdtpk')
-            ->get(['mopdtpk', 'ukuran', 'qty']);
-
-        // 2. R+Q (jnspk 2,6) -- GROUP BY size, TANPA limit, tampilkan SEMUA
-        //    variasi size + total jmlpcs + jumlah baris per size.
-        $rq = DB::connection('mysql_polibag')->table('output')
-            ->leftJoin('po', 'po.popk', '=', 'output.popk')
-            ->where('po.moppk', $moppk)
-            ->where('output.linepk', '>', 0)
-            ->whereIn('output.jnspk', [2, 6])
-            ->groupBy('output.size', 'output.jnspk')
-            ->selectRaw('output.size, output.jnspk, COUNT(*) as jml_baris, SUM(output.jmlpcs) as total_jmlpcs')
-            ->orderBy('output.size')
-            ->get();
-
-        // 3. Barcode TF (jnspk 10) -- GROUP BY size, TANPA limit.
-        $barcode = DB::connection('mysql_polibag')->table('output')
-            ->leftJoin('po', 'po.popk', '=', 'output.popk')
-            ->where('po.moppk', $moppk)
-            ->where('output.linepk', '>', 0)
-            ->where('output.jnspk', 10)
-            ->groupBy('output.size')
-            ->selectRaw('output.size, COUNT(*) as jml_baris, SUM(output.jmlpcs) as total_jmlpcs')
-            ->orderBy('output.size')
-            ->get();
-
-        // 4. BONUS: cek juga statuspk (kalau ada) -- kadang barcode/RQ dibedakan
-        //    juga oleh kolom lain yang belum kita perhitungkan.
-        $rqDistinctSizes = $rq->pluck('size')->unique()->values();
-        $barcodeDistinctSizes = $barcode->pluck('size')->unique()->values();
-
-        return response()->json([
-            'moppk'                    => $moppk,
-            'mopdt_ukuran'              => $mopdt,
-            'rq_grouped_by_size'        => $rq,
-            'barcode_grouped_by_size'   => $barcode,
-            'rq_distinct_size_texts'    => $rqDistinctSizes,
-            'barcode_distinct_size_texts' => $barcodeDistinctSizes,
-        ]);
-    }
-
 }

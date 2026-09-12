@@ -183,7 +183,7 @@
                     </a>
                 @endif
                 
-                @if (in_array($guserpk, [34]))
+                {{-- @if (in_array($guserpk, [34]))
                     <!-- finGoods -->
                     <a href="{{ route('stuff.index') }}"
                     class="nav-link p-0 @if (request()->is('finGoods*')) fw-bold @endif">
@@ -193,11 +193,11 @@
                     class="nav-link p-0 @if (request()->is('stuffing*')) fw-bold @endif">
                         Stuffing
                     </a>
-                    {{-- <a href="{{ route('stok-sisa.index') }}"
+                    <a href="{{ route('stok-sisa.index') }}"
                         class="nav-link p-0 @if (request()->is('stok-sisa*') || (request()->is('polibag/input*') && session('guserpk') == 35)) fw-bold @endif">
                         Stok Sisa(Grade)
-                    </a> --}}
-                @endif
+                    </a>
+                @endif --}}
                 @if (in_array($guserpk, [34, 35, 38]))
                     <!-- FG/STUFFING -->
                     <a href="{{ route('finish-good-stuffing.index') }}"
