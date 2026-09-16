@@ -568,23 +568,14 @@ class PackingController extends Controller
 
     public function apiGetAllLoadedCartons(Request $request)
     {
-        $rows = collect();
-        foreach (['mysql_andon' => 1, 'mysql' => 2] as $connName => $mifVal) {
-            $found = DB::connection($connName)->table('pack')
-                ->whereNotNull('exportpk')
-                ->whereNotNull('contpk')
-                ->get(['packpk', 'popk', 'carton', 'exportpk', 'contpk', 'pcsp']);
-    
-            $found = $found->map(function ($r) use ($mifVal) {
-                $r->mif = $mifVal;
-                return $r;
-            });
-    
-            $rows = $rows->merge($found);
-        }
-    
+        $rows = DB::connection('mysql')->table('pack')
+            ->join('po', 'po.popk', '=', 'pack.popk')
+            ->whereNotNull('pack.exportpk')
+            ->whereNotNull('pack.contpk')
+            ->get(['pack.packpk', 'pack.popk', 'pack.carton', 'pack.exportpk', 'pack.contpk', 'pack.pcsp', 'po.mif']);
+
         $rows = $rows->unique('packpk')->values();
-    
+
         return response()->json(['rows' => $rows]);
     }
 }

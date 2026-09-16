@@ -641,11 +641,23 @@
 
         .scan-nobar-feedback {
             display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #94a3b8
+            align-items: flex-start;
+            gap: 8px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: #f8fafc;
+            font-size: 12.5px;
+            line-height: 1.5;
+        }
+        .scan-nobar-feedback-icon {
+            flex-shrink: 0;
+            margin-top: 2px;
+            font-size: 13px;
+        }
+        .scan-nobar-feedback-text {
+            flex: 1;
+            min-width: 0;
+            word-break: break-word;
         }
 
         .scan-nobar-feedback.is-processing {
@@ -1072,10 +1084,10 @@
                         onclick="bulkProsesShipmentGlobal()">Proses Shipment</span>
                 @endif
                 @if ($cfg['showKembalikanButton'])
-                    <span class="sticky-action d-none" id="btnBuatDokumenInspectGlobal"
+                    {{-- <span class="sticky-action d-none" id="btnBuatDokumenInspectGlobal"
                         onclick="openInspectDocumentModal()">
                         Buat Dokumen Inspect
-                    </span>
+                    </span> --}}
                     <span class="sticky-action d-none" id="btnKembalikanStuffingGlobal"
                         onclick="confirmKembalikanStuffing()">
                         Kembalikan
@@ -1187,7 +1199,8 @@
                             placeholder="Scan barcode / ketik nobar lalu Enter..." autocomplete="off">
                     </div>
                     <div class="scan-nobar-feedback" id="scanNobarFeedbackGlobal">
-                        <i class="fas fa-circle-info"></i><span>Siap menerima scan.</span>
+                        <i class="fas fa-circle-info scan-nobar-feedback-icon"></i>
+                        <span class="scan-nobar-feedback-text">Siap menerima scan.</span>
                     </div>
                 </div>
             </div>
@@ -1251,6 +1264,14 @@
                                     </ul>
                                 </div>
                             @endif
+
+                            {{-- @if ($cfg['showKembalikanButton'])
+                                <button class="btn btn-dark btn-sm d-flex align-items-center fw-semibold"
+                                    style="font-size:12px;border-radius:6px;background:#1e293b;border-color:#1e293b;"
+                                    onclick="openInspectDocumentModal()">
+                                    <i class="fas fa-clipboard-check me-1"></i> Buat Dokumen Inspect
+                                </button>
+                            @endif --}}
                         
                             <div class="btn-group btn-group-sm" role="group" id="viewToggleGlobal">
                                 <button type="button" class="btn btn-outline-secondary" id="viewModeCompactBtn"
@@ -1382,6 +1403,7 @@
     @endif
     @if ($cfg['showSealAction'])
         @include($cfg['routes']['modalSegelCtn'])
+        @include('menu.packing.modal-segel-bundle-carton')
     @endif
     @if ($cfg['showKembalikanButton'])
         @include($cfg['routes']['modalKembalikanStuffing'])
@@ -1687,6 +1709,40 @@
                 renderPackingCards(window.lastPackingRows || []);
             }
         }
+
+        function buildBundleCompactGroup(unit) {
+            const tilesHtml = unit.members.map(function (m) {
+                const groupRows = m.groupRows;
+                const isNativeToThisPage = groupRows.some(r => r.POno === PO && r.OP === OP);
+        
+                if (!isNativeToThisPage) {
+                    const first = groupRows[0];
+                    return `
+                        <div class="packing-compact-tile" style="opacity:.5; background:#f1f5f9; cursor:not-allowed; position:relative;"
+                            title="Milik PO/OP lain: ${first.POno ?? '-'} &middot; ${first.OP ?? '-'} -- buka halaman PO/OP tersebut untuk mengedit/memilihnya">
+                            <i class="fas fa-lock" style="position:absolute; top:4px; right:4px; font-size:10px; color:#94a3b8;"></i>
+                            <div class="pc-carton" style="color:#64748b;">${first.carton ?? '-'}</div>
+                        </div>
+                    `;
+                }
+        
+                return buildPackingCompactTile(groupRows);
+            }).join('');
+        
+            return `
+                <div class="packing-bundle-compact-group" style="border:2px solid #92400e; border-radius:10px; padding:8px; background:#fdf3e7; grid-column: 1 / -1;">
+                    <div class="d-flex align-items-center justify-content-between mb-2" style="cursor:pointer;" onclick="editBundleCarton(${unit.bundlepk})">
+                        <div class="d-flex align-items-center gap-1">
+                            <i class="fas fa-boxes-stacked" style="font-size:11px; color:#92400e;"></i>
+                            <strong style="font-size:11.5px; color:#78350f;">${unit.bundleCartonName ?? 'Carton Besar'}</strong>
+                            <span class="text-muted" style="font-size:10px;">(${unit.members.length} carton)</span>
+                        </div>
+                        <i class="fas fa-pen" style="font-size:10px; color:#92400e;" title="Edit Bundle"></i>
+                    </div>
+                    <div class="packing-compact-grid" style="margin:0;">${tilesHtml}</div>
+                </div>
+            `;
+        }
         
         // ============================================================
         // bangun 1 tile Compact utk 1 grup carton (SAMA data source
@@ -1724,7 +1780,7 @@
             const bundleIndicatorHtml = d.hasBundle
                 ? `<span class="pc-bundle-indicator" title="Klik untuk edit Carton Besar: ${d.bundleCartonName ?? '-'}"
                     style="position:absolute; top:${bundleIndicatorTop}px; right:4px; width:17px; height:17px; border-radius:50%;
-                            background:#0284c7; color:#fff; display:flex; align-items:center; justify-content:center;
+                            background:#92400e; color:#fff; display:flex; align-items:center; justify-content:center;
                             font-size:9px; z-index:2; box-shadow:0 1px 3px rgba(0,0,0,.3); cursor:pointer;"
                     onclick="event.stopPropagation(); editBundleCarton(${d.bundlepk})">
                     <i class="fas fa-box-open"></i>
@@ -2109,11 +2165,11 @@
                 compactWrapper = $('#packingCompactWrapper'),
                 compactGrid = $('#packingCompactGrid'),
                 empty = $('#packingCardsEmpty');
-        
+
             grid.empty();
             listBody.empty();
             compactGrid.empty();
-        
+
             if (!rows.length) {
                 empty.removeClass('d-none');
                 grid.addClass('d-none');
@@ -2125,35 +2181,81 @@
                 return;
             }
             empty.addClass('d-none');
-        
+
             const cartonGroups = {}, cartonOrder = [];
             rows.forEach(function (row) {
                 const key = row.carton ?? '(tanpa carton)';
                 if (!cartonGroups[key]) { cartonGroups[key] = []; cartonOrder.push(key); }
                 cartonGroups[key].push(row);
             });
-        
+
+            // BARU -- FIX UTAMA: kelompokkan carton-carton kecil yang berbagi
+            // 'bundlepk' yang SAMA menjadi SATU unit render (Bundle) -- carton
+            // yang TIDAK ber-bundle tetap render sebagai unit tersendiri seperti
+            // biasa. HANYA berlaku utk Grid Card & Compact -- List/Table TIDAK
+            // disentuh, tetap render datar per carton seperti sebelumnya.
+            const renderUnits = [];
+            const seenCartonKeys = new Set();
+            const bundleUnitByBundlepk = {};
+
+            cartonOrder.forEach(function (cartonKey) {
+                if (seenCartonKeys.has(cartonKey)) return;
+                const groupRows = cartonGroups[cartonKey];
+                const bundlepk = groupRows.find(r => r.bundlepk)?.bundlepk || null;
+
+                if (!bundlepk) {
+                    renderUnits.push({ type: 'single', cartonKey, groupRows });
+                    seenCartonKeys.add(cartonKey);
+                    return;
+                }
+
+                if (bundleUnitByBundlepk[bundlepk]) {
+                    bundleUnitByBundlepk[bundlepk].members.push({ cartonKey, groupRows });
+                    seenCartonKeys.add(cartonKey);
+                    return;
+                }
+
+                const bundleCartonName = groupRows.find(r => r.bundle_carton)?.bundle_carton || null;
+                const unit = { type: 'bundle', bundlepk, bundleCartonName, members: [{ cartonKey, groupRows }] };
+                bundleUnitByBundlepk[bundlepk] = unit;
+                renderUnits.push(unit);
+                seenCartonKeys.add(cartonKey);
+            });
+
             grid.addClass('d-none');
             listWrapper.addClass('d-none');
             compactWrapper.addClass('d-none');
-        
+
             if (window.packingViewModeGlobal === 'list') {
+                // TIDAK BERUBAH -- List/Table tetap render datar per carton.
                 listWrapper.removeClass('d-none');
                 cartonOrder.forEach(k => listBody.append(buildPackingListRow(cartonGroups[k])));
             } else if (window.packingViewModeGlobal === 'compact') {
                 compactWrapper.removeClass('d-none');
-                cartonOrder.forEach(k => compactGrid.append(buildPackingCompactTile(cartonGroups[k])));
+                renderUnits.forEach(function (unit) {
+                    if (unit.type === 'bundle') {
+                        compactGrid.append(buildBundleCompactGroup(unit));
+                    } else {
+                        compactGrid.append(buildPackingCompactTile(unit.groupRows));
+                    }
+                });
             } else {
                 grid.removeClass('d-none');
-                cartonOrder.forEach(k => grid.append(buildPackingCard(cartonGroups[k])));
+                renderUnits.forEach(function (unit) {
+                    if (unit.type === 'bundle') {
+                        grid.append(buildBundleCard(unit));
+                    } else {
+                        grid.append(buildPackingCard(unit.groupRows));
+                    }
+                });
             }
-        
+
             const persisted = window.selectedPackpksGlobal || [];
             $('.packing-select-item').each(function () {
                 const packpksArr = String($(this).data('packpks') || '').split(',').map(Number).filter(Boolean);
                 $(this).toggleClass('selected', packpksArr.some(pk => persisted.includes(pk)));
             });
-        
+
             const maxPage = Math.max(1, Math.ceil(packingCardsTotal / packingCardsRows));
             $('#packingCardsInfo').text(packingCardsTotalCarton + ' carton');
             $('#packingCardsPageLabel').text('Halaman ' + packingCardsPage + ' / ' + maxPage);
@@ -2190,15 +2292,14 @@
         }
 
         function isRowComplete(row) {
-            const activeIdx = Object.keys(window.activeSizesGlobal || {});
             let hasAnyPlan = false;
-            const semuaSama = activeIdx.every(function(i) {
+            for (let i = 1; i <= 40; i++) {
                 const plan = Number(row[`qtyp${i}`] || 0);
-                if (plan <= 0) return true;
+                if (plan <= 0) continue;
                 hasAnyPlan = true;
-                return Number(row[`qty${i}`] || 0) === plan;
-            });
-            return hasAnyPlan && semuaSama;
+                if (Number(row[`qty${i}`] || 0) !== plan) return false;
+            }
+            return hasAnyPlan;
         }
 
         function getComboMarkerForPopk(popk) {
@@ -2354,7 +2455,7 @@
             const bundlepk = groupRows.find(r => r.bundlepk)?.bundlepk || null;
             
             const bundleBadgeHtml = hasBundle
-                ? `<span class="badge-soft" style="background:#e0f2fe;color:#0369a1;border-color:#bae6fd;cursor:pointer;"
+                ? `<span class="badge-soft" style="background:#fdf3e7;color:#92400e;border-color:#f3dcb8;cursor:pointer;"
                     title="Klik untuk edit Carton Besar: ${bundleCartonName ?? '-'}"
                     onclick="event.stopPropagation(); editBundleCarton(${bundlepk})">
                     <i class="fas fa-box-open me-1"></i>Dalam ${bundleCartonName ?? 'Bundle'}
@@ -2418,17 +2519,171 @@
             return `<button class="btn ${d.canSeal?'btn-dark':'btn-outline-secondary'}" ${d.canSeal?'':'disabled'} ${sealTitle} onclick="event.stopPropagation(); sealCarton('${d.packpksAttr}')">Seal</button>`;
         }
 
-        function buildPackingCard(groupRows) {
+        function buildBundleCard(unit) {
+            const membersHtml = unit.members.map(function (m, idx) {
+                const groupRows = m.groupRows;
+                const isNativeToThisPage = groupRows.some(r => r.POno === PO && r.OP === OP);
+                const uid = `bcm_${unit.bundlepk}_${idx}`;
+                return isNativeToThisPage
+                    ? buildBundleMemberRow(groupRows, uid)
+                    : buildDisabledMiniCartonCard(groupRows);
+            }).join('');
+
+            const totalCount = unit.members.length;
+            const sealedCount = unit.members.filter(m => m.groupRows.every(r => Number(r.segel) === 1)).length;
+            const allSealed = sealedCount === totalCount;
+
+            // BARU -- agregat Plan/Actual SELURUH anggota (native maupun bukan),
+            // supaya progress bar kartu Bundle mencerminkan total isi bundle,
+            // SAMA konsep dengan progress bar kartu carton biasa.
+            let totalPlan = 0, totalActual = 0;
+            unit.members.forEach(function (m) {
+                m.groupRows.forEach(function (row) {
+                    for (let i = 1; i <= 40; i++) {
+                        totalPlan += Number(row[`qtyp${i}`] || 0);
+                        totalActual += Number(row[`qty${i}`] || 0);
+                    }
+                });
+            });
+            const pct = totalPlan > 0 ? Math.round((totalActual / totalPlan) * 100) : 0;
+            const barColor = allSealed ? '#8bc63f' : (pct >= 100 ? '#8bc63f' : '#f97316');
+
+            const anyReject = unit.members.some(m => m.groupRows.some(r => Number(r.reject) === 1));
+            const rejectBadgeHtml = anyReject
+                ? `<span class="badge-soft" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;"><i class="fas fa-times-circle me-1"></i>Reject</span>`
+                : '';
+
+            const ribbonHtml = allSealed ? '<div class="ribbon-segel">SEGEL</div>' : '';
+
+            const bundleNobar = unit.members[0]?.groupRows[0]?.bundle_nobar || null;
+
+            const isPackingAdmin = !!window.pageCfg.showAddPacking;
+
+            const editBundleBtnHtml = isPackingAdmin
+                ? `<i class="fas fa-pen icon-btn" title="Edit Carton Besar" onclick="event.stopPropagation(); editBundleCarton(${unit.bundlepk})"></i>`
+                : '';
+
+            const sealBadgeHtml = `<span class="badge-status ${allSealed ? 'sealed' : 'planned'}">${allSealed ? 'Sealed' : `${sealedCount}/${totalCount} Sealed`}</span>`;
+
+            const bundleSealBtnHtml = (!isPackingAdmin && window.canManageSegel)
+                ? (allSealed
+                    ? `<button class="btn btn-outline-secondary w-100" onclick="event.stopPropagation(); openSegelBundleModal(0, ${unit.bundlepk})"><i class="fas fa-unlock me-1"></i>Unseal</button>`
+                    : `<button class="btn btn-dark w-100" onclick="event.stopPropagation(); openSegelBundleModal(1, ${unit.bundlepk})">Seal</button>`)
+                : '';
+
+            // GANTI TOTAL -- struktur template SEKARANG SAMA PERSIS dengan
+            // buildPackingCard(): ribbon -> badge row -> subline -> progress bar
+            // -> "sizes" (di sini diisi daftar anggota) -> barcode -> card-actions.
+            // Kartu luar SENGAJA TIDAK punya class 'packing-select-item'/onclick
+            // select (kartu Bundle itu sendiri tetap tidak bisa diklik-pilih,
+            // cuma tombol Edit Bundle / Seal Bundle yang aktif).
+            return `<div class="col-12 col-md-6 col-xl-4"><div class="packing-bundle-card" style="border:2px solid #92400e; border-radius:12px; padding:12px; background:#fdf3e7; position:relative;">
+                ${ribbonHtml}
+                <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                    <span class="ctn-code" style="color:#78350f;"><i class="fas fa-boxes-stacked me-1"></i>${unit.bundleCartonName ?? 'Carton Besar'}</span>
+                    ${sealBadgeHtml}
+                    ${rejectBadgeHtml}
+                    ${editBundleBtnHtml}
+                </div>
+                <div class="subline mb-1">${totalCount} carton di dalam bundle ini</div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <div class="progress-main flex-grow-1"><span class="bar" style="width:${Math.min(100,pct)}%; background:${barColor};"></span></div>
+                    <div class="text-nowrap" style="font-size:12.5px;"><strong>${totalActual}</strong> / ${totalPlan} pcs <span class="text-muted">${pct}%</span></div>
+                </div>
+
+                <div class="packing-card-sizes" style="max-height:220px; overflow-y:auto;">
+                    ${membersHtml}
+                </div>
+
+                ${bundleNobar ? `<div class="card-barcode"><span class="barcode-text"><i class="fas fa-barcode me-1"></i>${bundleNobar}</span></div>` : ''}
+
+                ${bundleSealBtnHtml ? `<div class="card-actions">${bundleSealBtnHtml}</div>` : ''}
+            </div></div>`;
+        }
+
+        function buildBundleMemberRow(groupRows, uid) {
+            const d = computePackingGroupData(groupRows);
+        
+            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d.canEdit) ?
+                '' :
+                `<i class="fas fa-pen icon-btn" style="font-size:11px;" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
+        
+            const actionButtonHtml = d.canEdit ? buildActionButtonHtml(d).replace('btn ', 'btn btn-sm ') : '';
+            const cardOpacityStyle = !d.canEdit ? 'opacity:.7;' : '';
+        
+            return `
+                <div class="packing-select-item packing-mini-row" style="${cardOpacityStyle} background:#fff; border-radius:8px; border:1px solid #e2e8f0; padding:8px 10px; margin-bottom:6px;"
+                    data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${d.canEdit?1:0}"
+                    onclick="onPackingItemClick(event, this)">
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                        <div class="d-flex align-items-center gap-2" style="min-width:0;">
+                            <i class="fas fa-chevron-right pg-bundle-expand-icon" style="font-size:10px; color:#94a3b8; cursor:pointer; transition:transform .15s;"
+                                onclick="event.stopPropagation(); toggleBundleMemberDetail('${uid}', this)"></i>
+                            <span class="ctn-code" style="font-size:12.5px;">${d.first.carton??'-'}</span>
+                            <span class="badge-status ${d.status.key}" style="font-size:9px;">${d.status.label}</span>
+                            ${d.rejectBadgeHtml}
+                        </div>
+                        <div class="d-flex align-items-center gap-1" style="flex-shrink:0;">
+                            ${editButtonHtml}
+                            ${actionButtonHtml}
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 mt-1" style="font-size:10.5px; color:#64748b;">
+                        <span class="text-truncate" style="max-width:110px;">${d.first.nobar ? d.first.nobar : 'Belum ada barcode'}</span>
+                        <div class="progress-main flex-grow-1" style="height:5px;"><span class="bar" style="width:${Math.min(100,d.pct)}%; background:${d.barColor};"></span></div>
+                        <span>${d.pct}%</span>
+                    </div>
+                    <div id="${uid}" class="pg-bundle-expand-detail" style="display:none; margin-top:8px; padding-top:8px; border-top:1px dashed #e2e8f0;">
+                        <div class="packing-card-sizes">${d.sizeRows}</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // BARU -- toggle expand/collapse detail breakdown size per carton kecil.
+        function toggleBundleMemberDetail(uid, iconEl) {
+            const $detail = $('#' + uid);
+            const wasVisible = $detail.is(':visible');
+            $detail.slideToggle(150);
+            $(iconEl).css('transform', wasVisible ? 'rotate(0deg)' : 'rotate(90deg)');
+        }
+
+        // BARU -- kumpulkan SEMUA packpk milik 1 bundle (lintas PO/OP), dari
+        // dataset yang SUDAH DIMUAT halaman ini (window.lastPackingRows).
+        function collectBundlePackpks(bundlepk) {
+            return (window.lastPackingRows || [])
+                .filter(r => String(r.bundlepk) === String(bundlepk))
+                .map(r => r.packpk);
+        }
+        
+        // BARU -- mini-card carton kecil yang BUKAN dari PO/OP halaman ini --
+        // DISABLE total, tidak punya class 'packing-select-item' sama sekali
+        // (supaya otomatis tidak ikut ke-toggle oleh logic seleksi/select-all
+        // mana pun).
+        function buildDisabledMiniCartonCard(groupRows) {
+            const first = groupRows[0];
+            return `
+                <div class="packing-mini-row" style="opacity:.5; background:#f1f5f9; border-radius:8px; border:1px dashed #cbd5e1; padding:8px 10px; margin-bottom:6px; cursor:not-allowed;"
+                    title="Carton ini milik PO/OP lain (${first.POno ?? '-'} &middot; ${first.OP ?? '-'}) -- buka halaman PO/OP tersebut untuk mengedit/memilihnya">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="ctn-code" style="font-size:12.5px;">${first.carton??'-'}</span>
+                        <i class="fas fa-lock" style="font-size:10px; color:#94a3b8;"></i>
+                    </div>
+                    <div class="text-muted" style="font-size:10.5px;">${first.POno ?? '-'} &middot; ${first.OP ?? '-'}</div>
+                </div>
+            `;
+        }
+
+        function buildPackingCard(groupRows, colClass) {
+            colClass = colClass || 'col-12 col-md-6 col-xl-4';
+        
             const d = computePackingGroupData(groupRows);
             const ribbonHtml = d.allSegel ? '<div class="ribbon-segel">SEGEL</div>' : '';
         
-            // GANTI -- tambahkan !d.canEdit ke kondisi yang menyembunyikan tombol Edit.
             const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d.canEdit) ?
                 '' :
                 `<i class="fas fa-pen icon-btn" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
         
-            // BARU -- badge kecil supaya user paham KENAPA carton ini tidak
-            // bisa diapa-apakan (bukan sekadar hilang begitu saja tanpa penjelasan).
             const readonlyBadgeHtml = !d.canEdit
                 ? `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Carton ini dibuat oleh MIF lain - hanya bisa dilihat">
                     <i class="fas fa-lock me-1"></i>Read-only
@@ -2437,11 +2692,9 @@
         
             const actionButtonHtml = d.canEdit ? buildActionButtonHtml(d) : '';
         
-            // BARU -- kartu jadi sedikit redup (opacity) kalau read-only, supaya
-            // langsung kelihatan sekilas TANPA harus baca badge dulu.
             const cardOpacityStyle = !d.canEdit ? 'opacity:.7;' : '';
         
-            return `<div class="col-12 col-md-6 col-xl-4"><div class="packing-select-item packing-card" style="${cardOpacityStyle}" data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${d.canEdit?1:0}" onclick="onPackingItemClick(event, this)">
+            return `<div class="${colClass}"><div class="packing-select-item packing-card" style="${cardOpacityStyle}" data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${d.canEdit?1:0}" onclick="onPackingItemClick(event, this)">
                 ${ribbonHtml}
                 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                     <span class="ctn-code">${d.first.carton??'-'}</span>
@@ -2519,7 +2772,7 @@
                     const alreadySelected = (window.selectedRowsCache && Object.values(window.selectedRowsCache)[0]) || null;
                     if (alreadySelected) {
                         baselineSegel = Number(alreadySelected.segel) === 1;
-                        baselinePart = alreadySelected.part ?? '';
+                        baselinePart = alreadySelected.exportpk ?? '';
                     }
 
                     rangeItems.each(function () {
@@ -2531,10 +2784,7 @@
                         if (groupRows.some(r => r.can_edit !== true)) { skippedInconsistent++; return; } 
 
                         const segelState = groupRows.some(r => Number(r.segel) === 1);
-                        const partState = groupRows.map(r => r.part).find(p =>
-                            p !== null && p !== undefined && p !== '' && Number(p) !== 0
-                        ) ?? '';
-
+                        const partState = groupRows.map(r => r.exportpk).find(p => p !== null && p !== undefined && p !== '') ?? '';
                         if (baselineSegel === null) {
                             baselineSegel = segelState; baselinePart = partState;
                         } else if (segelState !== baselineSegel || String(partState) !== String(baselinePart)) {
@@ -2598,12 +2848,12 @@
                 }
 
                 if (window.pageCfg.showPartFilter || window.pageCfg.showKembalikanButton) {
-                    const normalizePart = (p) => (p === null || p === undefined || p === '' || Number(p) === 0) ? '' : String(p);
-                    const existingPart = normalizePart(existingRows[0].part);
-                    const newPart = normalizePart(rowsForThisItem[0].part);
-                    if (existingPart !== newPart) {
-                        showToast('warning', 'Tidak bisa memilih carton dengan Session berbeda secara bersamaan.');
-                        return; // seleksi lama TETAP UTUH
+                    const normalizeExportpk = (p) => (p === null || p === undefined || p === '') ? '' : String(p);
+                    const existingExportpk = normalizeExportpk(existingRows[0].exportpk);
+                    const newExportpk = normalizeExportpk(rowsForThisItem[0].exportpk);
+                    if (existingExportpk !== newExportpk) {
+                        showToast('warning', 'Tidak bisa memilih carton dengan Session (Export) berbeda secara bersamaan.');
+                        return;
                     }
                 }
             }
@@ -2656,13 +2906,13 @@
                 return;
             }
             if (window.pageCfg.showPartFilter || window.pageCfg.showKembalikanButton) {
-                const normalizePart = (p) => {
-                    if (p === null || p === undefined || p === '' || Number(p) === 0) return '';
+                const normalizeExportpk = (p) => {
+                    if (p === null || p === undefined || p === '') return '';
                     return String(p);
                 };
-                const uniqueParts = new Set(selectedRows.map(r => normalizePart(r.part)));
-                if (uniqueParts.size > 1) {
-                    abortSelection('Tidak bisa memilih carton dengan Session berbeda secara bersamaan.');
+                const uniqueExportpks = new Set(selectedRows.map(r => normalizeExportpk(r.exportpk)));
+                if (uniqueExportpks.size > 1) {
+                    abortSelection('Tidak bisa memilih carton dengan Session (Export) berbeda secara bersamaan.');
                     return;
                 }
             }
@@ -2704,17 +2954,19 @@
                 anyReturning && !anyReject));
 
             if (window.pageCfg.showShipmentActions) {
-                const eligibleForShipFlow = hasSegel && !anyInspecting && hasPart;
-                $('#btnProsesInspectGlobal').toggleClass('d-none', !eligibleForShipFlow);
+                const eligibleForInspect = hasSegel && !anyInspecting;
+                $('#btnProsesInspectGlobal').toggleClass('d-none', !eligibleForInspect);
+            
+                const eligibleForShipment = hasSegel && !anyInspecting && hasPart;
             
                 const selectedExportpkValue = selectedRows.length
-                    ? (selectedRows[0].exportpk !== null && selectedRows[0].exportpk !== undefined ? String(selectedRows[0].exportpk) : '') // FIX -- exportpk, bukan part
+                    ? (selectedRows[0].exportpk !== null && selectedRows[0].exportpk !== undefined ? String(selectedRows[0].exportpk) : '')
                     : '';
                 const matchedSessionPart = (window.shipmentPlanPartsCache || [])
                     .find(p => String(p.exportpk) === selectedExportpkValue);
                 const sessionIsStarted = !!(matchedSessionPart && matchedSessionPart.startship && !matchedSessionPart.endship);
             
-                $('#btnProsesShipmentGlobal').toggleClass('d-none', !(eligibleForShipFlow && sessionIsStarted));
+                $('#btnProsesShipmentGlobal').toggleClass('d-none', !(eligibleForShipment && sessionIsStarted));
             
                 const allReturning = selectedRows.length > 0 && selectedRows.every(r => r.ship_returning === true);
                 $('#btnTerimaCartonGlobal').toggleClass('d-none', !allReturning);
@@ -2865,7 +3117,19 @@
                 });
 
                 function showScanFeedback(ok, msgHtml) {
-                    feedback.innerHTML = msgHtml;
+                    const $icon = feedback.querySelector('.scan-nobar-feedback-icon');
+                    const $text = feedback.querySelector('.scan-nobar-feedback-text');
+                
+                    if ($text) {
+                        $text.innerHTML = msgHtml;
+                    } else {
+                        feedback.innerHTML = msgHtml;
+                    }
+                
+                    if ($icon) {
+                        $icon.className = 'fas ' + (ok ? 'fa-circle-check' : 'fa-triangle-exclamation') + ' scan-nobar-feedback-icon';
+                    }
+                
                     feedback.style.color = ok ? '#15803d' : '#DC143C';
                 }
                 input.addEventListener('keydown', function(e) {
@@ -2958,7 +3222,7 @@
             }
 
             function sessionLabel(p) {
-                return p.part_complete ? 'Complete' : `Session ${p.session_no}`;
+                return `SP00${p.exportpk}`;
             }
 
             function populatePartFilterOptions(parts) {
@@ -2966,7 +3230,7 @@
                 if (!$el.length) return;
             
                 const currentValue = $el.data('combobox') ? $el.combobox('getValue') : '';
-                const data = [{ value: '', text: 'Semua Session' }];
+                const data = [{ value: '', text: 'Semua Shipplan' }];
                 parts.forEach(function (p) {
                     data.push({
                         value: String(p.exportpk),
@@ -3191,7 +3455,7 @@
                 $('#shipmentPlanDetailBody').html(`
                     <div class="row g-3 mb-3">
                         <div class="col-6">
-                            <div class="text-secondary" style="font-size:11px;">PEB No</div>
+                            <div class="text-secondary" style="font-size:11px;">PEB Number</div>
                             <div class="fw-semibold" style="font-size:13px;">${e.pebno ?? '-'}</div>
                         </div>
                         <div class="col-6">
@@ -3199,11 +3463,11 @@
                             <div class="fw-semibold" style="font-size:13px;">${e.buyer ?? '-'}</div>
                         </div>
                         <div class="col-6">
-                            <div class="text-secondary" style="font-size:11px;">Export Date</div>
+                            <div class="text-secondary" style="font-size:11px;">Ex-Factory Deadline</div>
                             <div class="fw-semibold" style="font-size:13px;">${formatStampDate(e.exdate) || '-'}</div>
                         </div>
                         <div class="col-6">
-                            <div class="text-secondary" style="font-size:11px;">Actual Container Date</div>
+                            <div class="text-secondary" style="font-size:11px;">Actual Container Arrival</div>
                             <div class="fw-semibold" style="font-size:13px;">${formatStampDate(e.actcontdate) || '-'}</div>
                         </div>
                         <div class="col-6">
@@ -3211,7 +3475,7 @@
                             <div class="fw-semibold" style="font-size:13px;">${e.vessname ?? '-'}</div>
                         </div>
                         <div class="col-6">
-                            <div class="text-secondary" style="font-size:11px;">ETD / ETA</div>
+                            <div class="text-secondary" style="font-size:11px;">Vessel ETD / Vessel ETA</div>
                             <div class="fw-semibold" style="font-size:13px;">${formatStampDate(e.etdvess) || '-'} &rarr; ${formatStampDate(e.etavess) || '-'}</div>
                         </div>
                         <div class="col-6">
@@ -3224,7 +3488,7 @@
                         </div>
                         ${e.remark ? `
                         <div class="col-12">
-                            <div class="text-secondary" style="font-size:11px;">Remark</div>
+                            <div class="text-secondary" style="font-size:11px;">Catatan</div>
                             <div style="font-size:12.5px; font-style:italic;">${e.remark}</div>
                         </div>` : ''}
                     </div>
@@ -3240,7 +3504,7 @@
                             <thead class="table-light">
                                 <tr>
                                     <th>No Container</th>
-                                    <th>Tipe</th>
+                                    <th>Shipment Method</th>
                                     <th class="text-center">Qty Ctn</th>
                                     <th class="text-center">Status</th>
                                     <th>Mulai</th>
@@ -3279,34 +3543,98 @@
                 );
             }
 
+            // GANTI TOTAL renderSpdContainerBox():
             function renderSpdContainerBox() {
                 const idx = parseInt($('#spdContainerSelect').val());
                 const container = spdContainersCache[idx];
                 const $box = $('#spdContainerBox');
                 $box.empty();
-            
+
                 if (!container || !container.cartons || !container.cartons.length) {
                     $box.html('<div class="spd-container-empty">Tidak ada carton di container ini.</div>');
                     return;
                 }
-            
-                //  natural sort di sisi klien juga, jaga-jaga.
+
                 const sortedCartons = naturalSortCartons(container.cartons);
-            
-                sortedCartons.forEach((c, i) => {
+
+                // BARU -- kelompokkan carton yang berbagi 'bundlepk' yang SAMA jadi
+                // satu klaster visual -- SAMA konsep dengan packing list (carton
+                // Bundle dikumpulkan jadi satu tampilan, bukan tersebar acak di
+                // antara carton lain). Carton yang TIDAK ber-bundle tetap tampil
+                // sebagai kotak individual seperti sebelumnya.
+                const bundleGroups = {};
+                const bundleOrder = [];
+                const standaloneCartons = [];
+
+                sortedCartons.forEach(function (c) {
+                    if (c.bundlepk) {
+                        if (!bundleGroups[c.bundlepk]) {
+                            bundleGroups[c.bundlepk] = { bundleCartonName: c.bundle_carton, cartons: [] };
+                            bundleOrder.push(c.bundlepk);
+                        }
+                        bundleGroups[c.bundlepk].cartons.push(c);
+                    } else {
+                        standaloneCartons.push(c);
+                    }
+                });
+
+                // Kotak carton individual -- tag Mix PO TETAP ditempel di sini
+                // (terlepas carton ini bagian dari Bundle atau bukan), supaya kalau
+                // 1 carton kebetulan Mix PO SEKALIGUS anggota Bundle, kedua tag itu
+                // tetap terlihat: bingkai coklat (Bundle, di klaster) + ikon ungu
+                // (Mix PO, di kotaknya sendiri).
+                function buildCartonBoxHtml(c, i) {
+                    const poOpList = c.po_op_list || [];
                     const matchesFilter = !spdActivePoOpFilter
-                        || (c.POno === spdActivePoOpFilter.POno && c.OP === spdActivePoOpFilter.OP);
+                        || poOpList.some(p => p.POno === spdActivePoOpFilter.POno && p.OP === spdActivePoOpFilter.OP);
                     const dimmedClass = matchesFilter ? '' : ' dimmed';
-                    //  kelas 'shipped' -- biru kalau carton ini SUDAH
-                    // masuk (ship.status >= 6).
                     const shippedClass = c.shipped ? ' shipped' : '';
                     const cartonLabel = c.carton ?? '-';
                     const statusText = c.shipped ? ' | Sudah Masuk' : '';
-                    const title = `Carton ${cartonLabel}${c.POno ? ' | ' + c.POno + ' &middot; ' + c.OP : ''}${statusText}`;
-                    $box.append(
-                        `<div class="spd-carton-box${dimmedClass}${shippedClass}" style="animation-delay:${Math.min(i * 8, 600)}ms;" title="${title.replace(/"/g,'')}">${cartonLabel}</div>`
-                    );
+                    const poOpLabel = poOpList.length
+                        ? poOpList.map(p => `${p.POno ?? '-'} &middot; ${p.OP ?? '-'}`).join(', ')
+                        : '';
+                    const mixTag = c.is_mix ? ' [Mix PO]' : '';
+                    const title = `Carton ${cartonLabel}${poOpLabel ? ' | ' + poOpLabel : ''}${mixTag}${statusText}`;
+
+                    const mixIconHtml = c.is_mix
+                        ? `<i class="fas fa-shuffle" style="position:absolute; top:2px; left:2px; font-size:8px; color:#8b5cf6;" title="Mix PO: ${poOpLabel}"></i>`
+                        : '';
+
+                    return `
+                        <div class="spd-carton-box${dimmedClass}${shippedClass}" style="animation-delay:${Math.min(i * 8, 600)}ms; position:relative;" title="${title.replace(/"/g,'')}">
+                            ${mixIconHtml}
+                            ${cartonLabel}
+                        </div>
+                    `;
+                }
+
+                let html = '';
+                let counter = 0;
+
+                // Render klaster Bundle DULU -- masing-masing dibungkus bingkai
+                // putus-putus coklat (SAMA skema warna dgn kartu Bundle di packing
+                // list), berisi kotak-kotak carton anggotanya.
+                bundleOrder.forEach(function (bundlepk) {
+                    const group = bundleGroups[bundlepk];
+                    const innerHtml = group.cartons.map(c => buildCartonBoxHtml(c, counter++)).join('');
+                    html += `
+                        <div class="spd-bundle-group" style="display:inline-flex; flex-wrap:wrap; gap:4px; align-items:center;
+                            border:2px dashed #92400e; border-radius:8px; padding:4px; margin:2px;">
+                            <div style="font-size:9px; color:#92400e; width:100%; font-weight:600;">
+                                <i class="fas fa-box-open me-1"></i>${group.bundleCartonName ?? 'Bundle'}
+                            </div>
+                            ${innerHtml}
+                        </div>
+                    `;
                 });
+
+                // Lalu carton standalone (bukan anggota Bundle apa pun) seperti biasa.
+                standaloneCartons.forEach(function (c) {
+                    html += buildCartonBoxHtml(c, counter++);
+                });
+
+                $box.html(html);
             }
             
             // dipanggil saat dropdown container berubah.
@@ -3596,8 +3924,8 @@
                                 &middot; Total Sample: <strong>${doc.totpcs}</strong> pcs
                             </div>
                             <div style="max-height:140px; overflow-y:auto;">${cartonListHtml}</div>
-                            <div class="card-actions mt-2">
-                                <button class="btn btn-outline-dark btn-sm w-100" onclick="printInspectPdf(${doc.inspecpk})">
+                            <div class="card-actions mt-2 d-flex gap-2">
+                                <button class="btn btn-outline-dark btn-sm flex-fill" onclick="printInspectPdf(${doc.inspecpk})">
                                     <i class="fas fa-print me-1"></i> Cetak PDF
                                 </button>
                             </div>
@@ -3795,24 +4123,54 @@
 
             let inspecCart = []; // [{packpk, shippk, carton, size, color, secsz, qty:1}] -- SETIAP entry SELALU qty:1, TIDAK PERNAH digabung
             let inspecRemainingBySizeKey = {}; // key = `${packpk}|${sizeLabel}` -> sisa yang boleh diambil
+            window.editingInspecpk = null;
+ 
+            // buka modal dalam mode EDIT, isi ulang dari dokumen yang sudah ada.
+            function editInspecDocument(inspecpk) {
+                $.get(`${R.inspectShow}/${inspecpk}`, function (data) {
+                    window.editingInspecpk = data.inspecpk;
+            
+                    inspecCart = data.lines.map(l => ({
+                        packpk: l.packpk,
+                        carton: l.carton,
+                        size: l.size,
+                        color: l.color,
+                        secsz: l.secsz,
+                        qty: l.qty,
+                        stspass: l.stspass,
+                        defects: (l.defects || []).map(pk => ({ defectpk: pk, defectnm: '#' + pk })),
+                    }));
+                    inspecRemainingBySizeKey = {};
+                    $('#inspecAql').val(data.aql);
+                    renderInspecCart();
+                    recomputeHasilDisplay();
+            
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('inspectDocumentModal')).show();
+                    loadInspectAvailableCartons(''); // muat carton yg MASIH fca=1, utk bisa tambah sample baru
+            
+                    // resolve nama defect yang benar setelah defect master dimuat.
+                    loadDefectSubDataIfNeeded(function () {
+                        inspecCart.forEach(function (line) {
+                            line.defects = line.defects.map(function (d) {
+                                const found = inspecDefectSubCache.defects.find(x => x.defectpk === d.defectpk);
+                                return found ? { defectpk: found.defectpk, defectnm: found.defectnm } : d;
+                            });
+                        });
+                        renderInspecCart();
+                    });
+                });
+            }
 
             function openInspectDocumentModal() {
+                window.editingInspecpk = null; // BARU -- pastikan mode CREATE, bukan lanjutan edit sebelumnya
                 inspecCart = [];
                 inspecRemainingBySizeKey = {};
                 $('#inspecAql').val('');
-                $('#inspecHasilLulus').prop('checked', true);
                 $('#inspecRejectWarning').addClass('d-none');
                 renderInspecCart();
             
-                //  ambil part dari carton yang sedang dipilih di
-                // halaman (SUDAH pasti seragam, divalidasi updateSelectionGlobal()).
-                const packpks = window.selectedPackpksGlobal || [];
-                const selectedRows = packpks.map(pk => window.selectedRowsCache[pk]).filter(Boolean);
-                const selectedPart = selectedRows.length ? (selectedRows[0].part ?? '') : '';
-                window.currentInspecDocPart = selectedPart; // simpan utk dipakai submitInspecDocument() kalau perlu
-            
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('inspectDocumentModal')).show();
-                loadInspectAvailableCartons(selectedPart);
+                loadInspectAvailableCartons('');
             }
             
             // GANTI loadInspectAvailableCartons() -- TAMBAH parameter 'part' yang
@@ -3855,11 +4213,25 @@
                     });
                 });
 
-                cartonOrder.forEach(function(cartonNo) {
+                cartonOrder.forEach(function (cartonNo) {
                     const packRowsInCarton = cartonGroups[cartonNo];
                     const uniqueCombos = new Set(packRowsInCarton.map(r => `${r.material ?? '-'}||${r.secsz ?? ''}`));
                     const isMixed = uniqueCombos.size > 1;
                     const cartonIdSafe = safeIdPart(cartonNo);
+                
+                    // BARU -- info Mix Polibag/Bundle, TIDAK men-disable apa pun.
+                    const anyMix = packRowsInCarton.some(r => r.mixno !== null && r.mixno !== undefined && r.mixno !== '');
+                    const anyBundle = packRowsInCarton.some(r => r.bundlepk !== null && r.bundlepk !== undefined && r.bundlepk !== '');
+                    const mixInfoHtml = anyMix
+                        ? `<span class="inspec-badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;" title="Carton fisik ini berisi juga stock dari PO/OP lain (Mix Polibag)">
+                            <i class="fas fa-shuffle" style="font-size:9px;"></i> Mix PO
+                        </span>`
+                        : '';
+                    const bundleInfoHtml = anyBundle
+                        ? `<span class="inspec-badge-soft" style="background:#fdf3e7;color:#92400e;border-color:#f3dcb8;" title="Carton ini anggota Carton Besar (Bundle)">
+                            <i class="fas fa-box-open" style="font-size:9px;"></i> Bundle
+                        </span>`
+                        : '';
 
                     let sizePillsHtml = '';
                     packRowsInCarton.forEach(function(row) {
@@ -3900,7 +4272,7 @@
                                 <div class="flex-grow-1">
                                     <div class="inspec-carton-title">
                                         Carton ${cartonNo}
-                                        <span class="inspec-badge-soft ${compositionCls}">${compositionLabel}</span>
+                                        <span class="inspec-badge-soft ${compositionCls}">${compositionLabel}</span>${mixInfoHtml}${bundleInfoHtml}
                                     </div>
                                     <div class="inspec-carton-sub"><i class="fas fa-barcode me-1"></i>${repRow.nobar ?? 'Belum ada barcode'}</div>
                                 </div>
@@ -3941,14 +4313,13 @@
 
                 inspecCart.push({
                     packpk: packpk,
-                    shippk: row.shippk,
                     carton: row.carton,
                     size: sizeLabel,
                     color: row.material,
                     secsz: row.secsz,
                     qty: 1,
-                    stspass: 1, // default Pass
-                    defects: [], // BARU
+                    stspass: 1,
+                    defects: [],
                 });
 
                 inspecRemainingBySizeKey[sizeKey] = remaining - 1;
@@ -4068,23 +4439,23 @@
                     showToast('warning', 'Isi nilai AQL terlebih dulu.');
                     return;
                 }
-
-                // Validasi: semua baris Defect WAJIB sudah punya minimal 1 defect dipilih.
                 const belumPilihDefect = inspecCart.some(l => l.stspass === 0 && (!l.defects || !l.defects.length));
                 if (belumPilihDefect) {
                     showToast('warning', 'Ada baris berstatus Defect yang belum dipilih tipe defect-nya.');
                     return;
                 }
-
+            
+                const isEdit = !!window.editingInspecpk;
+                const url = isEdit ? `${R.inspectUpdate}/${window.editingInspecpk}` : R.inspectStore;
+            
                 $('#btnSubmitInspecDoc').prop('disabled', true);
                 $.ajax({
-                    url: R.inspectStore,
-                    method: 'POST',
+                    url: url,
+                    method: isEdit ? 'PUT' : 'POST',
                     data: {
                         aql: aql,
-                        mif: MIF,
                         lines: inspecCart.map(l => ({
-                            shippk: l.shippk,
+                            packpk: l.packpk,
                             size: l.size,
                             color: l.color,
                             secsz: l.secsz,
@@ -4093,19 +4464,17 @@
                             defects: l.defects.map(d => d.defectpk),
                         })),
                     },
-                    success: function(res) {
+                    success: function (res) {
                         showToast(res.icon, res.title);
                         bootstrap.Modal.getInstance(document.getElementById('inspectDocumentModal')).hide();
-                        window.lastInspecDocHasil = res.hasil;
+                        window.editingInspecpk = null;
+                        if (window.inspectionActiveTab === 'documents') loadInspectDocuments();
                     },
-                    error: function(xhr) {
-                        const res = xhr.responseJSON || {
-                            icon: 'error',
-                            title: 'Gagal menyimpan dokumen inspect.'
-                        };
+                    error: function (xhr) {
+                        const res = xhr.responseJSON || { icon: 'error', title: 'Gagal menyimpan dokumen inspect.' };
                         showToast(res.icon, res.title);
                     },
-                    complete: function() {
+                    complete: function () {
                         $('#btnSubmitInspecDoc').prop('disabled', false);
                     }
                 });

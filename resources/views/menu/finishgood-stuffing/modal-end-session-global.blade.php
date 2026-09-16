@@ -92,7 +92,7 @@
 
         $('#btnConfirmEndSession').prop('disabled', true);
 
-        $.get("{{ route('finish-good-stuffing.list.detail.global') }}", {
+        $.get("{{ route('packing.list.detail.global') }}", {
             po: @json($po), op: @json($op), poref: @json($poref ?? null), mif: @json($mif),
             part: part, rows: 9999
         }, function (data) {

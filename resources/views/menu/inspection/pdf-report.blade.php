@@ -4,209 +4,238 @@
     <meta charset="utf-8">
     <title>Laporan Inspeksi {{ $noInspec }}</title>
     <style>
-        @page { size: A4; margin: 15mm 12mm; }
+        @page { size: A4; margin: 12mm 11mm; }
         * { box-sizing: border-box; }
-        body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111827; margin: 0; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5px; color: #1e293b; margin: 0; }
+        table { border-collapse: collapse; width: 100%; }
+        table.plain, table.plain td { border: none; padding: 0; }
 
-        .report-header {
-            display: flex; justify-content: space-between; align-items: flex-start;
-            border-bottom: 3px solid #1e293b; padding-bottom: 10px; margin-bottom: 14px;
+        /* ===================== HEADER BANNER ===================== */
+        .banner {
+            /* background: #1e293b; color: #fff; border-radius: 8px; */
+            padding: 12px 16px; margin-bottom: 12px; overflow: hidden;
         }
-        .report-title { font-size: 17px; font-weight: 800; color: #1e293b; letter-spacing: .3px; }
-        .report-subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
-        .report-no { text-align: right; font-size: 12px; }
-        .report-no strong { font-size: 14px; color: #1e293b; }
-
-        .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 24px; margin-bottom: 14px; font-size: 11px; }
-        .info-grid .label { color: #64748b; font-size: 9.5px; text-transform: uppercase; letter-spacing: .3px; }
-        .info-grid .value { font-weight: 700; color: #111827; }
-
-        .stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
-        .stat-box {
-            flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; text-align: center;
+        .banner .company-name { font-size: 15px; font-weight: 800; letter-spacing: .2px; }
+        .banner .company-sub { font-size: 8.5px; color: #000000; margin-top: 1px; }
+        .banner .doc-box {
+            float: right; text-align: right; background: rgba(255,255,255,.08);
+            border-radius: 6px; padding: 6px 12px;
         }
-        .stat-box .stat-label { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: .3px; }
-        .stat-box .stat-value { font-size: 18px; font-weight: 800; color: #111827; margin-top: 2px; }
-        .stat-box.pass .stat-value { color: #16a34a; }
-        .stat-box.defect .stat-value { color: #dc2626; }
+        .banner .doc-box .doc-label { font-size: 7.5px; color: #494e54; text-transform: uppercase; letter-spacing: .4px; }
+        .banner .doc-box .doc-no { font-size: 12.5px; font-weight: 800; }
 
-        .result-stamp {
-            display: inline-block; border: 3px solid; border-radius: 8px; padding: 10px 28px;
-            font-size: 20px; font-weight: 900; letter-spacing: 2px; transform: rotate(-3deg);
-        }
-        .result-stamp.pass { border-color: #16a34a; color: #16a34a; }
-        .result-stamp.reject { border-color: #dc2626; color: #dc2626; }
+        .report-title-row { text-align: center; margin: 10px 0 8px; }
+        .report-title { font-size: 14px; font-weight: 800; color: #1e293b; }
+        .stage-row { margin-top: 4px; font-size: 9px; }
+        .stage-row .chk { display: inline-block; margin: 0 12px; }
+        .box { display: inline-block; width: 10px; height: 10px; border: 1.3px solid #1e293b; text-align: center;
+               line-height: 9px; font-size: 7.5px; font-weight: 800; margin-right: 3px; vertical-align: middle; border-radius: 2px; }
 
-        table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-        table.data-table th {
-            background: #1e293b; color: #fff; font-size: 9.5px; text-transform: uppercase;
-            padding: 6px 8px; text-align: left; letter-spacing: .3px;
+        /* ===================== INFO CARDS ===================== */
+        .info-card {
+            border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; margin-bottom: 8px;
         }
-        table.data-table td { padding: 5px 8px; border-bottom: 1px solid #e5e7eb; font-size: 10.5px; }
-        table.data-table tr:nth-child(even) td { background: #f8fafc; }
-        .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 9.5px; font-weight: 700; }
+        .info-card-title {
+            font-size: 8px; font-weight: 800; text-transform: uppercase; color: #64748b;
+            letter-spacing: .4px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #f1f5f9;
+        }
+        .lbl { font-size: 7.5px; font-weight: 700; text-transform: uppercase; color: #494e54; width: 42%; padding: 2px 0; }
+        .val { font-size: 9.5px; font-weight: 700; color: #1e293b; padding: 2px 0; }
+
+        .mix-badge {
+            display: inline-block; font-size: 7.5px; font-weight: 800; color: #6d28d9;
+            background: #ede9fe; border-radius: 8px; padding: 1px 7px; margin-left: 2px;
+        }
+        .bundle-note { font-size: 7px; color: #92400e; font-weight: 600; margin-top: 1px; }
+        .mix-note { font-size: 7px; color: #6d28d9; font-weight: 600; margin-top: 1px; }
+
+        /* ===================== SECTION TITLES ===================== */
+        .section-title {
+            font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: #1e293b;
+            margin: 12px 0 5px; padding-left: 7px; letter-spacing: .3px;
+        }
+        .section-hint { font-weight: 400; text-transform: none; color: #494e54; font-size: 7.5px; }
+
+        /* ===================== TABLES ===================== */
+        table.grid-table { border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
+        table.grid-table th {
+            background: #f8fafc; color: #475569; font-size: 7.5px; text-transform: uppercase;
+            letter-spacing: .3px; padding: 5px 6px; text-align: left; border-bottom: 1px solid #e2e8f0;
+        }
+        table.grid-table td { padding: 5px 6px; font-size: 8.5px; border-bottom: 1px solid #f1f5f9; }
+        table.grid-table tr:last-child td { border-bottom: none; }
+        table.grid-table tr:nth-child(even) td { background: #fafbfc; }
+
+        .pill { display: inline-block; padding: 1.5px 7px; border-radius: 999px; font-size: 7.5px; font-weight: 800; }
         .pill.pass { background: #dcfce7; color: #166534; }
         .pill.defect { background: #fee2e2; color: #991b1b; }
 
-        .section-title {
-            font-size: 12.5px; font-weight: 800; color: #1e293b; margin: 18px 0 8px;
-            border-left: 4px solid #1e293b; padding-left: 8px;
+        /* ===================== RESULT STAMP ===================== */
+        .result-row { text-align: center; margin: 14px 0; }
+        .result-stamp {
+            display: inline-block; border: 2.5px solid; border-radius: 8px; padding: 7px 26px;
+            font-size: 15px; font-weight: 900; letter-spacing: 1.5px;
         }
+        .result-stamp.pass { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
+        .result-stamp.reject { border-color: #dc2626; color: #dc2626; background: #fef2f2; }
 
-        .signature-row { display: flex; justify-content: space-between; margin-top: 40px; }
-        .signature-box { width: 30%; text-align: center; }
-        .signature-box .sig-line { border-top: 1px solid #111827; margin-top: 50px; padding-top: 6px; font-size: 10.5px; font-weight: 700; }
-        .signature-box .sig-role { font-size: 9.5px; color: #64748b; }
+        /* ===================== SIGNATURE ===================== */
+        .sig-row { margin-top: 30px; overflow: hidden; }
+        .sig-col { width: 33.33%; float: left; text-align: center; }
+        .sig-line { border-top: 1px solid #1e293b; margin: 38px 14px 4px; padding-top: 4px; font-size: 8.5px; font-weight: 700; }
 
-        @media print {
-            .no-print { display: none; }
-        }
+        @media print { .no-print { display: none; } }
     </style>
 </head>
 <body onload="window.print()">
 
-    {{-- HEADER --}}
-    <div class="report-header">
-        <div>
-            <div class="report-title">LAPORAN INSPEKSI</div>
-            <div class="report-subtitle">Quality Inspection Report</div>
+    {{-- ===================== BANNER HEADER ===================== --}}
+    <div class="banner">
+        <div class="doc-box">
+            <div class="doc-label">No. Dokumen</div>
+            <div class="doc-no">{{ $noInspec }}</div>
         </div>
-        <div class="report-no">
-            <div>No. Dokumen</div>
-            <strong>{{ $noInspec }}</strong>
+        <div class="company-name">PT. MORICH INDO FASHION</div>
+        <div class="company-sub">Quality Assurance Department</div>
+    </div>
+
+    <div class="report-title-row">
+        <div class="report-title">INSPECTION REPORT</div>
+        <div class="stage-row">
+            <span class="chk"><span class="box">&nbsp;</span>PRE FINAL</span>
+            <span class="chk"><span class="box">X</span>FINAL</span>
         </div>
     </div>
 
-    {{-- INFO PO/OP --}}
-    <div class="info-grid">
-        <div>
-            <div class="label">PO No / OP</div>
-            <div class="value">{{ $poInfo->POno ?? '-' }} / {{ $poInfo->OP ?? '-' }}</div>
-        </div>
-        <div>
-            <div class="label">Buyer</div>
-            <div class="value">{{ $poInfo->buyer ?? '-' }}</div>
-        </div>
-        <div>
-            <div class="label">Style</div>
-            <div class="value">{{ $poInfo->style ?? '-' }}</div>
-        </div>
-        <div>
-            <div class="label">Customer / Place</div>
-            <div class="value">{{ $poInfo->customer ?? '-' }}</div>
-        </div>
-        <div>
-            <div class="label">Tanggal Inspeksi</div>
-            <div class="value">{{ \Carbon\Carbon::parse($inspec->tgl)->format('d M Y') }}</div>
-        </div>
-        <div>
-            <div class="label">Total Carton Diinspeksi</div>
-            <div class="value">{{ $totalCarton }} carton</div>
-        </div>
-    </div>
+    {{-- ===================== INFO CARDS 3 KOLOM ===================== --}}
+    <table class="plain">
+        <tr>
+            <td style="width:33%; padding-right:6px; vertical-align:top;">
+                <div class="info-card">
+                    <div class="info-card-title">Order Information</div>
+                    <table class="plain">
+                        <tr><td class="lbl">Order Qty</td><td class="val">{{ $poInfo->qty ? number_format($poInfo->qty) . ' Pcs' : '-' }}</td></tr>
+                        <tr><td class="lbl">Shipment Qty</td><td class="val">{{ $totalCarton }} Ctn</td></tr>
+                        <tr><td class="lbl">Lot / Balance</td><td class="val">&nbsp;</td></tr>
+                        <tr><td class="lbl">Shipment Mode</td><td class="val"><span class="box" style="width:8px;height:8px;">&nbsp;</span> Air &nbsp; <span class="box" style="width:8px;height:8px;">&nbsp;</span> Boat</td></tr>
+                    </table>
+                </div>
+            </td>
+            <td style="width:34%; padding-right:6px; vertical-align:top;">
+                <div class="info-card">
+                    <div class="info-card-title">PO / Style</div>
+                    <table class="plain">
+                        <tr>
+                            <td class="lbl">PO No. / OP No.</td>
+                            <td class="val">
+                                @if ($allPoOpPairs->count() > 1)
+                                    {{-- <span class="mix-badge">MIX POLIBAG &middot; {{ $allPoOpPairs->count() }} PO</span> --}}
+                                    <div style="font-size:7px; font-weight:400; margin-top:2px;">
+                                        @foreach ($allPoOpPairs as $p)
+                                            {{ $p['POno'] ?? '-' }} / {{ $p['OP'] ?? '-' }}@if (!$loop->last), @endif
+                                        @endforeach
+                                    </div>
+                                @else
+                                    {{ $poInfo->POno ?? '-' }} / {{ $poInfo->OP ?? '-' }}
+                                @endif
+                            </td>
+                        </tr>
+                        <tr><td class="lbl">Style No.</td><td class="val">{{ $poInfo->style ?? '-' }}</td></tr>
+                        <tr><td class="lbl">Destination</td><td class="val">{{ $poInfo->customer ?? '-' }}</td></tr>
+                        <tr><td class="lbl">Buyer</td><td class="val">{{ $poInfo->buyer ?? '-' }}</td></tr>
+                    </table>
+                </div>
+            </td>
+            <td style="width:33%; vertical-align:top;">
+                <div class="info-card">
+                    <div class="info-card-title">Jadwal Inspect</div>
+                    <table class="plain">
+                        <tr><td class="lbl">Tgl Inspeksi</td><td class="val">{{ \Carbon\Carbon::parse($inspec->tgl)->format('d M Y') }}</td></tr>
+                        <tr><td class="lbl">Tgl Selesai</td><td class="val">{{ $inspec->enddate ? \Carbon\Carbon::parse($inspec->enddate)->format('d M Y') : '-' }}</td></tr>
+                    </table>
+                </div>
+                <div class="info-card" style="margin-top:6px;">
+                    <div class="info-card-title">Sampling Plan AQL</div>
+                    <table class="grid-table">
+                        <tr><th>Sample</th><th>Accept Level</th><th>Reject Level</th></tr>
+                        <tr style="text-align:center;">
+                            <td>{{ $inspec->totpcs }}</td>
+                            <td>{{ max(0, $inspec->aql - 1) }}</td>
+                            <td>{{ $inspec->aql }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </td>
+        </tr>
+    </table>
 
-    {{-- STATISTIK SAMPLE --}}
-    <div class="stat-row">
-        <div class="stat-box">
-            <div class="stat-label">Total Sample</div>
-            <div class="stat-value">{{ $inspec->totpcs }}</div>
-        </div>
-        <div class="stat-box pass">
-            <div class="stat-label">Pass</div>
-            <div class="stat-value">{{ $totalPass }}</div>
-        </div>
-        <div class="stat-box defect">
-            <div class="stat-label">Defect</div>
-            <div class="stat-value">{{ $totalDefect }}</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-label">AQL / Batas Reject</div>
-            <div class="stat-value">{{ $inspec->aql }}</div>
-        </div>
-    </div>
+    {{-- ===================== FAULT CODE / DEFECT SUMMARY ===================== --}}
+    <div class="section-title">Fault Code &amp; Defects Found</div>
+    @if ($defectSummary->isNotEmpty())
+        <table class="grid-table">
+            <tr><th style="width:15%;">Qty</th><th>Kategori / Jenis Defect</th></tr>
+            @foreach ($defectSummary as $cat)
+                @foreach ($cat['detail'] as $defectnm => $count)
+                    <tr>
+                        <td style="text-align:center; font-weight:700;">{{ $count }}</td>
+                        <td>{{ $loop->parent->first ? strtoupper($cat['subnm']) . ' -- ' : '' }}{{ $defectnm }}</td>
+                    </tr>
+                @endforeach
+            @endforeach
+        </table>
+    @else
+        <table class="grid-table"><tr><td style="text-align:center; color:#494e54; padding:10px;">Tidak ada defect ditemukan.</td></tr></table>
+    @endif
 
-    {{-- HASIL --}}
-    <div style="text-align:center; margin-bottom: 18px;">
-        <span class="result-stamp {{ (int) $inspec->hasil === 1 ? 'pass' : 'reject' }}">
-            {{ (int) $inspec->hasil === 1 ? 'LULUS / PASSED' : 'REJECT' }}
-        </span>
-    </div>
-
-    {{-- DETAIL SAMPLE PER CARTON --}}
-    <div class="section-title">Detail Sample per Carton</div>
-    <table class="data-table">
+    {{-- ===================== DETAIL PER CARTON ===================== --}}
+    <div class="section-title">Detail per Carton</div>
+    <table class="grid-table">
         <thead>
             <tr>
-                <th width="60">No</th>
-                <th>Carton</th>
-                <th>Color</th>
-                <th>Sec Size</th>
-                <th>Size</th>
-                <th class="text-end">Qty</th>
-                <th>Status</th>
-                <th>Jenis Defect</th>
+                <th style="width:20%;">Carton #</th>
+                <th>Sizes</th>
+                <th>Colors</th>
+                <th style="width:60px;">Inspect</th>
+                <th style="width:60px;">Defect</th>
+                <th style="width:75px;">Tgl Kembali</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($detailRows as $i => $row)
+            @php $byCarton = collect($detailRows)->groupBy('carton'); @endphp
+            @foreach ($byCarton as $cartonNo => $rows)
+                @php
+                    $rowsColl = collect($rows);
+                    $poOpPairs = $rowsColl->map(fn ($r) => ($r['POno'] ?? '-') . ' / ' . ($r['OP'] ?? '-'))->unique()->values();
+                    $isMix = $poOpPairs->count() > 1;
+                    $bundleName = $rowsColl->pluck('bundle_carton')->filter()->first();
+                    $kembaliVal = $rowsColl->pluck('kembali')->filter()->first();
+                @endphp
                 <tr>
-                    <td>{{ $i + 1 }}</td>
-                    <td>{{ $row['carton'] }}</td>
-                    <td>{{ $row['color'] ?? '-' }}</td>
-                    <td>{{ $row['secsz'] ?? '-' }}</td>
-                    <td>{{ $row['size'] }}</td>
-                    <td class="text-end">{{ $row['qty'] }}</td>
                     <td>
-                        <span class="pill {{ $row['stspass'] === 1 ? 'pass' : 'defect' }}">
-                            {{ $row['stspass'] === 1 ? 'Pass' : 'Defect' }}
-                        </span>
+                        <strong>{{ $cartonNo }}</strong>
+                        @if ($isMix)<div class="mix-note">Mix PO: {{ $poOpPairs->implode(', ') }}</div>@endif
+                        @if ($bundleName)<div class="bundle-note">Bundle: {{ $bundleName }}</div>@endif
                     </td>
-                    <td>{{ $row['defects'] ?: '-' }}</td>
+                    <td>{{ $rowsColl->pluck('size')->unique()->implode(', ') }}</td>
+                    <td>{{ $rowsColl->pluck('color')->filter()->unique()->implode(', ') }}</td>
+                    <td style="text-align:center; font-weight:700;">{{ $rowsColl->sum('qty') }}</td>
+                    <td style="text-align:center; font-weight:700; color:#dc2626;">{{ $rowsColl->where('stspass', 0)->sum('qty') }}</td>
+                    <td style="text-align:center;">{{ $kembaliVal ? \Carbon\Carbon::parse($kembaliVal)->format('d/m/y') : '-' }}</td>
                 </tr>
             @endforeach
         </tbody>
     </table>
 
-    {{-- REKAP DEFECT PER KATEGORI --}}
-    @if($defectSummary->isNotEmpty())
-        <div class="section-title">Rekap Defect per Kategori</div>
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Kategori</th>
-                    <th>Jenis Defect</th>
-                    <th class="text-end" width="100">Jumlah</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($defectSummary as $cat)
-                    @foreach($cat['detail'] as $defectnm => $count)
-                        <tr>
-                            <td>{{ $loop->first ? $cat['subnm'] : '' }}</td>
-                            <td>{{ $defectnm }}</td>
-                            <td class="text-end">{{ $count }}</td>
-                        </tr>
-                    @endforeach
-                @endforeach
-            </tbody>
-        </table>
-    @endif
+    {{-- ===================== COMMENTS ===================== --}}
+    <div class="section-title">Comments</div>
+    <div class="info-card" style="min-height:26px;">{{ $inspec->keterangan ?: '' }}</div>
 
-    {{-- TANDA TANGAN -- standar sign-off laporan QC garment --}}
-    {{-- <div class="signature-row">
-        <div class="signature-box">
-            <div class="sig-line">Inspector QC</div>
-            <div class="sig-role">Nama &amp; Tanda Tangan</div>
-        </div>
-        <div class="signature-box">
-            <div class="sig-line">Supervisor QA</div>
-            <div class="sig-role">Nama &amp; Tanda Tangan</div>
-        </div>
-        <div class="signature-box">
-            <div class="sig-line">Buyer QC Representative</div>
-            <div class="sig-role">Nama &amp; Tanda Tangan (jika ada)</div>
-        </div>
-    </div> --}}
+    {{-- ===================== RESULT ===================== --}}
+    <div class="result-row">
+        <span class="result-stamp {{ (int) $inspec->hasil === 1 ? 'pass' : 'reject' }}">
+            {{ (int) $inspec->hasil === 1 ? 'ACCEPT / LULUS' : 'REJECT' }}
+        </span>
+    </div>
 
 </body>
 </html>

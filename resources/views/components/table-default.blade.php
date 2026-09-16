@@ -279,6 +279,7 @@
                 var lastQuery = {};
                 var filtersReady = false;
                 var hasYearFilter = $filterBar.find('[data-dg-generator="years"]').length > 0;
+                var suppressChangeReload = false;
 
                 EasyuiDG._instances[gridId] = {
                     loadData: loadData
@@ -330,9 +331,11 @@
                     // Combobox (buyer default, atau combobox custom dari slot filters)
                     $filterBar.find('[data-dg-filter-type="combobox"]').each(function () {
                         var $el = $(this);
+                        var url = $el.data('dg-url');
+                    
                         $el.combobox({
                             method: 'get',
-                            url: $el.data('dg-url'),
+                            url: url,
                             valueField: $el.data('dg-value-field') || 'value',
                             textField: $el.data('dg-text-field') || 'text',
                             panelHeight: 300,
@@ -348,8 +351,10 @@
                                 }, 300);
                             }
                         });
-                        // Default combobox biasanya kosong -- tetap dicatat
-                        // supaya konsisten dengan mekanisme reset-ke-default.
+                        if (url) {
+                            $el.combobox('reload', url);
+                        }
+                    
                         $el.data('dg-initial-value', '');
                     });
 
@@ -445,13 +450,14 @@
 
                     // Elemen filter generik lainnya (native <select>, dsb)
                     $filterBar.find('[data-dg-filter]')
-                        .not('[data-dg-filter-type="search"]')
-                        .not('[data-dg-filter-type="combobox"]')
-                        .not('[data-dg-filter-type="select"]')
-                        .not('[data-dg-filter-type="sort-dropdown"]')
-                        .on('change', function () {
-                            loadData(1);
-                        });
+                    .not('[data-dg-filter-type="search"]')
+                    .not('[data-dg-filter-type="combobox"]')
+                    .not('[data-dg-filter-type="select"]')
+                    .not('[data-dg-filter-type="sort-dropdown"]')
+                    .on('change', function () {
+                        if (suppressChangeReload) return;
+                        loadData(1);
+                    });
                 }
 
                 /* =========================
@@ -577,6 +583,7 @@
                 });
 
                 $chipsWrap.on('click', '.chip-clear-all', function () {
+                    suppressChangeReload = true; // BARU
                     $filterBar.find('[data-dg-filter]').each(function () {
                         var $el = $(this);
                         var hideChip = $el.data('dg-chip-hide') === true;
@@ -585,6 +592,7 @@
                             resetFilterElement($el, type);
                         }
                     });
+                    suppressChangeReload = false; // BARU
                     loadData(1, true);
                 });
 
@@ -595,15 +603,13 @@
                 function resetFilterElement($el, type) {
                     var resetTo = $el.data('dg-initial-value');
                     resetTo = (resetTo === undefined || resetTo === null) ? '' : resetTo;
-
+                
                     if (type === 'combobox' || type === 'select') {
                         try {
                             $el.combobox('setValue', resetTo);
                         } catch (e) {}
-                    } else if ($el.is('select')) {
-                        $el.val(resetTo);
                     } else {
-                        $el.val(resetTo);
+                        $el.val(resetTo).trigger('change'); // BARU -- trigger('change') ditambahkan
                     }
                 }
 

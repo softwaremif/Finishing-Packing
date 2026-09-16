@@ -79,7 +79,7 @@
             return;
         }
     
-        const selectedRows = packpks.map(pk => window.selectedRowsCache[pk]).filter(Boolean);
+        const selectedRows = packpks.map(pk => window.selectedRowsCache[pk] || (window.lastPackingRows || []).find(r => r.packpk === pk)).filter(Boolean);
     
         if (target === 1) {
             const belumLengkap = selectedRows.filter(r => !isRowComplete(r));
@@ -127,11 +127,17 @@
             const groupRows = cartonGroups[cartonKey];
             const first = groupRows[0];
     
-            const combos = [...new Set(groupRows.map(function (r) {
+            const comboLines = groupRows.map(function (r) {
                 const materialLabel = getComboLabel(r);
                 const secszTag = r.secsz ? ` (${r.secsz})` : '';
-                return `${materialLabel}${secszTag}`;
-            }))].join(', ');
+                const isNative = (r.POno === PO && r.OP === OP);
+                const originTag = isNative
+                    ? ''
+                    : ` <span class="text-muted" style="font-size:10.5px;">[${r.POno ?? '-'} &middot; ${r.OP ?? '-'}]</span>`;
+                return `${materialLabel}${secszTag}${originTag}`;
+            });
+
+            const combos = [...new Set(comboLines)].join('<br>');
     
             const totalPcs = groupRows.reduce((sum, r) => sum + Number(r.pcs ?? 0), 0);
     

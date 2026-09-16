@@ -15,12 +15,14 @@
                 style="width: 4px; height: 16px; display: inline-block; background: #475569;"></span>
             Informasi Detail PO
         </div>
-        <button type="button"
-            class="btn btn-dark btn-sm d-inline-flex align-items-center px-2.5 py-1.5 fw-semibold"
-            style="font-size: 12px; border-radius: 6px; background-color: #1e293b; border-color: #1e293b;"
-            onclick="openEditPackingModal()">
-            <i class="fas fa-edit me-2 small"></i> Edit Info PO
-        </button>
+        @if (!in_array($guserpk, [17, 35, 38]))
+            <button type="button"
+                class="btn btn-dark btn-sm d-inline-flex align-items-center px-2.5 py-1.5 fw-semibold"
+                style="font-size: 12px; border-radius: 6px; background-color: #1e293b; border-color: #1e293b;"
+                onclick="openEditPackingModal()">
+                <i class="fas fa-edit me-2 small"></i> Edit Info PO
+            </button>
+        @endif
     </div>
     <div class="card-body px-4 pb-4 pt-1">
         <div class="row row-cols-1 row-cols-sm-2 row-cols-md-4 g-4 mb-4">

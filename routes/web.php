@@ -90,7 +90,7 @@ Route::middleware(['check'])->group(function () {
     Route::get('packing/segel/partial-status/{popk}', [SegelPackingController::class, 'partialStatus'])->name('packing.segel.partial-status');
     Route::post('/packing/segel/cancel', [SegelPackingController::class, 'cancel'])->name('packing.segel.cancel');
 
-    Route::middleware(['guser:23,34,35,37'])->group(function () {
+    Route::middleware(['guser:23,34,35,37,38,17'])->group(function () {
         // MENU TRANSFER TO FINISHING
         Route::get('/tf-finishing', [TransferFinishingController::class, 'index'])->name('tf_finishing.index');
         Route::get('/tf-finishing/list', [TransferFinishingController::class, 'getList'])->name('tf_finishing.list');
@@ -145,6 +145,7 @@ Route::middleware(['check'])->group(function () {
         Route::post('/packing/copy-selected-global', [PackingController::class, 'copyMultipleGlobal'])->name('packing.copy-selected.global');
         Route::post('/packing/update-segel-global', [PackingController::class, 'updateSegelStatusGlobal'])->name('packing.update-segel.global');
         Route::post('/packing/urut-global', [PackingController::class, 'urutCtnGlobal'])->name('packing.urut.global');
+        Route::post('/packing/bundle-segel', [PackingController::class, 'updateSegelBundleGlobal'])->name('packing.bundleSegel');
         Route::get('/packing/combos-global', [PackingController::class, 'combosGlobal'])->name('packing.combosGlobal');
         Route::post('/packing/save-header-global', [PackingController::class, 'saveHeaderGlobal'])->name('packing.saveHeaderGlobal');
         Route::get('/packing/header-info-global', [PackingController::class, 'headerInfoGlobal'])->name('packing.headerInfoGlobal');
@@ -190,8 +191,6 @@ Route::middleware(['check'])->group(function () {
         Route::get('/finish-good-stuffing', [FinishgoodStuffingController::class, 'index'])->name('finish-good-stuffing.index');
         Route::get('/finish-good-stuffing/list', [FinishgoodStuffingController::class, 'getList'])->name('finish-good-stuffing.list');
         Route::get('/finish-good-stuffing/input-global', [FinishgoodStuffingController::class, 'inputPackingGlobal'])->name('finish-good-stuffing.input.global');
-        Route::get('/finish-good-stuffing/header-info-global', [FinishgoodStuffingController::class, 'headerInfoGlobal'])->name('finish-good-stuffing.headerInfoGlobal');
-        Route::get('/finish-good-stuffing/combos-global', [FinishgoodStuffingController::class, 'combosGlobal'])->name('finish-good-stuffing.combosGlobal');
         Route::get('/finish-good-stuffing/list-detail-global', [FinishgoodStuffingController::class, 'listDetailGlobal'])->name('finish-good-stuffing.list.detail.global');
         Route::post('/finish-good-stuffing/update-ctn', [FinishgoodStuffingController::class, 'updateCtn'])->name('finish-good-stuffing.update-ctn');
         Route::post('/finish-good-stuffing/bulk-ship-action', [FinishgoodStuffingController::class, 'bulkShipAction'])->name('finish-good-stuffing.bulk-ship-action');
@@ -206,8 +205,7 @@ Route::middleware(['check'])->group(function () {
     });
 
     Route::get('/packing/laporan-global/pdf', [LaporanController::class, 'printGlobal'])->name('laporan.pdf.global');
-    Route::get('/finish-good-stuffing/cards-info-global', [FinishgoodStuffingController::class, 'cardsInfoGlobal'])->name('finish-good-stuffing.cardsInfoGlobal');
-    Route::get('/finish-good-stuffing/breakdown-summary-global', [FinishgoodStuffingController::class, 'breakdownSummaryGlobal'])->name('finish-good-stuffing.breakdownSummaryGlobal');
+    
     Route::get('/finish-good-stuffing/part-summary-global', [FinishgoodStuffingController::class, 'partSummaryGlobal'])->name('finish-good-stuffing.partSummaryGlobal');
 
     // MENU INSPECTION
@@ -228,6 +226,19 @@ Route::middleware(['check'])->group(function () {
 
         Route::get('/inspection/inspect-defect-sub-list', [InspectionController::class, 'inspectDefectSubList'])->name('inspection.inspect-defect-sub-list');
         Route::get('/inspection/inspect-pdf/{inspecpk}', [InspectionController::class, 'inspectPdfReport'])->name('inspection.inspect-pdf');
+
+
+        Route::get('/inspection/inspect-show/{inspecpk}', [InspectionController::class, 'inspectShow'])->name('inspection.inspect-show');
+        Route::put('/inspection/inspect-update/{inspecpk}', [InspectionController::class, 'inspectUpdate'])->name('inspection.inspect-update');
+
+        Route::get('/inspection/global-carton-list', [InspectionController::class, 'globalCartonInspectList'])->name('inspection.globalCartonList');
+        Route::get('/inspection/global-documents-list', [InspectionController::class, 'globalInspectDocumentsList'])->name('inspection.globalDocumentsList');
+        Route::get('/inspection/global-history-list', [InspectionController::class, 'globalHistoryCartonInspectList'])->name('inspection.globalHistoryList');
+
+        Route::post('/inspection/inspect-end/{inspecpk}', [InspectionController::class, 'inspectEndDocument'])->name('inspection.inspect-end');
+
+
+        Route::get('/inspection/global-available-cartons', [InspectionController::class, 'globalInspectAvailableCartons'])->name('inspection.globalAvailableCartons');
 
         // Route::get('/inspect/available-cartons', [FinishgoodStuffingController::class, 'inspectAvailableCartons'])->name('inspect.available-cartons');
         // Route::post('/inspect/store', [FinishgoodStuffingController::class, 'storeInspecDocument'])->name('inspect.store');

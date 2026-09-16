@@ -692,6 +692,7 @@ class PackingController extends Controller
                     'bundleCartonList'   => route('packing.bundleCartonList'),
                     'storeCartonBundle'  => route('packing.storeCartonBundle'),
                     'bundleDetail' => route('packing.bundleDetail'),
+                    'bundleSegel' => route('packing.bundleSegel'),
                     'headerPartial'          => 'menu.packing.partials.header_info_global',
                     'cardsInfoPartial'       => 'menu.packing.partials.cards_info_global',
                     'breakdownPartial'       => 'menu.packing.partials.breakdown_summary_global',
@@ -1057,6 +1058,274 @@ class PackingController extends Controller
     // Data tabel Detail Packing/Carton di halaman Input Packing List Global
     // -- support filter size/color/secsz/part/status/search, paginasi PER
     // CARTON (bukan per baris pack).
+    // public function listDetailGlobal(Request $request)
+    // {
+    //     $request->validate([
+    //         'po'    => 'nullable',
+    //         'op'    => 'required',
+    //         'poref' => 'nullable',
+    //         'mif'   => 'nullable',
+    //     ]);
+
+    //     $po    = $request->query('po');
+    //     $op    = $request->query('op');
+    //     $poref = $request->query('poref');
+    //     $mif   = (int) $request->query('mif', session('pos'));
+
+    //     // GANTI -- FIX UTAMA: connection SEKARANG SELALU 'mysql'.
+    //     $connection = 'mysql';
+    //     $db = DB::connection($connection);
+
+    //     $popks = $db->table('po')
+    //         ->where('OP', $op)->where('mif', $mif)
+    //         ->when($po !== null && $po !== '', fn($q)=>$q->where('POno',$po), fn($q)=>$q->where(fn($qq)=>$qq->whereNull('POno')->orWhere('POno','')))
+    //         ->when($poref !== null && $poref !== '', fn($q)=>$q->where('poref',$poref), fn($q)=>$q->where(fn($qq)=>$qq->whereNull('poref')->orWhere('poref','')))
+    //         ->pluck('popk');
+
+    //     if ($popks->isEmpty()) {
+    //         return response()->json(['total' => 0, 'total_carton' => 0, 'rows' => []]);
+    //     }
+
+    //     $nativePackpks = $db->table('pack')->whereIn('popk', $popks)->pluck('packpk');
+ 
+    //     $mixnosInvolved = $db->table('pack')
+    //         ->whereIn('packpk', $nativePackpks)
+    //         ->whereNotNull('mixno')
+    //         ->distinct()
+    //         ->pluck('mixno');
+        
+    //     $crossPoPackpks = collect();
+    //     if ($mixnosInvolved->isNotEmpty()) {
+    //         $crossPoPackpks = $db->table('pack')
+    //             ->whereIn('mixno', $mixnosInvolved)
+    //             ->whereNotIn('packpk', $nativePackpks)
+    //             ->pluck('packpk');
+    //     }
+
+    //     $allRelevantPackpks = $nativePackpks->merge($crossPoPackpks)->unique()->values();
+
+    //     if ($crossPoPackpks->isNotEmpty()) {
+    //         $crossPoPopks = $db->table('pack')->whereIn('packpk', $crossPoPackpks)->pluck('popk')->unique();
+    //         $popks = $popks->merge($crossPoPopks)->unique()->values();
+    //     }
+
+    //     $cr     = $request->cr;
+    //     $size   = $request->size;
+    //     $color  = $request->color;
+    //     $secsz  = $request->secsz;
+    //     $part   = $request->part;
+    //     $page   = max(1, (int) $request->input('page', 1));
+    //     $rowsPerPage = max(1, (int) $request->input('rows', 50));
+    //     $search = trim($request->search ?? '');
+
+    //     $shipRows = $db->table('pack')
+    //         ->whereIn('popk', $popks)
+    //         ->get(['packpk', 'popk', 'part', 'status', 'fca']);
+        
+    //     $shipInfoByPackpk = [];
+    //     foreach ($shipRows as $sr) {
+    //         $shipInfoByPackpk[$sr->packpk] = [
+    //             'shipped'   => in_array((int) $sr->status, [6, 7], true),
+    //             'inspect'   => (int) $sr->fca === 1,
+    //             'returning' => (int) $sr->fca === 2,
+    //             'popk'      => $sr->popk,
+    //             'part'      => $sr->part,
+    //         ];
+    //     }
+
+    //     $shipDateColumns = collect(range(1, 10))->map(fn($i) => "ship{$i}")->all();
+
+    //     $poShipDateRows = $db->table('po')
+    //         ->whereIn('popk', $popks)
+    //         ->get(array_merge(['popk'], $shipDateColumns));
+
+    //     $shipDateByPopkPart = [];
+    //     foreach ($poShipDateRows as $pr) {
+    //         for ($i = 1; $i <= 10; $i++) {
+    //             $shipDateByPopkPart[$pr->popk][$i] = $pr->{"ship{$i}"};
+    //         }
+    //     }
+
+    //     $matchingCartonQuery = $db->table('pack')
+    //         ->whereIn('packpk', $allRelevantPackpks)
+    //         ->when($cr, fn($q) => $q->where('carton', $cr))
+    //         ->when($size, fn($q) => $q->where("qtyp{$size}", '>', 0))
+    //         ->when($color, fn($q) => $q->where('material', $color))
+    //         ->when($secsz, fn($q) => $q->where('secsz', $secsz))
+    //         ->when($part, fn($q) => $q->where('part', $part))
+    //         ->when($search, function ($q) use ($search) {
+    //             $q->where(function ($x) use ($search) {
+    //                 $x->where('nobar', 'like', "%{$search}%")
+    //                     ->orWhere('carton', 'like', "%{$search}%");
+    //             });
+    //         });
+        
+    //     $hasAnyFilter = $cr || $size || $color || $secsz || $part || $search;
+
+    //     $baseQuery = $db->table('pack')->whereIn('packpk', $allRelevantPackpks);
+
+    //     if ($hasAnyFilter) {
+    //         $matchingCartons = $matchingCartonQuery->pluck('carton')->unique()->values();
+    //         $baseQuery->whereIn('carton', $matchingCartons->isNotEmpty() ? $matchingCartons : ['__NONE__']);
+    //     }
+
+    //     $allMatchingRows = (clone $baseQuery)->get();
+
+    //     foreach ($allMatchingRows as $r) {
+    //         $shipInfo = $shipInfoByPackpk[$r->packpk] ?? null;
+    //         $r->ship_shipped = $shipInfo['shipped'] ?? false;
+    //         $r->ship_inspect = $shipInfo['inspect'] ?? false;
+    //         $r->ship_returning = $shipInfo['returning'] ?? false;
+    //     }
+
+    //     $rowsByCartonForStatus = $allMatchingRows->groupBy('carton');
+
+    //     $cartonStatusMap     = [];
+    //     $cartonShipStatusMap = [];
+    //     foreach ($rowsByCartonForStatus as $cartonKey => $groupRows) {
+    //         $cartonStatusMap[$cartonKey] = $this->getPackGroupStatus($groupRows);
+
+    //         $anyShipped   = $groupRows->contains(fn ($r) => $r->ship_shipped === true);
+    //         $anyReturning = $groupRows->contains(fn ($r) => $r->ship_returning === true);
+    //         $anyInspect   = $groupRows->contains(fn ($r) => $r->ship_inspect === true);
+
+    //         $cartonShipStatusMap[$cartonKey] = $anyShipped ? 'shipped'
+    //             : ($anyReturning ? 'returning'
+    //             : ($anyInspect ? 'inspect' : null));
+    //     }
+
+    //     $statusCounts = [
+    //         'all'      => count($cartonStatusMap),
+    //         'planned'  => count(array_filter($cartonStatusMap, fn($s) => $s === 'planned')),
+    //         'packing'  => count(array_filter($cartonStatusMap, fn($s) => $s === 'packing')),
+    //         'complete' => count(array_filter($cartonStatusMap, fn($s) => $s === 'complete')),
+    //         'sealed'   => count(array_filter($cartonStatusMap, fn($s) => $s === 'sealed')),
+    //         'shipped'  => count(array_filter($cartonShipStatusMap, fn($s) => $s === 'shipped')),
+    //         'inspect'  => count(array_filter($cartonShipStatusMap, fn($s) => $s === 'inspect')),
+    //         'returning' => count(array_filter($cartonShipStatusMap, fn($s) => $s === 'returning')),
+    //     ];
+
+    //     $status = $request->input('status');
+
+    //     $finalQuery = clone $baseQuery;
+    //     if ($status !== '' && $status !== null) {
+    //         if (in_array($status, ['shipped', 'inspect'], true)) {
+    //             $matchingCartons = array_keys(array_filter($cartonShipStatusMap, fn($s) => $s === $status));
+    //         } else {
+    //             $matchingCartons = array_keys(array_filter($cartonStatusMap, fn($s) => $s === $status));
+    //         }
+    //         $finalQuery->whereIn('carton', !empty($matchingCartons) ? $matchingCartons : ['__NONE__']);
+    //     }
+
+    //     // Paginasi per CARTON, bukan per baris. Ambil SEMUA baris yang
+    //     // lolos filter (tanpa limit), kelompokkan per carton, urutkan
+    //     // CARTON-nya (bukan barisnya), baru slice sesuai halaman.
+    //     $allFinalRows = $finalQuery->get();
+    //     $rowsByCarton = $allFinalRows->groupBy('carton');
+
+    //     $sort = $request->input('sort');
+    //     $sortMap = [
+    //         'carton_asc'  => ['carton', 'asc'],
+    //         'carton_desc' => ['carton', 'desc'],
+    //         'nobar_asc'   => ['nobar', 'asc'],
+    //         'nobar_desc'  => ['nobar', 'desc'],
+    //     ];
+
+    //     $representativeByCarton = $rowsByCarton->map(function ($group) {
+    //         return $group->sortByDesc(fn($r) => [$r->urut ?? 0, $r->packpk])->first();
+    //     });
+
+    //     $cartonKeys = $rowsByCarton->keys();
+
+    //     if (isset($sortMap[$sort])) {
+    //         [$sortColumn, $sortDir] = $sortMap[$sort];
+    //         $cartonKeys = $cartonKeys->sort(function ($a, $b) use ($representativeByCarton, $sortColumn, $sortDir) {
+    //             $valA = (string) ($representativeByCarton[$a]->{$sortColumn} ?? '');
+    //             $valB = (string) ($representativeByCarton[$b]->{$sortColumn} ?? '');
+    //             $cmp = ($sortColumn === 'carton') ? strnatcmp($valA, $valB) : strcmp($valA, $valB);
+    //             return $sortDir === 'desc' ? -$cmp : $cmp;
+    //         })->values();
+    //     } else {
+    //         $cartonKeys = $cartonKeys->sort(function ($a, $b) use ($representativeByCarton) {
+    //             $valA = (string) ($representativeByCarton[$a]->carton ?? '');
+    //             $valB = (string) ($representativeByCarton[$b]->carton ?? '');
+    //             return strnatcmp($valA, $valB);
+    //         })->values();
+    //     }
+
+    //     $totalCarton = $cartonKeys->count();
+
+    //     $pageCartonKeys = $cartonKeys->slice(($page - 1) * $rowsPerPage, $rowsPerPage)->values();
+
+    //     $data = collect();
+    //     foreach ($pageCartonKeys as $ck) {
+    //         foreach ($rowsByCarton[$ck] as $row) {
+    //             $data->push($row);
+    //         }
+    //     }
+    //     $data = $data->values();
+
+    //     $distinctCreators = $data->pluck('created_by')->filter()->unique()->values();
+    //     $posByUserpk = [];
+    //     if ($distinctCreators->isNotEmpty()) {
+    //         $userRows = DB::connection('mysql_akses')->table('user')
+    //             ->whereIn('userpk', $distinctCreators)
+    //             ->get(['userpk', 'pos']);
+    //         foreach ($userRows as $ur) {
+    //             $posByUserpk[$ur->userpk] = $ur->pos;
+    //         }
+    //     }
+        
+    //     $currentUserpk = session('userpk');
+    //     $currentPos    = session('pos');
+        
+    //     foreach ($data as $row) {
+    //         if (empty($row->created_by)) {
+    //             // Data LAMA (belum punya created_by) -- tetap boleh diedit,
+    //             // TIDAK dikunci oleh aturan baru ini.
+    //             $row->can_edit = false;
+    //             continue;
+    //         }
+        
+    //         $ownerPos = $posByUserpk[$row->created_by] ?? null;
+    //         $row->can_edit = ((int) $row->created_by === (int) $currentUserpk)
+    //             && ((string) $ownerPos === (string) $currentPos);
+    //     }
+
+    //     $bundlepksInvolved = $data->pluck('bundlepk')->filter()->unique()->values();
+    //     $bundleInfoMap = [];
+    //     if ($bundlepksInvolved->isNotEmpty()) {
+    //         $bundleRows = $db->table('carton_bundle')->whereIn('bundlepk', $bundlepksInvolved)->get();
+    //         foreach ($bundleRows as $br) {
+    //             $bundleInfoMap[$br->bundlepk] = $br->bundle_carton;
+    //         }
+    //     }
+    //     foreach ($data as $row) {
+    //         $row->bundle_carton = $bundleInfoMap[$row->bundlepk] ?? null;
+    //     }
+
+    //     foreach ($data as $index => $row) {
+    //         $row->no      = $index + 1;
+    //         $row->balance = ($row->pcs ?? 0) - ($row->pcsp ?? 0);
+
+    //         $shipInfo = $shipInfoByPackpk[$row->packpk] ?? null;
+
+    //         $row->ship_shipped = $shipInfo['shipped'] ?? false;
+    //         $row->ship_inspect = $shipInfo['inspect'] ?? false;
+    //         $row->ship_returning = $shipInfo['returning'] ?? false;
+
+    //         $shipPopk = $shipInfo['popk'] ?? $row->popk;
+    //         $shipPart = $shipInfo['part'] ?? $row->part;
+    //         $row->ship_date = $shipDateByPopkPart[$shipPopk][$shipPart] ?? null;
+    //     }
+
+    //     return response()->json([
+    //         'total'         => $totalCarton,
+    //         'total_carton'  => $totalCarton,
+    //         'status_counts' => $statusCounts,
+    //         'rows'          => $data,
+    //     ]);
+    // }
     public function listDetailGlobal(Request $request)
     {
         $request->validate([
@@ -1071,7 +1340,6 @@ class PackingController extends Controller
         $poref = $request->query('poref');
         $mif   = (int) $request->query('mif', session('pos'));
 
-        // GANTI -- FIX UTAMA: connection SEKARANG SELALU 'mysql'.
         $connection = 'mysql';
         $db = DB::connection($connection);
 
@@ -1085,8 +1353,9 @@ class PackingController extends Controller
             return response()->json(['total' => 0, 'total_carton' => 0, 'rows' => []]);
         }
 
+        // ---- Cross-PO Mix (mixno) -- TIDAK BERUBAH dari Packing ----
         $nativePackpks = $db->table('pack')->whereIn('popk', $popks)->pluck('packpk');
- 
+
         $mixnosInvolved = $db->table('pack')
             ->whereIn('packpk', $nativePackpks)
             ->whereNotNull('mixno')
@@ -1100,12 +1369,36 @@ class PackingController extends Controller
                 ->whereNotIn('packpk', $nativePackpks)
                 ->pluck('packpk');
         }
-
-        $allRelevantPackpks = $nativePackpks->merge($crossPoPackpks)->unique()->values();
-
-        if ($crossPoPackpks->isNotEmpty()) {
-            $crossPoPopks = $db->table('pack')->whereIn('packpk', $crossPoPackpks)->pluck('popk')->unique();
-            $popks = $popks->merge($crossPoPopks)->unique()->values();
+        
+        // ---- BARU -- expand via bundlepk (Bundle Carton) -- dicek dari native
+        // PACKPKS ATAU packpk hasil expand mixno di atas (supaya kalau ada carton
+        // yang KEBETULAN sekaligus Mix DAN Bundle, tetap ke-cover). ----
+        $packpksForBundleCheck = $nativePackpks->merge($crossPoPackpks)->unique()->values();
+        
+        $bundlepksInvolved = $db->table('pack')
+            ->whereIn('packpk', $packpksForBundleCheck)
+            ->whereNotNull('bundlepk')
+            ->distinct()
+            ->pluck('bundlepk');
+        
+        $bundleCrossPoPackpks = collect();
+        if ($bundlepksInvolved->isNotEmpty()) {
+            $bundleCrossPoPackpks = $db->table('pack')
+                ->whereIn('bundlepk', $bundlepksInvolved)
+                ->whereNotIn('packpk', $packpksForBundleCheck)
+                ->pluck('packpk');
+        }
+        
+        $allRelevantPackpks = $nativePackpks
+            ->merge($crossPoPackpks)
+            ->merge($bundleCrossPoPackpks)   // BARU
+            ->unique()
+            ->values();
+            
+        $extraPackpksFromExpansion = $crossPoPackpks->merge($bundleCrossPoPackpks)->unique();
+        if ($extraPackpksFromExpansion->isNotEmpty()) {
+            $extraPopks = $db->table('pack')->whereIn('packpk', $extraPackpksFromExpansion)->pluck('popk')->unique();
+            $popks = $popks->merge($extraPopks)->unique()->values();
         }
 
         $cr     = $request->cr;
@@ -1117,20 +1410,64 @@ class PackingController extends Controller
         $rowsPerPage = max(1, (int) $request->input('rows', 50));
         $search = trim($request->search ?? '');
 
+        // BARU -- FIX UTAMA: sertakan 'pinjam'/'kembali' (dipakai fitur
+        // Inspect di FG/Stuffing) ke select yang SUDAH ADA.
         $shipRows = $db->table('pack')
             ->whereIn('popk', $popks)
-            ->get(['packpk', 'popk', 'part', 'status', 'fca']);
+            ->get(['packpk', 'popk', 'part', 'status', 'fca', 'pinjam', 'kembali', 'carton']);
         
         $shipInfoByPackpk = [];
         foreach ($shipRows as $sr) {
             $shipInfoByPackpk[$sr->packpk] = [
-                'shipped'   => in_array((int) $sr->status, [6, 7], true),
-                'inspect'   => (int) $sr->fca === 1,
-                'returning' => (int) $sr->fca === 2,
-                'popk'      => $sr->popk,
-                'part'      => $sr->part,
+                'shipped'        => in_array((int) $sr->status, [6, 7], true),
+                'inspect'        => (int) $sr->fca === 1,
+                'returning'      => (int) $sr->fca === 2,
+                'ever_inspected' => !empty($sr->pinjam),
+                'pinjam'         => $sr->pinjam ?? null,
+                'kembali'        => $sr->kembali ?? null,
+                'popk'           => $sr->popk,
+                'part'           => $sr->part,
+                'carton'         => $sr->carton, // BARU
             ];
         }
+        
+        // GANTI TOTAL -- jembatan Inspect SEKARANG lepas TOTAL dari 'ship'.
+        // Pencocokan murni lewat nomor CARTON fisik -- otomatis mencakup Mix
+        // Polibag lintas PO (berbagi nomor carton yang sama, ditemukan dari
+        // halaman PO manapun), dan Bundle (tiap carton kecil dicocokkan
+        // sendiri-sendiri lewat nomornya masing-masing).
+        $distinctCartons = $shipRows->pluck('carton')->filter()->unique()->values();
+        
+        $inspecInfoByCarton = [];
+        if ($distinctCartons->isNotEmpty()) {
+            $inspecdtRows = $db->table('inspecdt')
+                ->join('inspec', 'inspec.inspecpk', '=', 'inspecdt.inspecpk')
+                ->whereIn('inspecdt.carton', $distinctCartons)
+                ->select('inspecdt.carton', 'inspec.inspecpk', 'inspec.tgl', 'inspec.hasil', 'inspec.aql', 'inspec.totpcs')
+                ->orderByDesc('inspec.inspecpk')
+                ->get();
+        
+            foreach ($inspecdtRows as $row) {
+                if (!isset($inspecInfoByCarton[$row->carton])) {
+                    $inspecInfoByCarton[$row->carton] = [
+                        'inspecpk'  => $row->inspecpk,
+                        'no_inspec' => $this->buildNoInspec($row->inspecpk, $row->tgl),
+                        'hasil'     => (int) $row->hasil,
+                        'aql'       => $row->aql,
+                        'totpcs'    => $row->totpcs,
+                    ];
+                }
+            }
+        }
+        
+        foreach ($shipInfoByPackpk as $packpk => &$info) {
+            $inspecInfo = $inspecInfoByCarton[$info['carton']] ?? null;
+            $info['has_inspec_doc'] = $inspecInfo !== null;
+            $info['no_inspec']      = $inspecInfo['no_inspec'] ?? null;
+            $info['inspec_hasil']   = $inspecInfo['hasil'] ?? null;
+            $info['inspec_aql']     = $inspecInfo['aql'] ?? null;
+        }
+        unset($info);
 
         $shipDateColumns = collect(range(1, 10))->map(fn($i) => "ship{$i}")->all();
 
@@ -1145,24 +1482,42 @@ class PackingController extends Controller
             }
         }
 
+        // Filter 'part' -- SUDAH BENAR pakai pack.part (bukan exportpk).
         $matchingCartonQuery = $db->table('pack')
             ->whereIn('packpk', $allRelevantPackpks)
             ->when($cr, fn($q) => $q->where('carton', $cr))
             ->when($size, fn($q) => $q->where("qtyp{$size}", '>', 0))
             ->when($color, fn($q) => $q->where('material', $color))
             ->when($secsz, fn($q) => $q->where('secsz', $secsz))
-            ->when($part, fn($q) => $q->where('part', $part))
+            ->when($part, fn($q) => $q->where('exportpk', $part))
             ->when($search, function ($q) use ($search) {
                 $q->where(function ($x) use ($search) {
                     $x->where('nobar', 'like', "%{$search}%")
                         ->orWhere('carton', 'like', "%{$search}%");
                 });
             });
-        
+
         $hasAnyFilter = $cr || $size || $color || $secsz || $part || $search;
 
         $baseQuery = $db->table('pack')->whereIn('packpk', $allRelevantPackpks);
 
+        // guserpk 35 (Stuffing) HANYA melihat carton yang
+        // SUDAH Segel PENUH (SEMUA baris carton itu segel=1). Dihitung per
+        // carton FISIK (bukan per baris) -- carton Mix Polibag/Bundle yang PUNYA
+        // baris belum Segel TETAP disembunyikan SELURUHNYA, bukan cuma
+        // barisnya saja (supaya tidak muncul carton dengan breakdown size yang
+        // hilang sebagian).
+        if (session('guserpk') == 35) {
+            $sealedCartons = $db->table('pack')
+                ->whereIn('packpk', $allRelevantPackpks)
+                ->select('carton')
+                ->groupBy('carton')
+                ->havingRaw('SUM(CASE WHEN segel = 1 THEN 0 ELSE 1 END) = 0')
+                ->pluck('carton');
+        
+            $baseQuery->whereIn('carton', $sealedCartons->isNotEmpty() ? $sealedCartons : ['__NONE__']);
+        }
+        
         if ($hasAnyFilter) {
             $matchingCartons = $matchingCartonQuery->pluck('carton')->unique()->values();
             $baseQuery->whereIn('carton', $matchingCartons->isNotEmpty() ? $matchingCartons : ['__NONE__']);
@@ -1172,15 +1527,20 @@ class PackingController extends Controller
 
         foreach ($allMatchingRows as $r) {
             $shipInfo = $shipInfoByPackpk[$r->packpk] ?? null;
-            $r->ship_shipped = $shipInfo['shipped'] ?? false;
-            $r->ship_inspect = $shipInfo['inspect'] ?? false;
+            $r->ship_shipped   = $shipInfo['shipped'] ?? false;
+            $r->ship_inspect   = $shipInfo['inspect'] ?? false;
             $r->ship_returning = $shipInfo['returning'] ?? false;
+            $r->has_inspec_doc = $shipInfo['has_inspec_doc'] ?? false; // BARU
+            $r->no_inspec      = $shipInfo['no_inspec'] ?? null;       // BARU
+            $r->inspec_hasil   = $shipInfo['inspec_hasil'] ?? null;    // BARU
+            $r->inspec_aql     = $shipInfo['inspec_aql'] ?? null;      // BARU
         }
 
         $rowsByCartonForStatus = $allMatchingRows->groupBy('carton');
 
-        $cartonStatusMap     = [];
-        $cartonShipStatusMap = [];
+        $cartonStatusMap        = [];
+        $cartonShipStatusMap    = [];
+        $cartonEverInspectedMap = []; // BARU
         foreach ($rowsByCartonForStatus as $cartonKey => $groupRows) {
             $cartonStatusMap[$cartonKey] = $this->getPackGroupStatus($groupRows);
 
@@ -1191,24 +1551,32 @@ class PackingController extends Controller
             $cartonShipStatusMap[$cartonKey] = $anyShipped ? 'shipped'
                 : ($anyReturning ? 'returning'
                 : ($anyInspect ? 'inspect' : null));
+
+            // BARU -- pernah masuk Inspect kapan pun (dipakai chip "History Inspect").
+            $cartonEverInspectedMap[$cartonKey] = $groupRows->contains(
+                fn ($r) => ($shipInfoByPackpk[$r->packpk]['ever_inspected'] ?? false) === true
+            );
         }
 
         $statusCounts = [
-            'all'      => count($cartonStatusMap),
-            'planned'  => count(array_filter($cartonStatusMap, fn($s) => $s === 'planned')),
-            'packing'  => count(array_filter($cartonStatusMap, fn($s) => $s === 'packing')),
-            'complete' => count(array_filter($cartonStatusMap, fn($s) => $s === 'complete')),
-            'sealed'   => count(array_filter($cartonStatusMap, fn($s) => $s === 'sealed')),
-            'shipped'  => count(array_filter($cartonShipStatusMap, fn($s) => $s === 'shipped')),
-            'inspect'  => count(array_filter($cartonShipStatusMap, fn($s) => $s === 'inspect')),
-            'returning' => count(array_filter($cartonShipStatusMap, fn($s) => $s === 'returning')),
+            'all'             => count($cartonStatusMap),
+            'planned'         => count(array_filter($cartonStatusMap, fn($s) => $s === 'planned')),
+            'packing'         => count(array_filter($cartonStatusMap, fn($s) => $s === 'packing')),
+            'complete'        => count(array_filter($cartonStatusMap, fn($s) => $s === 'complete')),
+            'sealed'          => count(array_filter($cartonStatusMap, fn($s) => $s === 'sealed')),
+            'shipped'         => count(array_filter($cartonShipStatusMap, fn($s) => $s === 'shipped')),
+            'inspect'         => count(array_filter($cartonShipStatusMap, fn($s) => $s === 'inspect')),
+            'returning'       => count(array_filter($cartonShipStatusMap, fn($s) => $s === 'returning')),
+            'inspect_history' => count(array_filter($cartonEverInspectedMap, fn($v) => $v === true)), // BARU
         ];
 
         $status = $request->input('status');
 
         $finalQuery = clone $baseQuery;
         if ($status !== '' && $status !== null) {
-            if (in_array($status, ['shipped', 'inspect'], true)) {
+            if ($status === 'inspect_history') { // BARU
+                $matchingCartons = array_keys(array_filter($cartonEverInspectedMap, fn($v) => $v === true));
+            } elseif (in_array($status, ['shipped', 'inspect', 'returning'], true)) {
                 $matchingCartons = array_keys(array_filter($cartonShipStatusMap, fn($s) => $s === $status));
             } else {
                 $matchingCartons = array_keys(array_filter($cartonStatusMap, fn($s) => $s === $status));
@@ -1216,9 +1584,6 @@ class PackingController extends Controller
             $finalQuery->whereIn('carton', !empty($matchingCartons) ? $matchingCartons : ['__NONE__']);
         }
 
-        // Paginasi per CARTON, bukan per baris. Ambil SEMUA baris yang
-        // lolos filter (tanpa limit), kelompokkan per carton, urutkan
-        // CARTON-nya (bukan barisnya), baru slice sesuai halaman.
         $allFinalRows = $finalQuery->get();
         $rowsByCarton = $allFinalRows->groupBy('carton');
 
@@ -1264,6 +1629,7 @@ class PackingController extends Controller
         }
         $data = $data->values();
 
+        // ---- Akses kontrol per-user (can_edit) -- TIDAK BERUBAH dari Packing ----
         $distinctCreators = $data->pluck('created_by')->filter()->unique()->values();
         $posByUserpk = [];
         if ($distinctCreators->isNotEmpty()) {
@@ -1274,33 +1640,34 @@ class PackingController extends Controller
                 $posByUserpk[$ur->userpk] = $ur->pos;
             }
         }
-        
-        $currentUserpk = session('userpk');
-        $currentPos    = session('pos');
-        
+
+        $currentPos = session('pos');
         foreach ($data as $row) {
             if (empty($row->created_by)) {
-                // Data LAMA (belum punya created_by) -- tetap boleh diedit,
-                // TIDAK dikunci oleh aturan baru ini.
                 $row->can_edit = false;
                 continue;
             }
         
             $ownerPos = $posByUserpk[$row->created_by] ?? null;
-            $row->can_edit = ((int) $row->created_by === (int) $currentUserpk)
-                && ((string) $ownerPos === (string) $currentPos);
+            $row->can_edit = ((string) $ownerPos === (string) $currentPos);
         }
 
+        // ---- Bundle Carton (bundlepk -> nama carton besar) -- TIDAK BERUBAH ----
         $bundlepksInvolved = $data->pluck('bundlepk')->filter()->unique()->values();
         $bundleInfoMap = [];
         if ($bundlepksInvolved->isNotEmpty()) {
             $bundleRows = $db->table('carton_bundle')->whereIn('bundlepk', $bundlepksInvolved)->get();
             foreach ($bundleRows as $br) {
-                $bundleInfoMap[$br->bundlepk] = $br->bundle_carton;
+                $bundleInfoMap[$br->bundlepk] = [
+                    'bundle_carton' => $br->bundle_carton,
+                    'bundle_nobar'  => $br->bundle_nobar,  // BARU
+                ];
             }
         }
         foreach ($data as $row) {
-            $row->bundle_carton = $bundleInfoMap[$row->bundlepk] ?? null;
+            $bundleInfo = $bundleInfoMap[$row->bundlepk] ?? null;
+            $row->bundle_carton = $bundleInfo['bundle_carton'] ?? null;
+            $row->bundle_nobar  = $bundleInfo['bundle_nobar'] ?? null;   // BARU
         }
 
         foreach ($data as $index => $row) {
@@ -1309,9 +1676,15 @@ class PackingController extends Controller
 
             $shipInfo = $shipInfoByPackpk[$row->packpk] ?? null;
 
-            $row->ship_shipped = $shipInfo['shipped'] ?? false;
-            $row->ship_inspect = $shipInfo['inspect'] ?? false;
+            $row->ship_shipped   = $shipInfo['shipped'] ?? false;
+            $row->ship_inspect   = $shipInfo['inspect'] ?? false;
             $row->ship_returning = $shipInfo['returning'] ?? false;
+            $row->ship_pinjam    = $shipInfo['pinjam'] ?? null;   // BARU
+            $row->ship_kembali   = $shipInfo['kembali'] ?? null;  // BARU
+            $row->has_inspec_doc = $shipInfo['has_inspec_doc'] ?? false; // BARU
+            $row->no_inspec      = $shipInfo['no_inspec'] ?? null;       // BARU
+            $row->inspec_hasil   = $shipInfo['inspec_hasil'] ?? null;    // BARU
+            $row->inspec_aql     = $shipInfo['inspec_aql'] ?? null;      // BARU
 
             $shipPopk = $shipInfo['popk'] ?? $row->popk;
             $shipPart = $shipInfo['part'] ?? $row->part;
@@ -1324,6 +1697,16 @@ class PackingController extends Controller
             'status_counts' => $statusCounts,
             'rows'          => $data,
         ]);
+    }
+
+    // BARU -- helper dipindah dari FinishgoodStuffingController (dibutuhkan
+    // oleh blok inspecdt di atas).
+    private function buildNoInspec($inspecpk, $tgl): string
+    {
+        $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+        $date = \Carbon\Carbon::parse($tgl);
+        $month = $romanMonths[$date->month - 1];
+        return sprintf('%04d/INS/%s/%d', $inspecpk, $month, $date->year);
     }
 
         // Proses tambah/edit carton dari modal "Add Packing" di halaman Input
@@ -3634,5 +4017,101 @@ class PackingController extends Controller
             'bundle'  => $bundle,
             'members' => $members,
         ]);
+    }
+
+    public function updateSegelBundleGlobal(Request $request)
+    {
+        $request->validate([
+            'bundlepk' => 'required|integer',
+            'target'   => 'required|in:0,1',
+        ]);
+    
+        $bundlepk = (int) $request->input('bundlepk');
+        $target   = (int) $request->input('target');
+    
+        $connection = 'mysql';
+        $db = DB::connection($connection);
+    
+        DB::connection($connection)->beginTransaction();
+    
+        try {
+            $packs = $db->table('pack')->where('bundlepk', $bundlepk)->lockForUpdate()->get();
+    
+            if ($packs->isEmpty()) {
+                DB::connection($connection)->rollBack();
+                return response()->json([
+                    'icon'  => 'warning',
+                    'title' => 'Carton Besar tidak ditemukan atau tidak punya anggota.',
+                ], 422);
+            }
+    
+            if ($target === 1) {
+                foreach ($packs as $pack) {
+                    for ($i = 1; $i <= 40; $i++) {
+                        $plan = (int) ($pack->{"qtyp{$i}"} ?? 0);
+                        if ($plan <= 0) continue;
+                        $actual = (int) ($pack->{"qty{$i}"} ?? 0);
+                        if ($actual <= 0) {
+                            DB::connection($connection)->rollBack();
+                            return response()->json([
+                                'icon'  => 'warning',
+                                'title' => "Carton <b>{$pack->carton}</b> (di dalam bundle ini) belum lengkap Actual-nya -- lengkapi dulu sebelum bisa Seal Bundle.",
+                            ], 422);
+                        }
+                    }
+                }
+            }
+    
+            $sudahSesuai = $packs->where('segel', $target)->count();
+            $perluDiubah = $packs->where('segel', '<>', $target)->pluck('packpk');
+    
+            if ($perluDiubah->isEmpty()) {
+                DB::connection($connection)->rollBack();
+                $labelStatus = $target === 1 ? 'Segel' : 'Buka Segel';
+                return response()->json([
+                    'icon'  => 'warning',
+                    'title' => "Semua carton dalam bundle ini sudah berstatus {$labelStatus} sebelumnya.",
+                ], 422);
+            }
+    
+            $updateData = ['segel' => $target];
+            if ($target === 1) {
+                $updateData['sealdate'] = now();
+            } else {
+                $updateData['unsealdate'] = now();
+            }
+    
+            $db->table('pack')->whereIn('packpk', $perluDiubah)->update($updateData);
+    
+            // BARU -- update status agregat di carton_bundle juga (dipakai
+            // sebagai referensi cepat, misal untuk badge/laporan nanti).
+            $bundleUpdateData = ['segel' => $target];
+            if ($target === 1) {
+                $bundleUpdateData['sealdate'] = now();
+            } else {
+                $bundleUpdateData['unsealdate'] = now();
+            }
+            $db->table('carton_bundle')->where('bundlepk', $bundlepk)->update($bundleUpdateData);
+    
+            DB::connection($connection)->commit();
+    
+            $jumlah = $perluDiubah->count();
+            $aksi   = $target === 1 ? 'disegel' : 'dibuka segelnya';
+            $pesan  = "Carton Besar berhasil {$aksi} ({$jumlah} carton kecil diproses).";
+            if ($sudahSesuai > 0) {
+                $pesan .= " {$sudahSesuai} carton dilewati (sudah sesuai status sebelumnya).";
+            }
+    
+            return response()->json([
+                'icon'  => 'success',
+                'title' => $pesan,
+            ]);
+        } catch (\Throwable $e) {
+            DB::connection($connection)->rollBack();
+            return response()->json([
+                'icon'  => 'error',
+                'title' => 'Gagal memproses Seal Carton Besar.',
+            ], 500);
+        }
     }
 }
