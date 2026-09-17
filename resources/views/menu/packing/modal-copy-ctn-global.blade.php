@@ -123,13 +123,23 @@
         const copies = Math.max(1, parseInt($('#copyAmountGlobal').val()) || 1);
         const activeIdx = Object.keys(window.activeSizesGlobal || {});
     
-        // remaining pool di-key by popk.
+        // BARU -- helper cari combo utk 1 popk.
+        function findComboForPopk(popk) {
+            return (window.pgCombos || []).find(c => String(c.popk) === String(popk));
+        }
+    
+        // GANTI -- remaining sekarang di-key by poolKey, bukan popk. Kalau
+        // combo/poolKey tidak ditemukan, pakai fallback per-popk supaya
+        // tetap aman (tidak error).
         const remaining = {};
+        const seenPoolKeys = new Set();
         (window.pgCombos || []).forEach(function (c) {
-            const key = String(c.popk);
-            remaining[key] = {};
+            const poolKey = c.poolKey || ('_fallback_' + c.popk);
+            if (seenPoolKeys.has(poolKey)) return; // pool ini sudah dihitung lewat combo lain di pool yang sama
+            seenPoolKeys.add(poolKey);
+            remaining[poolKey] = {};
             activeIdx.forEach(function (i) {
-                remaining[key][i] = Number(c.transQty?.[i] || 0) - Number(c.readyQty?.[i] || 0);
+                remaining[poolKey][i] = Number(c.transQty?.[i] || 0) - Number(c.readyQty?.[i] || 0);
             });
         });
     
@@ -137,7 +147,9 @@
         let adaDitolak = false;
     
         rows.forEach(function (row, index) {
-            const popkKey = String(row.popk); // key by popk, bukan comboKey string.
+            const combo = findComboForPopk(row.popk);
+            const poolKey = combo?.poolKey || ('_fallback_' + row.popk); // GANTI dari popkKey mentah
+    
             const punyaActual = activeIdx.some(i => Number(row[`qty${i}`] || 0) > 0);
             let statusParts = [];
     
@@ -150,7 +162,7 @@
                     const namaSize = window.activeSizesGlobal[i] || `Size ${i}`;
     
                     let totalTersalin = 0;
-                    let sisa = remaining[popkKey]?.[i] ?? 0;
+                    let sisa = remaining[poolKey]?.[i] ?? 0; // GANTI poolKey
                     let roundPenuh = 0;
                     let roundPartial = 0;
     
@@ -167,13 +179,13 @@
                         }
                     }
     
-                    if (remaining[popkKey]) remaining[popkKey][i] = sisa;
+                    if (remaining[poolKey]) remaining[poolKey][i] = sisa; // GANTI poolKey
     
                     const totalSeharusnya = actualAsal * copies;
                     if (totalTersalin >= totalSeharusnya) {
                         statusParts.push(`<span class="text-success">✅ ${namaSize}: Actual tersalin penuh ke semua ${copies} copy</span>`);
                     } else if (totalTersalin > 0) {
-                        statusParts.push(`<span class="text-warning fw-semibold">⚠ ${namaSize}: Polibag terbatas -- ${roundPenuh} copy penuh${roundPartial ? ` + 1 copy sebagian (sisa ${sisa === 0 ? remaining[popkKey]?.[i] : ''})` : ''}, total tersalin ${totalTersalin}/${totalSeharusnya}</span>`);
+                        statusParts.push(`<span class="text-warning fw-semibold">⚠ ${namaSize}: Polibag terbatas -- ${roundPenuh} copy penuh${roundPartial ? ` + 1 copy sebagian (sisa ${sisa === 0 ? remaining[poolKey]?.[i] : ''})` : ''}, total tersalin ${totalTersalin}/${totalSeharusnya}</span>`);
                         adaDitolak = true;
                     } else {
                         statusParts.push(`<span class="text-danger">❌ ${namaSize}: Polibag sudah habis, Actual tidak ikut dicopy</span>`);
@@ -182,17 +194,21 @@
                 });
             }
     
-            // label konsisten dengan Detail Packing/Bulk Actual --
-            // tampil "BLACK 1"/"BLACK 2" kalau row ini popk-nya kembaran warna.
-            const materialLabel = getComboLabel(row);
+           const materialLabel = getComboLabel(row);
             const secszTag = row.secsz ? ` (${row.secsz})` : '';
-    
+            const customerTag = row.customer
+                ? `<div class="text-muted" style="font-size:10.5px;">${row.customer}</div>`
+                : '';
+            
             html += `
                 <tr>
                     <td>${index + 1}</td>
                     <td>${row.nobar ?? ''}</td>
                     <td>${row.carton}</td>
-                    <td>${materialLabel}${secszTag}</td>
+                    <td>
+                        <div>${materialLabel}${secszTag}</div>
+                        ${customerTag}
+                    </td>
                     <td class="text-start" style="font-size:12px;line-height:1.7;">${statusParts.join('<br>')}</td>
                 </tr>
             `;

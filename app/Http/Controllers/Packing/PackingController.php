@@ -2741,13 +2741,34 @@ class PackingController extends Controller
             $rowsByCarton = $rows->groupBy('carton');
 
             $affectedPopks = $rows->pluck('popk')->unique()->values();
-            $remaining = [];
+ 
+            $poRowsByPopk = $db->table('po')->whereIn('popk', $affectedPopks)->get()->keyBy('popk');
+            
+            $poolKeyByPopk = [];
             foreach ($affectedPopks as $popkKey) {
-                $remaining[$popkKey] = [];
+                $poRow = $poRowsByPopk->get($popkKey);
+                $poolKeyByPopk[$popkKey] = $poRow ? $this->pgResolvePoolKey($poRow) : ('_fallback_' . $popkKey);
+            }
+            
+            $remaining = [];
+            $poolKeysProcessed = [];
+            foreach ($affectedPopks as $popkKey) {
+                $poolKey = $poolKeyByPopk[$popkKey];
+                if (in_array($poolKey, $poolKeysProcessed, true)) {
+                    continue; // pool ini sudah dihitung lewat popk lain di pool yang sama
+                }
+                $poolKeysProcessed[] = $poolKey;
+            
+                $poRow = $poRowsByPopk->get($popkKey);
+                $polibagPopks = $poRow
+                    ? $this->getPolibagGroupPopks($db, (int) $poRow->mif, $poRow->OP, $poRow->material, $poRow->secsz, $poRow->style)
+                    : collect([$popkKey]);
+            
+                $remaining[$poolKey] = [];
                 for ($i = 1; $i <= 40; $i++) {
-                    $ready    = (int) $db->table('pack')->where('popk', $popkKey)->sum("qty{$i}");
-                    $transfer = $this->getTransferQtyGlobal($db, $popkKey, $i);
-                    $remaining[$popkKey][$i] = $transfer - $ready;
+                    $ready    = (int) $db->table('pack')->whereIn('popk', $polibagPopks)->sum("qty{$i}");
+                    $transfer = $this->getTransferQtyGlobal($db, $polibagPopks, $i);
+                    $remaining[$poolKey][$i] = $transfer - $ready;
                 }
             }
 
@@ -2809,7 +2830,8 @@ class PackingController extends Controller
 
                     foreach ($rowsInCarton as $row) {
                         $popkKey = $row->popk;
-
+                        $poolKey = $poolKeyByPopk[$popkKey] ?? ('_fallback_' . $popkKey); // BARU
+                    
                         $rowPunyaActual = false;
                         for ($i = 1; $i <= 40; $i++) {
                             if ((int) ($row->{"qty{$i}"} ?? 0) > 0) {
@@ -2817,7 +2839,7 @@ class PackingController extends Controller
                                 break;
                             }
                         }
-
+                    
                         $new = (array) $row;
                         unset($new['packpk']);
                         $new['carton']     = $candidateCarton;
@@ -2829,29 +2851,29 @@ class PackingController extends Controller
                         $new['part']       = null;
                         $new['reject']     = null;
                         $new['contpk']     = null;
-
+                    
                         if ($rowPunyaActual) {
                             $pcsActual = 0;
                             $adaPartialDiCarton = false;
-
+                    
                             for ($i = 1; $i <= 40; $i++) {
                                 $actualAsal = (int) ($row->{"qty{$i}"} ?? 0);
-
+                    
                                 if ($actualAsal <= 0) {
                                     $new["qty{$i}"] = $row->{"qty{$i}"} ?? null;
                                     continue;
                                 }
-
-                                $avail = max(0, $remaining[$popkKey][$i] ?? 0);
-
+                    
+                                $avail = max(0, $remaining[$poolKey][$i] ?? 0); // GANTI poolKey
+                    
                                 if ($avail >= $actualAsal) {
                                     $new["qty{$i}"] = $actualAsal;
-                                    $remaining[$popkKey][$i] -= $actualAsal;
+                                    $remaining[$poolKey][$i] -= $actualAsal; // GANTI poolKey
                                     $pcsActual += $actualAsal;
                                     $totalActualDicopy++;
                                 } elseif ($avail > 0) {
                                     $new["qty{$i}"] = $avail;
-                                    $remaining[$popkKey][$i] -= $avail;
+                                    $remaining[$poolKey][$i] -= $avail; // GANTI poolKey
                                     $pcsActual += $avail;
                                     $totalActualDitolak++;
                                     $adaPartialDiCarton = true;
@@ -2862,7 +2884,7 @@ class PackingController extends Controller
                                     $sizeHabisInfoByPopk[$popkKey][$i] = true;
                                 }
                             }
-
+                    
                             $new['pcs']    = $pcsActual;
                             $new['jmlpcs'] = 1;
                         } else {
@@ -2871,7 +2893,7 @@ class PackingController extends Controller
                             }
                             $new['pcs'] = 0;
                         }
-
+                    
                         $db->table('pack')->insert($new);
                         $totalCopyDibuat++;
                     }
