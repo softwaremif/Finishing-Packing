@@ -3564,12 +3564,9 @@ class PackingController extends Controller
             return response()->json(['icon' => 'warning', 'title' => 'Isi minimal salah satu: Panjang/Lebar/Tinggi atau NW/GW.'], 422);
         }
 
-        if (!empty($dimensiUpdate)) {
-            $db->table('pack')->whereIn('packpk', $packpks)->update($dimensiUpdate);
-        }
-
-        if (!empty($weightUpdate)) {
-            $db->table('pack')->whereIn('packpk', $packpks)->update($weightUpdate);
+        $mergedUpdate = array_merge($dimensiUpdate, $weightUpdate);
+        if (!empty($mergedUpdate)) {
+            $db->table('pack')->whereIn('packpk', $packpks)->update($mergedUpdate);
         }
 
         $cartonCount = $db->table('pack')->whereIn('packpk', $packpks)->distinct()->count('carton');
