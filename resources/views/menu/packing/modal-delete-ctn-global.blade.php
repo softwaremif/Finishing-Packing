@@ -77,12 +77,18 @@
         rows.forEach(function (row, index) {
             const materialLabel = getComboLabel(row);
             const secszTag = row.secsz ? ` (${row.secsz})` : '';
+            const customerTag = row.customer
+                ? `<div class="text-muted" style="font-size:10.5px;">${row.customer}</div>`
+                : '';
             html += `
                 <tr>
                     <td>${index + 1}</td>
                     <td>${row.nobar ?? ''}</td>
                     <td><strong>${row.carton}</strong></td>
-                    <td>${materialLabel}${secszTag}</td>
+                    <td>
+                        <div>${materialLabel}${secszTag}</div>
+                        ${customerTag}
+                    </td>
                 </tr>
             `;
         });

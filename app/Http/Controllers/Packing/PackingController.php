@@ -2986,6 +2986,27 @@ class PackingController extends Controller
 
             // Renumbering TIDAK dilakukan -- carton yang tersisa TIDAK
             // diurutkan ulang. Nomor yang "bolong" dibiarkan apa adanya.
+            $affectedBundlepks = $db->table('pack')
+                ->whereIn('packpk', $ids)
+                ->whereNotNull('bundlepk')
+                ->pluck('bundlepk')
+                ->unique()
+                ->values();
+            
+            $deleted = $db->table('pack')
+                ->whereIn('packpk', $ids)
+                ->delete();
+            
+            // carton_bundle yang jadi yatim (0 pack tersisa) ikut dihapus.
+            foreach ($affectedBundlepks as $bundlepk) {
+                $stillHasMembers = $db->table('pack')->where('bundlepk', $bundlepk)->exists();
+                if (!$stillHasMembers) {
+                    $db->table('carton_bundle')->where('bundlepk', $bundlepk)->delete();
+                }
+            }
+            
+            // Renumbering TIDAK dilakukan -- carton yang tersisa TIDAK
+            // diurutkan ulang. Nomor yang "bolong" dibiarkan apa adanya.
             foreach ($affectedPopks as $popkAffected) {
                 $ctn = $db->table('pack')->where('popk', $popkAffected)->count();
                 $db->table('po')->where('popk', $popkAffected)->update(['ctn' => $ctn]);
