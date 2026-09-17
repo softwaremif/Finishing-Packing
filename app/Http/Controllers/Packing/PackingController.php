@@ -920,6 +920,107 @@ class PackingController extends Controller
             ]);
         }
 
+        $currentStyles = $poRows->pluck('style')->filter()->unique()->values();
+
+        $poRowsForPolibag = $db->table('po')
+            ->where('OP', $op)
+            ->where('mif', $mif)
+            ->when($currentStyles->isNotEmpty(), fn ($q) => $q->whereIn('style', $currentStyles))
+            ->get();
+        
+        $polibagGroupedPopks = $poRowsForPolibag->groupBy(function ($row) {
+            return $row->OP . '|' . $row->material . '|' . $row->secsz . '|' . $row->style;
+        });
+        
+        $polibagGroups = collect();
+        
+        foreach ($polibagGroupedPopks as $groupRows) {
+            $popksInGroup = $groupRows->pluck('popk');
+            $repRow       = $groupRows->first();
+        
+            $poNoListInGroup = $groupRows->pluck('POno')->filter(fn ($v) => $v !== null && $v !== '')->unique()->values();
+        
+            $dt2Sum = $db->table('po')
+                ->selectRaw("SUM(qty) as qty, {$sumQtyExpr}")
+                ->whereIn('popk', $popksInGroup)
+                ->first();
+        
+            $summary = $db->table('bj')
+                ->selectRaw("SUM(pcs) as pcs, {$sumQtyExpr}")
+                ->whereIn('popk', $popksInGroup)
+                ->first();
+        
+            $outputSizeSums = DB::connection('mysql_polibag')
+                ->table('output')
+                ->whereIn('popk', $popksInGroup)
+                ->where('jnspk', 4)
+                ->select('size')
+                ->selectRaw('SUM(jmlpcs) as total')
+                ->groupBy('size')
+                ->get();
+        
+            foreach ($outputSizeSums as $osRow) {
+                $idx = $sizeLabelToIndex[$osRow->size] ?? null;
+                if ($idx !== null) {
+                    $qtyField = "qty{$idx}";
+                    $summary->{$qtyField} = (int) ($summary->{$qtyField} ?? 0) + (int) $osRow->total;
+                }
+            }
+            $summary->pcs = (int) ($summary->pcs ?? 0) + (int) $outputSizeSums->sum('total');
+        
+            // BARU -- actual qty yang SUDAH masuk carton (pack), SAMA pola dgn
+            // readyQty di $groups (Planning/Packing) -- ini yang belum ada
+            // sebelumnya di tab Polibag.
+            $dt3ForPolibag = $db->table('pack')
+                ->selectRaw($sumQtyExpr)
+                ->whereIn('popk', $popksInGroup)
+                ->first();
+        
+            $orderQty = [];
+            $transQty = [];
+            $readyQty = []; // BARU
+            foreach ($activeSizes as $i => $sz) {
+                $orderQty[$i] = $dt2Sum->{"qty$i"} ?? 0;
+                $transQty[$i] = $summary->{"qty$i"} ?? 0;
+                $readyQty[$i] = $dt3ForPolibag->{"qty$i"} ?? 0; // BARU
+            }
+        
+            $polibagGroups->push([
+                'poNoList' => $poNoListInGroup,
+                'OP'       => $repRow->OP,
+                'style'    => $repRow->style,
+                'material' => $repRow->material,
+                'secsz'    => $repRow->secsz,
+                'customer' => $repRow->customer,
+                'orderQty' => $orderQty,
+                'transQty' => $transQty,
+                'readyQty' => $readyQty, // BARU
+            ]);
+        }
+        
+        // Agregat khusus Polibag (dijumlah dari $polibagGroups, BUKAN dari $groups).
+        $polibagOrderAgg = [];
+        $polibagTransAgg = [];
+        $polibagReadyAgg = []; // BARU
+        foreach ($activeSizes as $i => $sz) {
+            $polibagOrderAgg[$i] = 0;
+            $polibagTransAgg[$i] = 0;
+            $polibagReadyAgg[$i] = 0; // BARU
+            foreach ($polibagGroups as $pg) {
+                $polibagOrderAgg[$i] += $pg['orderQty'][$i] ?? 0;
+                $polibagTransAgg[$i] += $pg['transQty'][$i] ?? 0;
+                $polibagReadyAgg[$i] += $pg['readyQty'][$i] ?? 0; // BARU
+            }
+        }
+        $polibagAggQty = [
+            'orderQty' => $polibagOrderAgg,
+            'transQty' => $polibagTransAgg,
+            'readyQty' => $polibagReadyAgg, // BARU
+            'totOrder' => array_sum($polibagOrderAgg),
+            'totTrans' => array_sum($polibagTransAgg),
+            'totReady' => array_sum($polibagReadyAgg), // BARU
+        ];
+
         // Agregat GLOBAL -- dijumlah lintas SEMUA grup. $transQtyAgg
         // OTOMATIS sudah termasuk output, karena diambil dari
         // $group['transQty'] yang sudah termasuk output di atas.
@@ -986,7 +1087,7 @@ class PackingController extends Controller
         $poNoList = $poRows->pluck('POno')->filter(fn($v) => $v !== null && $v !== '')->unique()->values();
         $allPopks = $poRows->pluck('popk')->values();
 
-        return compact('dt', 'dt2', 'activeSizes', 'groups', 'aggQty', 'ctnSummary', 'poNoList', 'allPopks');
+        return compact('dt', 'dt2', 'activeSizes', 'groups', 'aggQty', 'ctnSummary', 'poNoList', 'allPopks', 'polibagGroups', 'polibagAggQty');
     }
 
     // Reload AJAX Breakdown Summary (Coverage Matrix + CTN Summary) di

@@ -24,9 +24,9 @@
             'showShipmentPlan' => false,
             'showShipmentActions' => false,
             'showEditButton' => true,
-            'showSealAction' => true, 
-            'showKembalikanButton' => false, 
-            'showHistoryTab' => false, 
+            'showSealAction' => true,
+            'showKembalikanButton' => false,
+            'showHistoryTab' => false,
             'showBaseChips' => true,
             'backRouteName' => 'packing.index',
 
@@ -649,11 +649,13 @@
             font-size: 12.5px;
             line-height: 1.5;
         }
+
         .scan-nobar-feedback-icon {
             flex-shrink: 0;
             margin-top: 2px;
             font-size: 13px;
         }
+
         .scan-nobar-feedback-text {
             flex: 1;
             min-width: 0;
@@ -798,9 +800,9 @@
 
         .shipment-plan-card.is-active {
             position: sticky;
-            top: var(--shipment-plan-sticky-top, 70px); 
+            top: var(--shipment-plan-sticky-top, 70px);
             z-index: 40;
-            box-shadow: 0 8px 20px rgba(0,0,0,.12);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, .12);
             border: 1.5px solid #1e293b;
         }
 
@@ -809,18 +811,27 @@
             right: 20px;
             bottom: 20px;
             width: 260px;
-            z-index: 1055; 
+            z-index: 1055;
             background: #fff;
             border: 1.5px solid #1e293b;
             border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,.18);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
             padding: 14px;
             animation: shipmentFloatIn .2s ease;
         }
+
         @keyframes shipmentFloatIn {
-            from { opacity: 0; transform: translateY(12px); }
-            to   { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
+
         @media (max-width: 576px) {
             #activeShipmentFloatingCard {
                 right: 12px;
@@ -831,14 +842,15 @@
         }
 
         /* section('css_custom') -- mode Compact/Tile, banyak carton
-        muat dalam 1 layar (referensi: "carton wall" / bin-map di sistem WMS
-        garment). */
+            muat dalam 1 layar (referensi: "carton wall" / bin-map di sistem WMS
+            garment). */
 
         .packing-compact-grid {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
         }
+
         .packing-compact-tile {
             position: relative;
             width: 86px;
@@ -852,20 +864,24 @@
             justify-content: space-between;
             transition: box-shadow .12s ease, transform .1s ease;
         }
+
         .packing-compact-tile:hover {
-            box-shadow: 0 3px 10px rgba(15,23,42,.18);
+            box-shadow: 0 3px 10px rgba(15, 23, 42, .18);
             transform: translateY(-1px);
             z-index: 2;
         }
+
         .packing-compact-tile.selected {
             outline: 2px solid #2563eb;
             outline-offset: -2px;
             box-shadow: 0 0 0 3px rgba(37, 99, 235, .3);
-            position: relative; /* pastikan ::after ter-posisi relatif ke tile ini */
+            position: relative;
+            /* pastikan ::after ter-posisi relatif ke tile ini */
         }
 
         .packing-compact-tile.selected::after {
-            content: "\f00c"; /* fa-check */
+            content: "\f00c";
+            /* fa-check */
             font-family: "Font Awesome 5 Free";
             font-weight: 900;
             position: absolute;
@@ -880,36 +896,51 @@
             color: #fff;
             background: #2563eb;
             border-radius: 50%;
-            box-shadow: 0 1px 3px rgba(0,0,0,.35);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
             z-index: 4;
         }
-        
+
         /* Warna background PENUH per status -- ini bagian utama yang berubah. */
         .packing-compact-tile.pc-status-planned {
             background: #f1f5f9;
         }
+
         .packing-compact-tile.pc-status-planned .pc-carton,
-        .packing-compact-tile.pc-status-planned .pc-qty { color: #64748b; }
-        
+        .packing-compact-tile.pc-status-planned .pc-qty {
+            color: #64748b;
+        }
+
         .packing-compact-tile.pc-status-packing {
             background: #dbeefc;
         }
+
         .packing-compact-tile.pc-status-packing .pc-carton,
-        .packing-compact-tile.pc-status-packing .pc-qty { color: #0369a1; }
-        
+        .packing-compact-tile.pc-status-packing .pc-qty {
+            color: #0369a1;
+        }
+
         .packing-compact-tile.pc-status-complete {
             background: #dcfce7;
         }
+
         .packing-compact-tile.pc-status-complete .pc-carton,
-        .packing-compact-tile.pc-status-complete .pc-qty { color: #15803d; }
-        
+        .packing-compact-tile.pc-status-complete .pc-qty {
+            color: #15803d;
+        }
+
         .packing-compact-tile.pc-status-sealed {
             background: #0f172a;
         }
+
         .packing-compact-tile.pc-status-sealed .pc-carton,
-        .packing-compact-tile.pc-status-sealed .pc-qty { color: #f1f5f9; }
-        .packing-compact-tile.pc-status-sealed .pc-progress { background: rgba(255,255,255,.15); }
-        
+        .packing-compact-tile.pc-status-sealed .pc-qty {
+            color: #f1f5f9;
+        }
+
+        .packing-compact-tile.pc-status-sealed .pc-progress {
+            background: rgba(255, 255, 255, .15);
+        }
+
         .packing-compact-tile .pc-carton {
             font-weight: 700;
             font-size: 11px;
@@ -918,6 +949,7 @@
             text-overflow: ellipsis;
             line-height: 1.15;
         }
+
         .packing-compact-tile .pc-qty {
             font-size: 9px;
             font-weight: 600;
@@ -926,18 +958,21 @@
             text-overflow: ellipsis;
             opacity: .85;
         }
+
         .packing-compact-tile .pc-progress {
             height: 3px;
-            background: rgba(0,0,0,.08);
+            background: rgba(0, 0, 0, .08);
             border-radius: 2px;
             overflow: hidden;
         }
+
         .packing-compact-tile .pc-progress .bar {
             display: block;
             height: 100%;
             background: currentColor;
             opacity: .55;
         }
+
         .packing-compact-tile .pc-badges {
             position: absolute;
             top: 2px;
@@ -945,14 +980,21 @@
             display: flex;
             gap: 2px;
         }
+
         .packing-compact-tile .pc-dot {
             width: 5px;
             height: 5px;
             border-radius: 50%;
-            box-shadow: 0 0 0 1px rgba(255,255,255,.6);
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, .6);
         }
-        .packing-compact-tile .pc-dot.reject { background: #dc2626; }
-        .packing-compact-tile .pc-dot.shipped { background: #2563eb; }
+
+        .packing-compact-tile .pc-dot.reject {
+            background: #dc2626;
+        }
+
+        .packing-compact-tile .pc-dot.shipped {
+            background: #2563eb;
+        }
 
         .packing-compact-tile .pc-edit-btn {
             position: absolute;
@@ -965,6 +1007,7 @@
             padding: 2px;
             z-index: 3;
         }
+
         .packing-compact-tile .pc-edit-btn:hover {
             opacity: 1;
         }
@@ -983,24 +1026,28 @@
             cursor: pointer;
             transition: all .12s ease;
         }
+
         .spd-poop-chip:hover {
             border-color: #94a3b8;
             background: #e2e8f0;
         }
+
         .spd-poop-chip.active {
             background: #1e293b;
             border-color: #1e293b;
             color: #fff;
         }
+
         .spd-poop-chip .spd-mif-tag {
             font-size: 9.5px;
             font-weight: 700;
-            background: rgba(0,0,0,.08);
+            background: rgba(0, 0, 0, .08);
             border-radius: 4px;
             padding: 1px 5px;
         }
+
         .spd-poop-chip.active .spd-mif-tag {
-            background: rgba(255,255,255,.18);
+            background: rgba(255, 255, 255, .18);
         }
 
         .spd-container-box {
@@ -1015,6 +1062,7 @@
             align-content: flex-start;
             position: relative;
         }
+
         .spd-container-box::before {
             content: "CONTAINER";
             position: absolute;
@@ -1027,6 +1075,7 @@
             letter-spacing: .6px;
             color: #94a3b8;
         }
+
         .spd-carton-box {
             min-width: 34px;
             height: 26px;
@@ -1040,7 +1089,7 @@
             font-size: 9.5px;
             font-weight: 700;
             color: #fff;
-            text-shadow: 0 1px 1px rgba(0,0,0,.25);
+            text-shadow: 0 1px 1px rgba(0, 0, 0, .25);
             white-space: nowrap;
             opacity: 0;
             transform: scale(0.4);
@@ -1048,18 +1097,25 @@
             transition: opacity .2s ease, filter .2s ease, transform .15s ease;
             cursor: default;
         }
+
         .spd-carton-box:hover {
             transform: scale(1.15);
             z-index: 2;
         }
+
         .spd-carton-box.dimmed {
             opacity: .15 !important;
             filter: grayscale(1);
             transform: scale(0.85) !important;
         }
+
         @keyframes spdCartonIn {
-            to { opacity: 1; transform: scale(1); }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
         }
+
         .spd-container-empty {
             color: #94a3b8;
             font-size: 12px;
@@ -1067,6 +1123,7 @@
             width: 100%;
             text-align: center;
         }
+
         .spd-carton-box.shipped {
             background: #2563eb;
             border-color: #1e3a8a;
@@ -1094,17 +1151,21 @@
                     </span>
                 @endif
                 @if ($cfg['showShipmentActions'] && in_array($guserpk, $cfg['guserpkTerima']))
-                    <span class="sticky-action d-none" id="btnTerimaCartonGlobal" onclick="terimaCartonGlobal()">Terima Carton</span>
+                    <span class="sticky-action d-none" id="btnTerimaCartonGlobal" onclick="terimaCartonGlobal()">Terima
+                        Carton</span>
                 @endif
                 @if (in_array($guserpk, $cfg['guserpkSegel']))
-                    <span class="sticky-action d-none" id="btnBukaSegelGlobal" onclick="bulkBukaSegelGlobal()">Buka Segel</span>
+                    <span class="sticky-action d-none" id="btnBukaSegelGlobal" onclick="bulkBukaSegelGlobal()">Buka
+                        Segel</span>
                     <span class="sticky-action" id="btnBulkSegelCtnGlobal" onclick="bulkSegelCtnGlobal()">Segel CTN</span>
                     <span class="sticky-action d-none" id="btnProsesInspectGlobal"
                         onclick="bulkProsesInspectGlobal()">Proses Inspect</span>
                 @endif
                 @if ($cfg['showCtnManagement'])
-                    <span class="sticky-action" id="btnBulkDimensiGlobal" onclick="openBulkDimensiModal()">Edit Ukuran CTN</span>
-                    <span class="sticky-action" id="btnBulkActualCtnGlobal" onclick="bulkActualCtnGlobal()">Input Actual</span>
+                    <span class="sticky-action" id="btnBulkDimensiGlobal" onclick="openBulkDimensiModal()">Edit Ukuran
+                        CTN</span>
+                    <span class="sticky-action" id="btnBulkActualCtnGlobal" onclick="bulkActualCtnGlobal()">Input
+                        Actual</span>
                     <span class="sticky-action" id="btnBulkDeleteActualCtnGlobal"
                         onclick="bulkDeleteActualCtnGlobal()">Delete Actual</span>
                     <span class="sticky-action" id="btnBulkCopyGlobal" onclick="bulkCopyGlobal()">Copy CTN</span>
@@ -1243,21 +1304,24 @@
                                     onclick="openUrutkanCtnModal()">
                                     <i class="fas fa-sort-numeric-down me-1"></i> Penomoran CTN
                                 </button>
-                        
+
                                 <div class="dropdown">
-                                    <button class="btn btn-dark btn-sm d-flex align-items-center fw-semibold dropdown-toggle"
+                                    <button
+                                        class="btn btn-dark btn-sm d-flex align-items-center fw-semibold dropdown-toggle"
                                         style="font-size:12px;border-radius:6px;background:#1e293b;border-color:#1e293b;"
                                         type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                         <i class="fas fa-plus me-1"></i> Add Packing
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         <li>
-                                            <a class="dropdown-item" href="javascript:void(0)" onclick="openPackingGlobalModal()">
+                                            <a class="dropdown-item" href="javascript:void(0)"
+                                                onclick="openPackingGlobalModal()">
                                                 <i class="fas fa-box me-2 text-secondary"></i>Packing Biasa
                                             </a>
                                         </li>
                                         <li>
-                                            <a class="dropdown-item" href="javascript:void(0)" onclick="openBundleCartonModal()">
+                                            <a class="dropdown-item" href="javascript:void(0)"
+                                                onclick="openBundleCartonModal()">
                                                 <i class="fas fa-boxes-stacked me-2 text-secondary"></i>Gabung Carton Besar
                                             </a>
                                         </li>
@@ -1272,14 +1336,18 @@
                                     <i class="fas fa-clipboard-check me-1"></i> Buat Dokumen Inspect
                                 </button>
                             @endif --}}
-                        
+
                             <div class="btn-group btn-group-sm" role="group" id="viewToggleGlobal">
                                 <button type="button" class="btn btn-outline-secondary" id="viewModeCompactBtn"
-                                    onclick="setViewModeGlobal('compact')" title="Tampilan Compact (banyak carton sekaligus)"><i class="fas fa-table-cells"></i></button>
+                                    onclick="setViewModeGlobal('compact')"
+                                    title="Tampilan Compact (banyak carton sekaligus)"><i
+                                        class="fas fa-table-cells"></i></button>
                                 <button type="button" class="btn btn-outline-secondary active" id="viewModeGridBtn"
-                                    onclick="setViewModeGlobal('grid')" title="Tampilan Grid"><i class="fas fa-th-large"></i></button>
+                                    onclick="setViewModeGlobal('grid')" title="Tampilan Grid"><i
+                                        class="fas fa-th-large"></i></button>
                                 <button type="button" class="btn btn-outline-secondary" id="viewModeListBtn"
-                                    onclick="setViewModeGlobal('list')" title="Tampilan List"><i class="fas fa-list"></i></button>
+                                    onclick="setViewModeGlobal('list')" title="Tampilan List"><i
+                                        class="fas fa-list"></i></button>
                             </div>
                         </div>
                     </div>
@@ -1575,17 +1643,25 @@
             $('#matrixLegendCoverage').toggleClass('d-none', tab !== 'coverage');
             $('#matrixLegendPlanning').toggleClass('d-none', tab !== 'planning');
             $('#matrixLegendPacking').toggleClass('d-none', tab !== 'packing');
+
+            // BARU -- FIX UTAMA: toggle TBODY, bukan cuma kolom -- Coverage
+            // (Polibag) sekarang punya baris/grouping SENDIRI, beda dari
+            // Planning/Packing yang tetap berbagi 1 tbody.
+            $('#matrixBodyMain').toggleClass('d-none', tab === 'coverage');
+            $('#matrixBodyPolibag').toggleClass('d-none', tab !== 'coverage');
+
             $('#matrixTable .cov').toggleClass('d-none', tab !== 'coverage');
             $('#matrixTable .planning').toggleClass('d-none', tab !== 'planning');
             $('#matrixTable .pack').toggleClass('d-none', tab !== 'packing');
             const subtitles = {
-                coverage: 'Polibag vs Order per Color & Sec Size — klik sel untuk filter carton',
+                coverage: 'Polibag vs Order per OP, Color, Sec Size & Style — klik sel untuk filter carton',
                 planning: 'Planning vs Order per Color & Sec Size — klik sel untuk filter carton',
                 packing: 'Actual vs Plan per Color & Sec Size — klik sel untuk filter carton'
             };
             $('#matrixSubtitle').text(subtitles[tab]);
             $('.legend-item').removeClass('active');
             $('#matrixTable td.matrix-cell').removeClass('matrix-dim');
+            classifyMatrixCells(); // BARU -- perlu diklasifikasi ulang saat pindah ke tbody Polibag
         }
 
         function toggleMatrixChip(el) {
@@ -1645,10 +1721,10 @@
             if (window.pageCfg.showPartFilter) initFilterPartGlobal();
             initSortFieldGlobalCombobox();
             initPageSizeGlobalCombobox();
-        
-            applyViewModeUiState(window.packingViewModeGlobal); 
+
+            applyViewModeUiState(window.packingViewModeGlobal);
             loadPackingCards();
-        
+
             reloadBreakdownSummary();
             reloadCardsInfoGlobal();
             if (window.pageCfg.showShipmentPlan) {
@@ -1665,18 +1741,22 @@
         }
 
         window.pgLastAppliedViewMode = window.pgLastAppliedViewMode ?? null;
- 
+
         function applyViewModeUiState(mode) {
             const prevMode = window.pgLastAppliedViewMode; // null di panggilan PERTAMA -- GARANSI transisi terdeteksi
             window.pgLastAppliedViewMode = mode;
             window.packingViewModeGlobal = mode;
             localStorage.setItem('packingViewModeGlobal', mode);
             $('#viewModeGridBtn, #viewModeListBtn, #viewModeCompactBtn').removeClass('active');
-            const btnMap = { grid: '#viewModeGridBtn', list: '#viewModeListBtn', compact: '#viewModeCompactBtn' };
+            const btnMap = {
+                grid: '#viewModeGridBtn',
+                list: '#viewModeListBtn',
+                compact: '#viewModeCompactBtn'
+            };
             $(btnMap[mode]).addClass('active');
-        
+
             const COMPACT_PAGE_SIZE = 500;
-        
+
             if (mode === 'compact' && prevMode !== 'compact') {
                 window.pgPageSizeBeforeCompact = packingCardsRows;
                 packingCardsRows = COMPACT_PAGE_SIZE;
@@ -1699,7 +1779,7 @@
             }
             return false;
         }
-        
+
         function setViewModeGlobal(mode) {
             const needReload = applyViewModeUiState(mode);
             if (needReload) {
@@ -1711,10 +1791,10 @@
         }
 
         function buildBundleCompactGroup(unit) {
-            const tilesHtml = unit.members.map(function (m) {
+            const tilesHtml = unit.members.map(function(m) {
                 const groupRows = m.groupRows;
                 const isNativeToThisPage = groupRows.some(r => r.POno === PO && r.OP === OP);
-        
+
                 if (!isNativeToThisPage) {
                     const first = groupRows[0];
                     return `
@@ -1725,10 +1805,10 @@
                         </div>
                     `;
                 }
-        
+
                 return buildPackingCompactTile(groupRows);
             }).join('');
-        
+
             return `
                 <div class="packing-bundle-compact-group" style="border:2px solid #92400e; border-radius:10px; padding:8px; background:#fdf3e7; grid-column: 1 / -1;">
                     <div class="d-flex align-items-center justify-content-between mb-2" style="cursor:pointer;" onclick="editBundleCarton(${unit.bundlepk})">
@@ -1743,14 +1823,14 @@
                 </div>
             `;
         }
-        
+
         // ============================================================
         // bangun 1 tile Compact utk 1 grup carton (SAMA data source
         // dgn buildPackingCard()/buildPackingListRow(), lewat computePackingGroupData()).
         // ============================================================
         function buildPackingCompactTile(groupRows) {
             const d = computePackingGroupData(groupRows);
-        
+
             const tooltipParts = [
                 `Carton ${d.first.carton ?? '-'}`,
                 d.subline,
@@ -1762,71 +1842,80 @@
             if (!d.canEdit) tooltipParts.push('Read-only (dibuat user/pos lain)');
             if (d.anyReject) tooltipParts.push('REJECT');
             if (d.shipStampKey === 'shipped') tooltipParts.push('Sudah Shipped');
-        
-            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d.canEdit) ?
+
+            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d
+                    .canEdit) ?
                 '' :
                 `<i class="fas fa-pen pc-edit-btn" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
-        
-            const mixIndicatorHtml = d.isCrossPoMix
-                ? `<span class="pc-mix-indicator" title="Mix PO/OP: ${d.crossPoOrigins.join(', ')}"
+
+            const mixIndicatorHtml = d.isCrossPoMix ?
+                `<span class="pc-mix-indicator" title="Mix PO/OP: ${d.crossPoOrigins.join(', ')}"
                     style="position:absolute; top:22px; right:4px; width:17px; height:17px; border-radius:50%;
                             background:#8b5cf6; color:#fff; display:flex; align-items:center; justify-content:center;
                             font-size:9px; z-index:2; box-shadow:0 1px 3px rgba(0,0,0,.3); cursor:default;">
                     <i class="fas fa-shuffle"></i>
-                </span>`
-                : '';
-        
+                </span>` :
+                '';
+
             const bundleIndicatorTop = d.isCrossPoMix ? 40 : 22;
-            const bundleIndicatorHtml = d.hasBundle
-                ? `<span class="pc-bundle-indicator" title="Klik untuk edit Carton Besar: ${d.bundleCartonName ?? '-'}"
+            const bundleIndicatorHtml = d.hasBundle ?
+                `<span class="pc-bundle-indicator" title="Klik untuk edit Carton Besar: ${d.bundleCartonName ?? '-'}"
                     style="position:absolute; top:${bundleIndicatorTop}px; right:4px; width:17px; height:17px; border-radius:50%;
                             background:#92400e; color:#fff; display:flex; align-items:center; justify-content:center;
                             font-size:9px; z-index:2; box-shadow:0 1px 3px rgba(0,0,0,.3); cursor:pointer;"
                     onclick="event.stopPropagation(); editBundleCarton(${d.bundlepk})">
                     <i class="fas fa-box-open"></i>
-                </span>`
-                : '';
-        
+                </span>` :
+                '';
+
             // BARU -- ikon gembok kecil di pojok KIRI-BAWAH (area lain masih
             // kosong, tidak tabrakan dengan indikator Mix PO/Bundle di kanan-atas
             // maupun ikon Edit).
-            const readonlyIndicatorHtml = !d.canEdit
-                ? `<span style="position:absolute; bottom:4px; left:4px; font-size:10px; opacity:.75;" title="Read-only (dibuat user/pos lain)">
+            const readonlyIndicatorHtml = !d.canEdit ?
+                `<span style="position:absolute; bottom:4px; left:4px; font-size:10px; opacity:.75;" title="Read-only (dibuat user/pos lain)">
                     <i class="fas fa-lock"></i>
-                </span>`
-                : '';
-        
+                </span>` :
+                '';
+
             const badgesHtml = `
                 <div class="pc-badges">
                     ${d.anyReject ? '<span class="pc-dot reject" title="Reject"></span>' : ''}
                     ${d.shipStampKey === 'shipped' ? '<span class="pc-dot shipped" title="Shipped"></span>' : ''}
                 </div>
             `;
-        
+
             const progressColor = d.pct >= 100 ? '#8bc63f' : '#f97316';
-        
+
             let tileBg, tileText;
-        
+
             if (d.anyReject) {
-                tileBg = '#fee2e2'; tileText = '#7f1d1d';
+                tileBg = '#fee2e2';
+                tileText = '#7f1d1d';
             } else if (d.shipStampKey === 'shipped') {
-                tileBg = '#dbeafe'; tileText = '#1e3a8a';
+                tileBg = '#dbeafe';
+                tileText = '#1e3a8a';
             } else if (d.anyReturning) {
-                tileBg = '#f3e8ff'; tileText = '#5b21b6';
+                tileBg = '#f3e8ff';
+                tileText = '#5b21b6';
             } else if (d.anyInspecting) {
-                tileBg = '#fef3c7'; tileText = '#92400e';
+                tileBg = '#fef3c7';
+                tileText = '#92400e';
             } else if (d.isSealed) {
-                tileBg = '#1e293b'; tileText = '#e2e8f0';
+                tileBg = '#1e293b';
+                tileText = '#e2e8f0';
             } else if (d.totalActual <= 0) {
-                tileBg = '#f1f5f9'; tileText = '#64748b';
+                tileBg = '#f1f5f9';
+                tileText = '#64748b';
             } else if (d.pct >= 100) {
-                tileBg = '#f0fdf4'; tileText = '#166534';
+                tileBg = '#f0fdf4';
+                tileText = '#166534';
             } else {
-                tileBg = '#fff7ed'; tileText = '#9a3412';
+                tileBg = '#fff7ed';
+                tileText = '#9a3412';
             }
-        
+
             const compactOpacityStyle = !d.canEdit ? 'opacity:.65;' : '';
-        
+
             return `
                 <div class="packing-select-item packing-compact-tile pc-status-${d.status.key}"
                     style="background:${tileBg}; color:${tileText}; position:relative; ${compactOpacityStyle}"
@@ -1899,9 +1988,12 @@
             // Kelompokkan per carton.
             const cartonGroups = {};
             const cartonOrder = [];
-            rows.forEach(function (row) {
+            rows.forEach(function(row) {
                 const key = row.carton ?? '(tanpa carton)';
-                if (!cartonGroups[key]) { cartonGroups[key] = []; cartonOrder.push(key); }
+                if (!cartonGroups[key]) {
+                    cartonGroups[key] = [];
+                    cartonOrder.push(key);
+                }
                 cartonGroups[key].push(row);
             });
 
@@ -1915,8 +2007,8 @@
             const eligible = []; // [{ cartonKey, groupRows, segelState, partState }]
 
             let skippedReadonly = 0; // BARU -- deklarasikan di luar forEach, sejajar skippedShipped
- 
-            cartonOrder.forEach(function (cartonKey) {
+
+            cartonOrder.forEach(function(cartonKey) {
                 const groupRows = cartonGroups[cartonKey];
                 if (groupRows.some(r => r.ship_shipped === true)) {
                     skippedShipped++;
@@ -1932,7 +2024,12 @@
                 const partState = normalizePart(groupRows.map(r => r.part).find(p =>
                     p !== null && p !== undefined && p !== '' && Number(p) !== 0
                 ) ?? '');
-                eligible.push({ cartonKey, groupRows, segelState, partState });
+                eligible.push({
+                    cartonKey,
+                    groupRows,
+                    segelState,
+                    partState
+                });
             });
 
             if (!eligible.length) {
@@ -1943,25 +2040,29 @@
             // Hitung frekuensi tiap kombinasi (segel|part) -- kombinasi dengan
             // JUMLAH CARTON TERBANYAK yang menang jadi baseline.
             const freq = new Map();
-            eligible.forEach(function (item) {
+            eligible.forEach(function(item) {
                 const key = item.segelState + '|' + item.partState;
                 freq.set(key, (freq.get(key) || 0) + 1);
             });
-            let majorityKey = null, majorityCount = -1;
-            freq.forEach(function (count, key) {
-                if (count > majorityCount) { majorityCount = count; majorityKey = key; }
+            let majorityKey = null,
+                majorityCount = -1;
+            freq.forEach(function(count, key) {
+                if (count > majorityCount) {
+                    majorityCount = count;
+                    majorityKey = key;
+                }
             });
 
             // Pilih semua carton yang match kombinasi mayoritas, sisanya dilewati.
             const eligiblePackpks = [];
             let skippedMinority = 0;
-            eligible.forEach(function (item) {
+            eligible.forEach(function(item) {
                 const key = item.segelState + '|' + item.partState;
                 if (key !== majorityKey) {
                     skippedMinority++;
                     return;
                 }
-                item.groupRows.forEach(function (row) {
+                item.groupRows.forEach(function(row) {
                     eligiblePackpks.push(row.packpk);
                     window.selectedRowsCache[row.packpk] = row;
                 });
@@ -1976,7 +2077,7 @@
             window.pgSelectAllActive = true;
             $('#btnSelectAllVisible').html('<i class="fas fa-xmark me-1"></i> Batal Semua');
 
-            $('.packing-select-item').each(function () {
+            $('.packing-select-item').each(function() {
                 const packpksArr = String($(this).data('packpks') || '').split(',').map(Number).filter(Boolean);
                 $(this).toggleClass('selected', packpksArr.some(pk => eligiblePackpks.includes(pk)));
             });
@@ -1993,20 +2094,34 @@
 
         function initPageSizeGlobalCombobox() {
             $('#pageSizeGlobal').combobox({
-                data: [
-                    { value: 25, text: '25' },
-                    { value: 50, text: '50' },
-                    { value: 100, text: '100' },
-                    { value: 200, text: '200' },
-                    { value: 500, text: '500' }
+                data: [{
+                        value: 25,
+                        text: '25'
+                    },
+                    {
+                        value: 50,
+                        text: '50'
+                    },
+                    {
+                        value: 100,
+                        text: '100'
+                    },
+                    {
+                        value: 200,
+                        text: '200'
+                    },
+                    {
+                        value: 500,
+                        text: '500'
+                    }
                 ],
                 valueField: 'value',
                 textField: 'text',
                 value: 25,
                 editable: false,
                 panelHeight: 'auto',
-                onChange: function (v) {
-                    if (window.suppressPageSizeChangeReload) return; 
+                onChange: function(v) {
+                    if (window.suppressPageSizeChangeReload) return;
                     packingCardsRows = parseInt(v) || 25;
                     reloadPackingGlobal();
                 }
@@ -2182,10 +2297,14 @@
             }
             empty.addClass('d-none');
 
-            const cartonGroups = {}, cartonOrder = [];
-            rows.forEach(function (row) {
+            const cartonGroups = {},
+                cartonOrder = [];
+            rows.forEach(function(row) {
                 const key = row.carton ?? '(tanpa carton)';
-                if (!cartonGroups[key]) { cartonGroups[key] = []; cartonOrder.push(key); }
+                if (!cartonGroups[key]) {
+                    cartonGroups[key] = [];
+                    cartonOrder.push(key);
+                }
                 cartonGroups[key].push(row);
             });
 
@@ -2198,25 +2317,40 @@
             const seenCartonKeys = new Set();
             const bundleUnitByBundlepk = {};
 
-            cartonOrder.forEach(function (cartonKey) {
+            cartonOrder.forEach(function(cartonKey) {
                 if (seenCartonKeys.has(cartonKey)) return;
                 const groupRows = cartonGroups[cartonKey];
                 const bundlepk = groupRows.find(r => r.bundlepk)?.bundlepk || null;
 
                 if (!bundlepk) {
-                    renderUnits.push({ type: 'single', cartonKey, groupRows });
+                    renderUnits.push({
+                        type: 'single',
+                        cartonKey,
+                        groupRows
+                    });
                     seenCartonKeys.add(cartonKey);
                     return;
                 }
 
                 if (bundleUnitByBundlepk[bundlepk]) {
-                    bundleUnitByBundlepk[bundlepk].members.push({ cartonKey, groupRows });
+                    bundleUnitByBundlepk[bundlepk].members.push({
+                        cartonKey,
+                        groupRows
+                    });
                     seenCartonKeys.add(cartonKey);
                     return;
                 }
 
                 const bundleCartonName = groupRows.find(r => r.bundle_carton)?.bundle_carton || null;
-                const unit = { type: 'bundle', bundlepk, bundleCartonName, members: [{ cartonKey, groupRows }] };
+                const unit = {
+                    type: 'bundle',
+                    bundlepk,
+                    bundleCartonName,
+                    members: [{
+                        cartonKey,
+                        groupRows
+                    }]
+                };
                 bundleUnitByBundlepk[bundlepk] = unit;
                 renderUnits.push(unit);
                 seenCartonKeys.add(cartonKey);
@@ -2232,7 +2366,7 @@
                 cartonOrder.forEach(k => listBody.append(buildPackingListRow(cartonGroups[k])));
             } else if (window.packingViewModeGlobal === 'compact') {
                 compactWrapper.removeClass('d-none');
-                renderUnits.forEach(function (unit) {
+                renderUnits.forEach(function(unit) {
                     if (unit.type === 'bundle') {
                         compactGrid.append(buildBundleCompactGroup(unit));
                     } else {
@@ -2241,7 +2375,7 @@
                 });
             } else {
                 grid.removeClass('d-none');
-                renderUnits.forEach(function (unit) {
+                renderUnits.forEach(function(unit) {
                     if (unit.type === 'bundle') {
                         grid.append(buildBundleCard(unit));
                     } else {
@@ -2251,7 +2385,7 @@
             }
 
             const persisted = window.selectedPackpksGlobal || [];
-            $('.packing-select-item').each(function () {
+            $('.packing-select-item').each(function() {
                 const packpksArr = String($(this).data('packpks') || '').split(',').map(Number).filter(Boolean);
                 $(this).toggleClass('selected', packpksArr.some(pk => persisted.includes(pk)));
             });
@@ -2382,12 +2516,12 @@
 
             const shipStampKey = getShipStampForGroup(groupRows);
             const shippedRow = groupRows.find(r => r.ship_shipped === true);
-            
+
             const shipExportpk = shippedRow?.exportpk ?? null;
             const matchedExportForShip = (window.shipmentPlanPartsCache || [])
                 .find(p => String(p.exportpk) === String(shipExportpk));
             const shipDate = matchedExportForShip?.exdate ?? null;
-            
+
             const shipStampHtml = buildShipStamp(shipStampKey, shipDate, 'lg');
 
             const inspecDocRow = groupRows.find(r => r.no_inspec);
@@ -2438,29 +2572,29 @@
             const isCrossPoMix = groupRows.some(r => r.mixno !== null && r.mixno !== undefined && r.mixno !== '');
             const crossPoOrigins = [...new Set(
                 groupRows
-                    .filter(r => !(r.POno === PO && r.OP === OP))
-                    .map(r => `${r.POno ?? '-'} &middot; ${r.OP ?? '-'}`)
+                .filter(r => !(r.POno === PO && r.OP === OP))
+                .map(r => `${r.POno ?? '-'} &middot; ${r.OP ?? '-'}`)
             )];
-            
-            const crossPoBadgeHtml = isCrossPoMix
-                ? `<span class="badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;"
+
+            const crossPoBadgeHtml = isCrossPoMix ?
+                `<span class="badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;"
                     title="Carton ini digabung dengan: ${crossPoOrigins.join(', ') || 'PO/OP lain'}">
                     <i class="fas fa-shuffle me-1"></i>Mix PO
-                </span>`
-                : '';
+                </span>` :
+                '';
 
 
             const hasBundle = groupRows.some(r => r.bundlepk !== null && r.bundlepk !== undefined && r.bundlepk !== '');
             const bundleCartonName = groupRows.find(r => r.bundle_carton)?.bundle_carton || null;
             const bundlepk = groupRows.find(r => r.bundlepk)?.bundlepk || null;
-            
-            const bundleBadgeHtml = hasBundle
-                ? `<span class="badge-soft" style="background:#fdf3e7;color:#92400e;border-color:#f3dcb8;cursor:pointer;"
+
+            const bundleBadgeHtml = hasBundle ?
+                `<span class="badge-soft" style="background:#fdf3e7;color:#92400e;border-color:#f3dcb8;cursor:pointer;"
                     title="Klik untuk edit Carton Besar: ${bundleCartonName ?? '-'}"
                     onclick="event.stopPropagation(); editBundleCarton(${bundlepk})">
                     <i class="fas fa-box-open me-1"></i>Dalam ${bundleCartonName ?? 'Bundle'}
-                </span>`
-                : '';
+                </span>` :
+                '';
 
             return {
                 first,
@@ -2489,8 +2623,8 @@
                 anyInspecting,
                 anyReturning,
                 anyReject,
-                isCrossPoMix,      
-                crossPoOrigins,    
+                isCrossPoMix,
+                crossPoOrigins,
                 crossPoBadgeHtml,
                 sublineTitle,
                 hasBundle,
@@ -2506,11 +2640,11 @@
                 return `<button class="btn btn-outline-secondary" disabled title="Carton sedang Menunggu Diterima dari Inspect, tidak dapat disegel/diedit dulu"><i class="fas fa-clock me-1"></i>Menunggu</button>`;
             if (d.anyReject)
                 return `<button class="btn btn-outline-secondary" disabled title="Carton di-reject saat Inspect, perbaiki/rework dulu sebelum bisa disegel"><i class="fas fa-triangle-exclamation me-1"></i>Reject</button>`;
-        
+
             // user tanpa akses Segel (mis. role packing) --
             // tombol disembunyikan TOTAL, BUKAN lagi ditampilkan versi disabled.
             if (!window.canManageSegel) return '';
-        
+
             if (d.isSealed && d.hasPart)
                 return `<button class="btn btn-outline-secondary" disabled title="Sudah masuk proses shipment, tidak dapat dibuka Segel-nya lagi"><i class="fas fa-lock me-1"></i>Sealed</button>`;
             if (d.isSealed)
@@ -2520,22 +2654,21 @@
         }
 
         function buildBundleCard(unit) {
-            const membersHtml = unit.members.map(function (m, idx) {
+            const uid = `bundleDetail_${unit.bundlepk}`;
+        
+            // BARU -- FIX UTAMA: reuse buildPackingCard() (tampilan SAMA dengan
+            // carton biasa di luar bundle) utk anggota native, bukan lagi
+            // buildBundleMemberRow() yang compact.
+            const membersHtml = unit.members.map(function (m) {
                 const groupRows = m.groupRows;
                 const isNativeToThisPage = groupRows.some(r => r.POno === PO && r.OP === OP);
-                const uid = `bcm_${unit.bundlepk}_${idx}`;
-                return isNativeToThisPage
-                    ? buildBundleMemberRow(groupRows, uid)
-                    : buildDisabledMiniCartonCard(groupRows);
+                return buildPackingCard(groupRows, 'col-12', !isNativeToThisPage);
             }).join('');
-
+        
             const totalCount = unit.members.length;
             const sealedCount = unit.members.filter(m => m.groupRows.every(r => Number(r.segel) === 1)).length;
             const allSealed = sealedCount === totalCount;
-
-            // BARU -- agregat Plan/Actual SELURUH anggota (native maupun bukan),
-            // supaya progress bar kartu Bundle mencerminkan total isi bundle,
-            // SAMA konsep dengan progress bar kartu carton biasa.
+        
             let totalPlan = 0, totalActual = 0;
             unit.members.forEach(function (m) {
                 m.groupRows.forEach(function (row) {
@@ -2547,36 +2680,28 @@
             });
             const pct = totalPlan > 0 ? Math.round((totalActual / totalPlan) * 100) : 0;
             const barColor = allSealed ? '#8bc63f' : (pct >= 100 ? '#8bc63f' : '#f97316');
-
+        
             const anyReject = unit.members.some(m => m.groupRows.some(r => Number(r.reject) === 1));
             const rejectBadgeHtml = anyReject
                 ? `<span class="badge-soft" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;"><i class="fas fa-times-circle me-1"></i>Reject</span>`
                 : '';
-
+        
             const ribbonHtml = allSealed ? '<div class="ribbon-segel">SEGEL</div>' : '';
-
             const bundleNobar = unit.members[0]?.groupRows[0]?.bundle_nobar || null;
-
             const isPackingAdmin = !!window.pageCfg.showAddPacking;
-
+        
             const editBundleBtnHtml = isPackingAdmin
                 ? `<i class="fas fa-pen icon-btn" title="Edit Carton Besar" onclick="event.stopPropagation(); editBundleCarton(${unit.bundlepk})"></i>`
                 : '';
-
+        
             const sealBadgeHtml = `<span class="badge-status ${allSealed ? 'sealed' : 'planned'}">${allSealed ? 'Sealed' : `${sealedCount}/${totalCount} Sealed`}</span>`;
-
+        
             const bundleSealBtnHtml = (!isPackingAdmin && window.canManageSegel)
                 ? (allSealed
                     ? `<button class="btn btn-outline-secondary w-100" onclick="event.stopPropagation(); openSegelBundleModal(0, ${unit.bundlepk})"><i class="fas fa-unlock me-1"></i>Unseal</button>`
                     : `<button class="btn btn-dark w-100" onclick="event.stopPropagation(); openSegelBundleModal(1, ${unit.bundlepk})">Seal</button>`)
                 : '';
-
-            // GANTI TOTAL -- struktur template SEKARANG SAMA PERSIS dengan
-            // buildPackingCard(): ribbon -> badge row -> subline -> progress bar
-            // -> "sizes" (di sini diisi daftar anggota) -> barcode -> card-actions.
-            // Kartu luar SENGAJA TIDAK punya class 'packing-select-item'/onclick
-            // select (kartu Bundle itu sendiri tetap tidak bisa diklik-pilih,
-            // cuma tombol Edit Bundle / Seal Bundle yang aktif).
+        
             return `<div class="col-12 col-md-6 col-xl-4"><div class="packing-bundle-card" style="border:2px solid #92400e; border-radius:12px; padding:12px; background:#fdf3e7; position:relative;">
                 ${ribbonHtml}
                 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
@@ -2590,27 +2715,46 @@
                     <div class="progress-main flex-grow-1"><span class="bar" style="width:${Math.min(100,pct)}%; background:${barColor};"></span></div>
                     <div class="text-nowrap" style="font-size:12.5px;"><strong>${totalActual}</strong> / ${totalPlan} pcs <span class="text-muted">${pct}%</span></div>
                 </div>
-
-                <div class="packing-card-sizes" style="max-height:220px; overflow-y:auto;">
+        
+                ${bundleNobar ? `<div class="card-barcode"><span class="barcode-text"><i class="fas fa-barcode me-1"></i>${bundleNobar}</span></div>` : ''}
+        
+                <div class="card-actions">
+                    <button type="button" class="btn btn-outline-dark w-100" onclick="event.stopPropagation(); toggleBundleDetailExpand('${uid}', this, ${totalCount})">
+                        <i class="fas fa-chevron-down me-1" id="${uid}_icon"></i> Lihat Detail Carton (${totalCount})
+                    </button>
+                </div>
+        
+                <div id="${uid}" class="row g-2 mt-1" style="display:none;">
                     ${membersHtml}
                 </div>
-
-                ${bundleNobar ? `<div class="card-barcode"><span class="barcode-text"><i class="fas fa-barcode me-1"></i>${bundleNobar}</span></div>` : ''}
-
-                ${bundleSealBtnHtml ? `<div class="card-actions">${bundleSealBtnHtml}</div>` : ''}
+        
+                ${bundleSealBtnHtml ? `<div class="card-actions mt-2">${bundleSealBtnHtml}</div>` : ''}
             </div></div>`;
+        }
+        
+        // BARU -- toggle expand/collapse detail SELURUH carton kecil di dalam
+        // Bundle (menggantikan pola lama yang selalu tampil inline scroll).
+        function toggleBundleDetailExpand(uid, btnEl, totalCount) {
+            const $detail = $('#' + uid);
+            const wasVisible = $detail.is(':visible');
+            $detail.slideToggle(150);
+            $(btnEl).html(wasVisible
+                ? `<i class="fas fa-chevron-down me-1"></i> Lihat Detail Carton (${totalCount})`
+                : `<i class="fas fa-chevron-up me-1"></i> Tutup Detail Carton`
+            );
         }
 
         function buildBundleMemberRow(groupRows, uid) {
             const d = computePackingGroupData(groupRows);
-        
-            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d.canEdit) ?
+
+            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d
+                    .canEdit) ?
                 '' :
                 `<i class="fas fa-pen icon-btn" style="font-size:11px;" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
-        
+
             const actionButtonHtml = d.canEdit ? buildActionButtonHtml(d).replace('btn ', 'btn btn-sm ') : '';
             const cardOpacityStyle = !d.canEdit ? 'opacity:.7;' : '';
-        
+
             return `
                 <div class="packing-select-item packing-mini-row" style="${cardOpacityStyle} background:#fff; border-radius:8px; border:1px solid #e2e8f0; padding:8px 10px; margin-bottom:6px;"
                     data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${d.canEdit?1:0}"
@@ -2639,7 +2783,7 @@
                 </div>
             `;
         }
-        
+
         // BARU -- toggle expand/collapse detail breakdown size per carton kecil.
         function toggleBundleMemberDetail(uid, iconEl) {
             const $detail = $('#' + uid);
@@ -2655,7 +2799,7 @@
                 .filter(r => String(r.bundlepk) === String(bundlepk))
                 .map(r => r.packpk);
         }
-        
+
         // BARU -- mini-card carton kecil yang BUKAN dari PO/OP halaman ini --
         // DISABLE total, tidak punya class 'packing-select-item' sama sekali
         // (supaya otomatis tidak ikut ke-toggle oleh logic seleksi/select-all
@@ -2674,27 +2818,43 @@
             `;
         }
 
-        function buildPackingCard(groupRows, colClass) {
+        function buildPackingCard(groupRows, colClass, forceDisabled) {
             colClass = colClass || 'col-12 col-md-6 col-xl-4';
+            forceDisabled = !!forceDisabled; // BARU
         
             const d = computePackingGroupData(groupRows);
+            const effectiveCanEdit = d.canEdit && !forceDisabled; // BARU -- forceDisabled MENGALAHKAN can_edit apa pun nilainya
+        
             const ribbonHtml = d.allSegel ? '<div class="ribbon-segel">SEGEL</div>' : '';
         
-            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d.canEdit) ?
-                '' :
-                `<i class="fas fa-pen icon-btn" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
+            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !effectiveCanEdit)
+                ? ''
+                : `<i class="fas fa-pen icon-btn" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
         
-            const readonlyBadgeHtml = !d.canEdit
-                ? `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Carton ini dibuat oleh MIF lain - hanya bisa dilihat">
-                    <i class="fas fa-lock me-1"></i>Read-only
-                </span>`
+            // BARU -- badge berbeda tergantung ALASAN disabled-nya.
+            const readonlyBadgeHtml = !effectiveCanEdit
+                ? (forceDisabled
+                    ? `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Carton ini milik PO/OP lain -- buka halaman PO/OP tersebut untuk mengedit/memilihnya">
+                        <i class="fas fa-lock me-1"></i>PO/OP Lain
+                    </span>`
+                    : `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Carton ini dibuat oleh MIF lain - hanya bisa dilihat">
+                        <i class="fas fa-lock me-1"></i>Read-only
+                    </span>`)
                 : '';
         
-            const actionButtonHtml = d.canEdit ? buildActionButtonHtml(d) : '';
+            const actionButtonHtml = effectiveCanEdit ? buildActionButtonHtml(d) : '';
         
-            const cardOpacityStyle = !d.canEdit ? 'opacity:.7;' : '';
+            const cardOpacityStyle = !effectiveCanEdit ? 'opacity:.7;' : '';
         
-            return `<div class="${colClass}"><div class="packing-select-item packing-card" style="${cardOpacityStyle}" data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${d.canEdit?1:0}" onclick="onPackingItemClick(event, this)">
+            // BARU -- kalau forceDisabled, HAPUS kemampuan klik-pilih sama sekali
+            // (bukan cuma "read-only tapi masih bisa diklik"), supaya carton
+            // milik PO/OP lain benar-benar tidak bisa ikut ke-toggle oleh
+            // mekanisme seleksi/select-all mana pun.
+            const selectableClass = forceDisabled ? '' : 'packing-select-item';
+            const onclickAttr = forceDisabled ? '' : `onclick="onPackingItemClick(event, this)"`;
+            const cursorStyle = forceDisabled ? 'cursor:not-allowed;' : '';
+        
+            return `<div class="${colClass}"><div class="${selectableClass} packing-card" style="${cardOpacityStyle}${cursorStyle}" data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${effectiveCanEdit?1:0}" ${onclickAttr}>
                 ${ribbonHtml}
                 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                     <span class="ctn-code">${d.first.carton??'-'}</span>
@@ -2721,20 +2881,21 @@
 
         function buildPackingListRow(groupRows) {
             const d = computePackingGroupData(groupRows);
-        
-            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d.canEdit) ?
+
+            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !d
+                    .canEdit) ?
                 '<span class="text-muted small">-</span>' :
                 `<i class="fas fa-pen icon-btn" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
-        
+
             const actionButtonHtml = d.canEdit ? buildActionButtonHtml(d).replace('btn ', 'btn btn-sm ') : '';
             const segelIcon = d.allSegel ? '<i class="fas fa-lock text-danger ms-1" title="Sudah Segel"></i>' : '';
-        
-            const readonlyBadgeHtml = !d.canEdit
-                ? `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Dibuat user/pos lain"><i class="fas fa-lock me-1"></i>Read-only</span>`
-                : '';
-        
+
+            const readonlyBadgeHtml = !d.canEdit ?
+                `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Dibuat user/pos lain"><i class="fas fa-lock me-1"></i>Read-only</span>` :
+                '';
+
             const rowOpacityStyle = !d.canEdit ? 'style="opacity:.7;"' : '';
-        
+
             return `<tr class="packing-select-item packing-list-row" ${rowOpacityStyle} data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${d.canEdit?1:0}" onclick="onPackingItemClick(event, this)">
                 <td class="text-start"><strong>${d.first.carton??'-'}</strong>${segelIcon}<div><span class="badge-soft ${d.compositionClass}" style="font-size:10px;">${d.compositionLabel}</span>${d.partBadgeHtml}${d.crossPoBadgeHtml}${d.bundleBadgeHtml}${d.rejectBadgeHtml}${readonlyBadgeHtml}</div></td>
                 <td class="text-start" style="font-size:12.5px; color:#475569;">
@@ -2751,7 +2912,7 @@
             </tr>`;
         }
 
-        let pgLastClickedItem = null; 
+        let pgLastClickedItem = null;
 
         function onPackingItemClick(e, itemEl) {
             if ($(e.target).closest('.icon-btn, .pc-edit-btn, .card-actions, button, a').length) return;
@@ -2766,38 +2927,55 @@
                     const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
                     const rangeItems = $allItems.slice(from, to + 1);
 
-                    let skippedShipped = 0, skippedInconsistent = 0;
-                    let baselineSegel = null, baselinePart = null;
+                    let skippedShipped = 0,
+                        skippedInconsistent = 0;
+                    let baselineSegel = null,
+                        baselinePart = null;
 
-                    const alreadySelected = (window.selectedRowsCache && Object.values(window.selectedRowsCache)[0]) || null;
+                    const alreadySelected = (window.selectedRowsCache && Object.values(window.selectedRowsCache)[0]) ||
+                    null;
                     if (alreadySelected) {
                         baselineSegel = Number(alreadySelected.segel) === 1;
                         baselinePart = alreadySelected.exportpk ?? '';
                     }
 
-                    rangeItems.each(function () {
-                        const packpksArr = String($(this).data('packpks') || '').split(',').map(Number).filter(Boolean);
+                    rangeItems.each(function() {
+                        const packpksArr = String($(this).data('packpks') || '').split(',').map(Number).filter(
+                            Boolean);
                         const groupRows = (window.lastPackingRows || []).filter(r => packpksArr.includes(r.packpk));
                         if (!groupRows.length) return;
 
-                        if (groupRows.some(r => r.ship_shipped === true)) { skippedShipped++; return; }
-                        if (groupRows.some(r => r.can_edit !== true)) { skippedInconsistent++; return; } 
-
-                        const segelState = groupRows.some(r => Number(r.segel) === 1);
-                        const partState = groupRows.map(r => r.exportpk).find(p => p !== null && p !== undefined && p !== '') ?? '';
-                        if (baselineSegel === null) {
-                            baselineSegel = segelState; baselinePart = partState;
-                        } else if (segelState !== baselineSegel || String(partState) !== String(baselinePart)) {
-                            skippedInconsistent++; return;
+                        if (groupRows.some(r => r.ship_shipped === true)) {
+                            skippedShipped++;
+                            return;
+                        }
+                        if (groupRows.some(r => r.can_edit !== true)) {
+                            skippedInconsistent++;
+                            return;
                         }
 
-                        groupRows.forEach(row => { window.selectedRowsCache[row.packpk] = row; });
+                        const segelState = groupRows.some(r => Number(r.segel) === 1);
+                        const partState = groupRows.map(r => r.exportpk).find(p => p !== null && p !== undefined &&
+                            p !== '') ?? '';
+                        if (baselineSegel === null) {
+                            baselineSegel = segelState;
+                            baselinePart = partState;
+                        } else if (segelState !== baselineSegel || String(partState) !== String(baselinePart)) {
+                            skippedInconsistent++;
+                            return;
+                        }
+
+                        groupRows.forEach(row => {
+                            window.selectedRowsCache[row.packpk] = row;
+                        });
                         $(this).addClass('selected');
                     });
 
                     updateSelectionGlobal();
                     if (skippedShipped || skippedInconsistent) {
-                        showToast('warning', `${skippedShipped} dilewati (Shipped), ${skippedInconsistent} dilewati (beda status Segel/Session).`);
+                        showToast('warning',
+                            `${skippedShipped} dilewati (Shipped), ${skippedInconsistent} dilewati (beda status Segel/Session).`
+                            );
                     }
                     return;
                 }
@@ -2859,7 +3037,9 @@
             }
 
             // Lolos SEMUA validasi -- BARU SEKARANG toggle DOM + cache.
-            rowsForThisItem.forEach(row => { window.selectedRowsCache[row.packpk] = row; });
+            rowsForThisItem.forEach(row => {
+                window.selectedRowsCache[row.packpk] = row;
+            });
             $item.addClass('selected');
             updateSelectionGlobal();
         }
@@ -2875,18 +3055,19 @@
                 !domSelectedPackpks.includes(pk));
             const packpks = [...new Set([...domSelectedPackpks, ...stillPersistedPackpks])];
             window.selectedPackpksGlobal = packpks;
-        
+
             if (packpks.length === 0 && window.pgSelectAllActive) {
                 window.pgSelectAllActive = false;
                 $('#btnSelectAllVisible').html('<i class="fas fa-check-double me-1"></i> Pilih Semua');
             }
-        
+
             if (packpks.length === 0) {
                 $('#selectedCountGlobal').text('0');
                 $('#stickTopBarGlobal').hide();
                 return;
             }
             const selectedRows = packpks.map(pk => window.selectedRowsCache[pk]).filter(Boolean);
+
             function abortSelection(message) {
                 showToast('warning', message);
                 $('.packing-select-item').removeClass('selected');
@@ -2933,11 +3114,13 @@
             const anyReturning = selectedRows.some(r => r.ship_returning === true);
             const anyReject = selectedRows.some(r => Number(r.reject) === 1);
 
-            if ((anyInspecting || anyReturning) && !window.pageCfg.showKembalikanButton && !window.pageCfg.showShipmentActions) {
+            if ((anyInspecting || anyReturning) && !window.pageCfg.showKembalikanButton && !window.pageCfg
+                .showShipmentActions) {
                 $('#btnBukaSegelGlobal, #btnBulkSegelCtnGlobal, #btnProsesInspectGlobal, #btnProsesShipmentGlobal, ' +
-                '#btnTerimaCartonGlobal, #btnBulkActualCtnGlobal, #btnBulkDeleteActualCtnGlobal, ' +
-                '#btnBulkCopyGlobal, #btnBulkDeleteGlobal, #btnBuatDokumenInspectGlobal, #btnKembalikanStuffingGlobal')
-                .addClass('d-none');
+                        '#btnTerimaCartonGlobal, #btnBulkActualCtnGlobal, #btnBulkDeleteActualCtnGlobal, ' +
+                        '#btnBulkCopyGlobal, #btnBulkDeleteGlobal, #btnBuatDokumenInspectGlobal, #btnKembalikanStuffingGlobal'
+                        )
+                    .addClass('d-none');
                 return;
             }
 
@@ -2956,28 +3139,30 @@
             if (window.pageCfg.showShipmentActions) {
                 const eligibleForInspect = hasSegel && !anyInspecting;
                 $('#btnProsesInspectGlobal').toggleClass('d-none', !eligibleForInspect);
-            
+
                 const eligibleForShipment = hasSegel && !anyInspecting && hasPart;
-            
-                const selectedExportpkValue = selectedRows.length
-                    ? (selectedRows[0].exportpk !== null && selectedRows[0].exportpk !== undefined ? String(selectedRows[0].exportpk) : '')
-                    : '';
+
+                const selectedExportpkValue = selectedRows.length ?
+                    (selectedRows[0].exportpk !== null && selectedRows[0].exportpk !== undefined ? String(selectedRows[0]
+                        .exportpk) : '') :
+                    '';
                 const matchedSessionPart = (window.shipmentPlanPartsCache || [])
                     .find(p => String(p.exportpk) === selectedExportpkValue);
-                const sessionIsStarted = !!(matchedSessionPart && matchedSessionPart.startship && !matchedSessionPart.endship);
-            
+                const sessionIsStarted = !!(matchedSessionPart && matchedSessionPart.startship && !matchedSessionPart
+                    .endship);
+
                 $('#btnProsesShipmentGlobal').toggleClass('d-none', !(eligibleForShipment && sessionIsStarted));
-            
+
                 const allReturning = selectedRows.length > 0 && selectedRows.every(r => r.ship_returning === true);
                 $('#btnTerimaCartonGlobal').toggleClass('d-none', !allReturning);
             }
 
             if (window.pageCfg.showCtnManagement) {
                 const blockCtnManagement = hasSegel || anyInspecting || anyReturning;
-            
+
                 $('#btnBulkActualCtnGlobal, #btnBulkDeleteActualCtnGlobal, #btnBulkCopyGlobal')
                     .toggleClass('d-none', blockCtnManagement);
-            
+
                 // Delete CTN TAMBAHAN disembunyikan kalau carton
                 // sudah punya session/part (hasPart), TIDAK PEDULI status segel/
                 // inspect-nya apa.
@@ -3049,11 +3234,11 @@
             const navbar = document.querySelector('#navbarMain, nav.navbar, header.navbar, .app-navbar');
             let top = 0;
             if (navbar) top = Math.max(0, navbar.getBoundingClientRect().bottom);
-        
+
             if (bar) {
                 bar.style.top = top + 'px';
             }
-        
+
             //  offset utk card Shipment Plan yang di-sticky-kan
             // (.shipment-plan-card.is-active) -- ikut turun kalau sticky bar carton
             // sedang tampil (supaya tidak numpuk), ikut naik kalau sticky bar
@@ -3067,15 +3252,22 @@
 
         function loadShipDateCacheOnlyGlobal() {
             if (!R.partSummaryGlobal) return;
-            $.get(R.partSummaryGlobal, { po: PO, op: OP, poref: POREF, mif: MIF }, function (data) {
+            $.get(R.partSummaryGlobal, {
+                po: PO,
+                op: OP,
+                poref: POREF,
+                mif: MIF
+            }, function(data) {
                 window.shipmentPlanPartsCache = data.parts || [];
                 if (window.lastPackingRows && window.lastPackingRows.length) {
                     renderPackingCards(window.lastPackingRows);
                 }
             });
         }
-        
-        window.addEventListener('scroll', syncStickyBarGlobalPosition, { passive: true });
+
+        window.addEventListener('scroll', syncStickyBarGlobalPosition, {
+            passive: true
+        });
         window.addEventListener('resize', syncStickyBarGlobalPosition);
     </script>
 
@@ -3119,17 +3311,18 @@
                 function showScanFeedback(ok, msgHtml) {
                     const $icon = feedback.querySelector('.scan-nobar-feedback-icon');
                     const $text = feedback.querySelector('.scan-nobar-feedback-text');
-                
+
                     if ($text) {
                         $text.innerHTML = msgHtml;
                     } else {
                         feedback.innerHTML = msgHtml;
                     }
-                
+
                     if ($icon) {
-                        $icon.className = 'fas ' + (ok ? 'fa-circle-check' : 'fa-triangle-exclamation') + ' scan-nobar-feedback-icon';
+                        $icon.className = 'fas ' + (ok ? 'fa-circle-check' : 'fa-triangle-exclamation') +
+                            ' scan-nobar-feedback-icon';
                     }
-                
+
                     feedback.style.color = ok ? '#15803d' : '#DC143C';
                 }
                 input.addEventListener('keydown', function(e) {
@@ -3156,7 +3349,7 @@
                             loadPackingCards();
                             reloadBreakdownSummary();
                             if (window.pageCfg.showShipmentPlan) {
-                                loadShipmentPlanCards(); 
+                                loadShipmentPlanCards();
                             }
                         },
                         error: function(xhr) {
@@ -3215,7 +3408,8 @@
                 }
                 const parts = window.shipmentPlanPartsCache || [];
                 const matchedPart = parts.find(p => String(p.exportpk) === String(active));
-                const label = matchedPart ? sessionLabel(matchedPart) : `Session (exportpk ${active})`; // FIX -- sessionLabel(matchedPart)
+                const label = matchedPart ? sessionLabel(matchedPart) :
+                `Session (exportpk ${active})`; // FIX -- sessionLabel(matchedPart)
                 $('#activeSessionBadge').html(
                     `<i class="fas fa-circle-play text-primary me-1"></i>Sedang stuffing: <strong>${label}</strong>`
                 );
@@ -3228,16 +3422,19 @@
             function populatePartFilterOptions(parts) {
                 const $el = $('#filterPartGlobal');
                 if (!$el.length) return;
-            
+
                 const currentValue = $el.data('combobox') ? $el.combobox('getValue') : '';
-                const data = [{ value: '', text: 'Semua Shipplan' }];
-                parts.forEach(function (p) {
+                const data = [{
+                    value: '',
+                    text: 'Semua Shipplan'
+                }];
+                parts.forEach(function(p) {
                     data.push({
                         value: String(p.exportpk),
                         text: `${sessionLabel(p)} (PEB ${p.pebno ?? '-'})` // FIX -- sessionLabel(p), bukan sessionLabel(p.session_no)
                     });
                 });
-            
+
                 $el.combobox({
                     data: data,
                     valueField: 'value',
@@ -3245,7 +3442,7 @@
                     value: data.some(d => d.value === currentValue) ? currentValue : '',
                     editable: false,
                     panelHeight: 'auto',
-                    onChange: function () {
+                    onChange: function() {
                         if (window.inspectionActiveTab === 'history') {
                             loadHistoryCards();
                         } else {
@@ -3256,8 +3453,14 @@
             }
 
             function loadShipmentPlanCards() {
-                $.get(R.partSummaryGlobal, { po: PO, op: OP, poref: POREF, mif: MIF }, function (data) {
-                    const parts = data.parts || [], wrap = $('#shipmentPlanCards');
+                $.get(R.partSummaryGlobal, {
+                    po: PO,
+                    op: OP,
+                    poref: POREF,
+                    mif: MIF
+                }, function(data) {
+                    const parts = data.parts || [],
+                        wrap = $('#shipmentPlanCards');
                     wrap.empty();
 
                     window.shipmentPlanPartsCache = parts;
@@ -3269,50 +3472,58 @@
                     }
 
                     if (data.error) {
-                        wrap.html(`<div class="text-danger" style="font-size:12.5px;"><i class="fas fa-triangle-exclamation me-1"></i>${data.error}</div>`);
+                        wrap.html(
+                            `<div class="text-danger" style="font-size:12.5px;"><i class="fas fa-triangle-exclamation me-1"></i>${data.error}</div>`
+                            );
                         return;
                     }
                     if (!parts.length) {
-                        wrap.html('<div class="text-muted" style="font-size:12.5px;">Belum ada rencana Export dari sistem EXIM untuk carton PO/OP ini.</div>');
+                        wrap.html(
+                            '<div class="text-muted" style="font-size:12.5px;">Belum ada rencana Export dari sistem EXIM untuk carton PO/OP ini.</div>'
+                            );
                         return;
                     }
 
                     const anyStarted = parts.some(p => !!p.startship && !p.endship);
                     const activePart = getActiveSessionPart();
                     if (activePart !== null) {
-                        const stillValid = parts.some(p => String(p.exportpk) === String(activePart) && !!p.startship && !p.endship);
+                        const stillValid = parts.some(p => String(p.exportpk) === String(activePart) && !!p.startship &&
+                            !p.endship);
                         if (!stillValid) setActiveSessionPart(null);
                     }
 
                     const notDoneNotStarted = parts.filter(p => !p.endship && !p.startship);
-                    const nextEligibleExportpk = notDoneNotStarted.length
-                        ? notDoneNotStarted.slice().sort((a, b) => a.session_no - b.session_no)[0].exportpk
-                        : null;
-                    const nextEligibleSessionNo = notDoneNotStarted.length
-                        ? notDoneNotStarted.slice().sort((a, b) => a.session_no - b.session_no)[0].session_no
-                        : null;
+                    const nextEligibleExportpk = notDoneNotStarted.length ?
+                        notDoneNotStarted.slice().sort((a, b) => a.session_no - b.session_no)[0].exportpk :
+                        null;
+                    const nextEligibleSessionNo = notDoneNotStarted.length ?
+                        notDoneNotStarted.slice().sort((a, b) => a.session_no - b.session_no)[0].session_no :
+                        null;
 
-                    parts.forEach(function (p) {
+                    parts.forEach(function(p) {
                         const pct = p.total > 0 ? Math.round((p.shipped / p.total) * 100) : 0,
                             isDone = !!p.endship,
                             isStarted = !!p.startship && !p.endship,
                             barColor = isDone ? '#8bc63f' : '#f97316';
                         const exdateLabel = formatStampDate(p.exdate) || '-';
-                    
-                        const containerListHtml = (p.containers || []).map(function (c) {
+
+                        const containerListHtml = (p.containers || []).map(function(c) {
                             const contStarted = !!c.start_ship;
                             const contEnded = !!c.segel;
                             let statusBadge;
                             if (contEnded) {
-                                statusBadge = `<span class="badge" style="background:#8bc63f; font-size:9px;">Selesai</span>`;
+                                statusBadge =
+                                    `<span class="badge" style="background:#8bc63f; font-size:9px;">Selesai</span>`;
                             } else if (contStarted) {
-                                statusBadge = `<span class="badge" style="background:#f97316; font-size:9px;">Berjalan</span>`;
+                                statusBadge =
+                                    `<span class="badge" style="background:#f97316; font-size:9px;">Berjalan</span>`;
                             } else if (!p.actcontdate) {
                                 statusBadge = `<span class="badge bg-secondary" style="font-size:9px;" title="Menunggu Actual Container Date dari EXIM">
                                     <i class="fas fa-lock" style="font-size:8px;"></i> Menunggu
                                 </span>`;
                             } else {
-                                statusBadge = `<button class="btn btn-outline-dark btn-sm py-0 px-2" style="font-size:10.5px;" onclick="startStuffingSession('${p.exportpk}', ${c.contpk})">Mulai</button>`;
+                                statusBadge =
+                                    `<button class="btn btn-outline-dark btn-sm py-0 px-2" style="font-size:10.5px;" onclick="startStuffingSession('${p.exportpk}', ${c.contpk})">Mulai</button>`;
                             }
                             return `
                                 <div style="font-size:10.5px; color:#64748b; display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:3px;">
@@ -3321,14 +3532,16 @@
                                 </div>
                             `;
                         }).join('');
-                    
+
                         let topActionHtml = '';
                         if (isDone) {
-                            topActionHtml = `<button class="btn btn-outline-success btn-sm" disabled><i class="fas fa-check me-1"></i>Selesai</button>`;
+                            topActionHtml =
+                                `<button class="btn btn-outline-success btn-sm" disabled><i class="fas fa-check me-1"></i>Selesai</button>`;
                         } else if (isStarted) {
-                            topActionHtml = `<button class="btn btn-dark btn-sm" onclick="focusSessionPart('${p.exportpk}')">Lanjut</button>`;
+                            topActionHtml =
+                                `<button class="btn btn-dark btn-sm" onclick="focusSessionPart('${p.exportpk}')">Lanjut</button>`;
                         }
-                    
+
                         wrap.append(`
                             <div class="shipment-plan-card ${isStarted ? 'is-active' : ''} ${isDone ? 'is-done' : ''}" style="width:280px;">
                                 <div class="shipment-plan-title d-flex align-items-center justify-content-between">
@@ -3359,22 +3572,22 @@
 
             function renderActiveShipmentFloatingCard(parts) {
                 const $float = $('#activeShipmentFloatingCard');
-            
+
                 if (!window.isStuffingUser) {
                     $float.addClass('d-none').empty();
                     return;
                 }
-            
+
                 const activeP = parts.find(p => !!p.startship && !p.endship);
-            
+
                 if (!activeP) {
                     $float.addClass('d-none').empty();
                     return;
                 }
-            
+
                 const pct = activeP.total > 0 ? Math.round((activeP.shipped / activeP.total) * 100) : 0;
                 const barColor = '#f97316';
-            
+
                 $float.html(`
                     <div class="d-flex align-items-center justify-content-between mb-1">
                         <span style="font-size:11px; font-weight:700; color:#1e293b;">
@@ -3397,47 +3610,51 @@
             function openShipmentPlanDetailModal(exportpk) {
                 $('#shipmentPlanDetailBody').html('<div class="text-center text-muted py-5">Memuat...</div>');
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('shipmentPlanDetailModal')).show();
-            
-                $.get(R.shipmentPlanDetailGlobal, { exportpk: exportpk }, function (data) {
+
+                $.get(R.shipmentPlanDetailGlobal, {
+                    exportpk: exportpk
+                }, function(data) {
                     renderShipmentPlanDetail(data);
-                }).fail(function (xhr) {
+                }).fail(function(xhr) {
                     const msg = xhr.responseJSON?.error || 'Gagal memuat detail shipment plan.';
                     $('#shipmentPlanDetailBody').html(
                         `<div class="text-center text-danger py-5"><i class="fas fa-triangle-exclamation me-1"></i>${msg}</div>`
                     );
                 });
             }
-            
-            let spdContainersCache = [];   // containers[] dari response terakhir
+
+            let spdContainersCache = []; // containers[] dari response terakhir
             let spdActivePoOpFilter = null; // { POno, OP } atau null (tampil semua)
-            
+
             function renderShipmentPlanDetail(data) {
                 const e = data.export || {};
                 const poOpList = data.po_op_list || [];
                 const containers = data.containers || [];
-            
+
                 spdContainersCache = containers;
                 spdActivePoOpFilter = null;
-            
+
                 //  chip sekarang KLIK-ABLE, gabung Factory + MIF,
                 // dan tag data-poop supaya bisa dipakai filter visualisasi.
-                const poOpChipsHtml = poOpList.length
-                    ? poOpList.map((p, idx) => `
+                const poOpChipsHtml = poOpList.length ?
+                    poOpList.map((p, idx) => `
                         <span class="spd-poop-chip" id="spdChip_${idx}"
                             onclick="toggleSpdPoOpFilter('${(p.POno ?? '').replace(/'/g, "\\'")}', '${(p.OP ?? '').replace(/'/g, "\\'")}', ${idx})">
                             <span>${p.POno ?? '-'} &middot; ${p.OP ?? '-'}</span>
                             ${p.mif ? `<span class="spd-mif-tag">MIF ${p.mif}</span>` : ''}
                         </span>
-                    `).join('')
-                    : '<span class="text-muted" style="font-size:12px;">Tidak ada data PO/OP.</span>';
-            
-                const containersTableHtml = containers.length
-                    ? containers.map(c => {
-                        const isSegel = !!c.segel; // GANTI nama variabel -- lebih jelas: ini status SEGEL, bukan "berakhir kirim"
+                    `).join('') :
+                    '<span class="text-muted" style="font-size:12px;">Tidak ada data PO/OP.</span>';
+
+                const containersTableHtml = containers.length ?
+                    containers.map(c => {
+                        const isSegel = !!c
+                        .segel; // GANTI nama variabel -- lebih jelas: ini status SEGEL, bukan "berakhir kirim"
                         const contStarted = !!c.start_ship;
                         let statusHtml;
                         if (isSegel) statusHtml = `<span class="badge" style="background:#8bc63f;">Selesai</span>`;
-                        else if (contStarted) statusHtml = `<span class="badge" style="background:#f97316;">Berjalan</span>`;
+                        else if (contStarted) statusHtml =
+                        `<span class="badge" style="background:#f97316;">Berjalan</span>`;
                         else statusHtml = `<span class="badge bg-secondary">Belum Mulai</span>`;
                         return `
                             <tr>
@@ -3449,9 +3666,9 @@
                                 <td style="font-size:11px;">${formatStampDate(c.segel) || '-'}</td>
                             </tr>
                         `;
-                    }).join('')
-                    : `<tr><td colspan="6" class="text-center text-muted py-3">Belum ada container.</td></tr>`;
-            
+                    }).join('') :
+                    `<tr><td colspan="6" class="text-center text-muted py-3">Belum ada container.</td></tr>`;
+
                 $('#shipmentPlanDetailBody').html(`
                     <div class="row g-3 mb-3">
                         <div class="col-6">
@@ -3487,10 +3704,10 @@
                             <div class="fw-semibold" style="font-size:13px;">${Number(e.totctn || 0).toLocaleString()}</div>
                         </div>
                         ${e.remark ? `
-                        <div class="col-12">
-                            <div class="text-secondary" style="font-size:11px;">Catatan</div>
-                            <div style="font-size:12.5px; font-style:italic;">${e.remark}</div>
-                        </div>` : ''}
+                                <div class="col-12">
+                                    <div class="text-secondary" style="font-size:11px;">Catatan</div>
+                                    <div style="font-size:12.5px; font-style:italic;">${e.remark}</div>
+                                </div>` : ''}
                     </div>
             
                     <hr class="my-3">
@@ -3527,19 +3744,24 @@
                         <i class="fas fa-circle-info me-1"></i>Klik chip PO/OP di atas untuk menyorot carton milik kombinasi itu saja.
                     </div>
                 `);
-            
+
                 // Populate dropdown container + render box container pertama.
                 const $sel = $('#spdContainerSelect');
                 $sel.empty();
                 containers.forEach((c, idx) => {
-                    $sel.append(`<option value="${idx}">${c.contno ?? ('Container ' + (idx + 1))} (${c.qty_ctn} ctn)</option>`);
+                    $sel.append(
+                        `<option value="${idx}">${c.contno ?? ('Container ' + (idx + 1))} (${c.qty_ctn} ctn)</option>`
+                        );
                 });
                 onSpdContainerChange();
             }
 
             function naturalSortCartons(cartons) {
                 return [...cartons].sort((a, b) =>
-                    String(a.carton ?? '').localeCompare(String(b.carton ?? ''), undefined, { numeric: true, sensitivity: 'base' })
+                    String(a.carton ?? '').localeCompare(String(b.carton ?? ''), undefined, {
+                        numeric: true,
+                        sensitivity: 'base'
+                    })
                 );
             }
 
@@ -3566,10 +3788,13 @@
                 const bundleOrder = [];
                 const standaloneCartons = [];
 
-                sortedCartons.forEach(function (c) {
+                sortedCartons.forEach(function(c) {
                     if (c.bundlepk) {
                         if (!bundleGroups[c.bundlepk]) {
-                            bundleGroups[c.bundlepk] = { bundleCartonName: c.bundle_carton, cartons: [] };
+                            bundleGroups[c.bundlepk] = {
+                                bundleCartonName: c.bundle_carton,
+                                cartons: []
+                            };
                             bundleOrder.push(c.bundlepk);
                         }
                         bundleGroups[c.bundlepk].cartons.push(c);
@@ -3585,21 +3810,21 @@
                 // (Mix PO, di kotaknya sendiri).
                 function buildCartonBoxHtml(c, i) {
                     const poOpList = c.po_op_list || [];
-                    const matchesFilter = !spdActivePoOpFilter
-                        || poOpList.some(p => p.POno === spdActivePoOpFilter.POno && p.OP === spdActivePoOpFilter.OP);
+                    const matchesFilter = !spdActivePoOpFilter ||
+                        poOpList.some(p => p.POno === spdActivePoOpFilter.POno && p.OP === spdActivePoOpFilter.OP);
                     const dimmedClass = matchesFilter ? '' : ' dimmed';
                     const shippedClass = c.shipped ? ' shipped' : '';
                     const cartonLabel = c.carton ?? '-';
                     const statusText = c.shipped ? ' | Sudah Masuk' : '';
-                    const poOpLabel = poOpList.length
-                        ? poOpList.map(p => `${p.POno ?? '-'} &middot; ${p.OP ?? '-'}`).join(', ')
-                        : '';
+                    const poOpLabel = poOpList.length ?
+                        poOpList.map(p => `${p.POno ?? '-'} &middot; ${p.OP ?? '-'}`).join(', ') :
+                        '';
                     const mixTag = c.is_mix ? ' [Mix PO]' : '';
                     const title = `Carton ${cartonLabel}${poOpLabel ? ' | ' + poOpLabel : ''}${mixTag}${statusText}`;
 
-                    const mixIconHtml = c.is_mix
-                        ? `<i class="fas fa-shuffle" style="position:absolute; top:2px; left:2px; font-size:8px; color:#8b5cf6;" title="Mix PO: ${poOpLabel}"></i>`
-                        : '';
+                    const mixIconHtml = c.is_mix ?
+                        `<i class="fas fa-shuffle" style="position:absolute; top:2px; left:2px; font-size:8px; color:#8b5cf6;" title="Mix PO: ${poOpLabel}"></i>` :
+                        '';
 
                     return `
                         <div class="spd-carton-box${dimmedClass}${shippedClass}" style="animation-delay:${Math.min(i * 8, 600)}ms; position:relative;" title="${title.replace(/"/g,'')}">
@@ -3615,7 +3840,7 @@
                 // Render klaster Bundle DULU -- masing-masing dibungkus bingkai
                 // putus-putus coklat (SAMA skema warna dgn kartu Bundle di packing
                 // list), berisi kotak-kotak carton anggotanya.
-                bundleOrder.forEach(function (bundlepk) {
+                bundleOrder.forEach(function(bundlepk) {
                     const group = bundleGroups[bundlepk];
                     const innerHtml = group.cartons.map(c => buildCartonBoxHtml(c, counter++)).join('');
                     html += `
@@ -3630,18 +3855,18 @@
                 });
 
                 // Lalu carton standalone (bukan anggota Bundle apa pun) seperti biasa.
-                standaloneCartons.forEach(function (c) {
+                standaloneCartons.forEach(function(c) {
                     html += buildCartonBoxHtml(c, counter++);
                 });
 
                 $box.html(html);
             }
-            
+
             // dipanggil saat dropdown container berubah.
             function onSpdContainerChange() {
                 renderSpdContainerBox();
             }
-            
+
             // toggle filter PO/OP: klik chip yang sama lagi -> lepas filter
             // (tampilkan semua carton di container).
             function toggleSpdPoOpFilter(pono, op, idx) {
@@ -3650,12 +3875,15 @@
                 if (isSame) {
                     spdActivePoOpFilter = null;
                 } else {
-                    spdActivePoOpFilter = { POno: pono, OP: op };
+                    spdActivePoOpFilter = {
+                        POno: pono,
+                        OP: op
+                    };
                     $(`#spdChip_${idx}`).addClass('active');
                 }
                 renderSpdContainerBox();
             }
- 
+
 
             function startStuffingSession(part, contpk) {
                 if (!contpk) {
@@ -3665,15 +3893,22 @@
                 $.ajax({
                     url: R.eximUpdateShipment,
                     method: 'POST',
-                    data: { exportpk: part, contpk: contpk, action: 'start' },
-                    success: function (res) {
+                    data: {
+                        exportpk: part,
+                        contpk: contpk,
+                        action: 'start'
+                    },
+                    success: function(res) {
                         showToast(res.icon, res.title);
                         setActiveSessionPart(part);
                         focusSessionPart(part);
                         loadShipmentPlanCards();
                     },
-                    error: function (xhr) {
-                        const res = xhr.responseJSON || { icon: 'error', title: 'Gagal mengirim start_ship ke EXIM. Session TIDAK dimulai.' };
+                    error: function(xhr) {
+                        const res = xhr.responseJSON || {
+                            icon: 'error',
+                            title: 'Gagal mengirim start_ship ke EXIM. Session TIDAK dimulai.'
+                        };
                         showToast(res.icon, res.title);
                         loadShipmentPlanCards();
                     }
@@ -3684,12 +3919,12 @@
                 if ($('#filterPartGlobal').data('combobox')) {
                     $('#filterPartGlobal').combobox('setValue', String(exportpk));
                 }
-                const targetId = window.packingViewModeGlobal === 'list'
-                    ? 'packingListTableWrapper'
-                    : window.packingViewModeGlobal === 'compact'
-                        ? 'packingCompactWrapper'
-                        : 'packingCardsGrid';
-            
+                const targetId = window.packingViewModeGlobal === 'list' ?
+                    'packingListTableWrapper' :
+                    window.packingViewModeGlobal === 'compact' ?
+                    'packingCompactWrapper' :
+                    'packingCardsGrid';
+
                 document.getElementById(targetId)?.scrollIntoView({
                     behavior: 'smooth',
                     block: 'start'
@@ -4121,15 +4356,16 @@
                 return String(str).replace(/[^a-zA-Z0-9_-]/g, '_');
             }
 
-            let inspecCart = []; // [{packpk, shippk, carton, size, color, secsz, qty:1}] -- SETIAP entry SELALU qty:1, TIDAK PERNAH digabung
+            let
+            inspecCart = []; // [{packpk, shippk, carton, size, color, secsz, qty:1}] -- SETIAP entry SELALU qty:1, TIDAK PERNAH digabung
             let inspecRemainingBySizeKey = {}; // key = `${packpk}|${sizeLabel}` -> sisa yang boleh diambil
             window.editingInspecpk = null;
- 
+
             // buka modal dalam mode EDIT, isi ulang dari dokumen yang sudah ada.
             function editInspecDocument(inspecpk) {
-                $.get(`${R.inspectShow}/${inspecpk}`, function (data) {
+                $.get(`${R.inspectShow}/${inspecpk}`, function(data) {
                     window.editingInspecpk = data.inspecpk;
-            
+
                     inspecCart = data.lines.map(l => ({
                         packpk: l.packpk,
                         carton: l.carton,
@@ -4138,22 +4374,29 @@
                         secsz: l.secsz,
                         qty: l.qty,
                         stspass: l.stspass,
-                        defects: (l.defects || []).map(pk => ({ defectpk: pk, defectnm: '#' + pk })),
+                        defects: (l.defects || []).map(pk => ({
+                            defectpk: pk,
+                            defectnm: '#' + pk
+                        })),
                     }));
                     inspecRemainingBySizeKey = {};
                     $('#inspecAql').val(data.aql);
                     renderInspecCart();
                     recomputeHasilDisplay();
-            
+
                     bootstrap.Modal.getOrCreateInstance(document.getElementById('inspectDocumentModal')).show();
                     loadInspectAvailableCartons(''); // muat carton yg MASIH fca=1, utk bisa tambah sample baru
-            
+
                     // resolve nama defect yang benar setelah defect master dimuat.
-                    loadDefectSubDataIfNeeded(function () {
-                        inspecCart.forEach(function (line) {
-                            line.defects = line.defects.map(function (d) {
-                                const found = inspecDefectSubCache.defects.find(x => x.defectpk === d.defectpk);
-                                return found ? { defectpk: found.defectpk, defectnm: found.defectnm } : d;
+                    loadDefectSubDataIfNeeded(function() {
+                        inspecCart.forEach(function(line) {
+                            line.defects = line.defects.map(function(d) {
+                                const found = inspecDefectSubCache.defects.find(x => x
+                                    .defectpk === d.defectpk);
+                                return found ? {
+                                    defectpk: found.defectpk,
+                                    defectnm: found.defectnm
+                                } : d;
                             });
                         });
                         renderInspecCart();
@@ -4168,15 +4411,20 @@
                 $('#inspecAql').val('');
                 $('#inspecRejectWarning').addClass('d-none');
                 renderInspecCart();
-            
+
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('inspectDocumentModal')).show();
                 loadInspectAvailableCartons('');
             }
-            
+
             // GANTI loadInspectAvailableCartons() -- TAMBAH parameter 'part' yang
             // diteruskan ke endpoint backend.
             function loadInspectAvailableCartons(part) {
-                $.get(R.inspectAvailableCartons, { po: PO, op: OP, mif: MIF, part: part }, function (data) {
+                $.get(R.inspectAvailableCartons, {
+                    po: PO,
+                    op: OP,
+                    mif: MIF,
+                    part: part
+                }, function(data) {
                     renderInspectCartonList(data.rows || []);
                 });
             }
@@ -4213,25 +4461,27 @@
                     });
                 });
 
-                cartonOrder.forEach(function (cartonNo) {
+                cartonOrder.forEach(function(cartonNo) {
                     const packRowsInCarton = cartonGroups[cartonNo];
                     const uniqueCombos = new Set(packRowsInCarton.map(r => `${r.material ?? '-'}||${r.secsz ?? ''}`));
                     const isMixed = uniqueCombos.size > 1;
                     const cartonIdSafe = safeIdPart(cartonNo);
-                
+
                     // BARU -- info Mix Polibag/Bundle, TIDAK men-disable apa pun.
-                    const anyMix = packRowsInCarton.some(r => r.mixno !== null && r.mixno !== undefined && r.mixno !== '');
-                    const anyBundle = packRowsInCarton.some(r => r.bundlepk !== null && r.bundlepk !== undefined && r.bundlepk !== '');
-                    const mixInfoHtml = anyMix
-                        ? `<span class="inspec-badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;" title="Carton fisik ini berisi juga stock dari PO/OP lain (Mix Polibag)">
+                    const anyMix = packRowsInCarton.some(r => r.mixno !== null && r.mixno !== undefined && r.mixno !==
+                        '');
+                    const anyBundle = packRowsInCarton.some(r => r.bundlepk !== null && r.bundlepk !== undefined && r
+                        .bundlepk !== '');
+                    const mixInfoHtml = anyMix ?
+                        `<span class="inspec-badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;" title="Carton fisik ini berisi juga stock dari PO/OP lain (Mix Polibag)">
                             <i class="fas fa-shuffle" style="font-size:9px;"></i> Mix PO
-                        </span>`
-                        : '';
-                    const bundleInfoHtml = anyBundle
-                        ? `<span class="inspec-badge-soft" style="background:#fdf3e7;color:#92400e;border-color:#f3dcb8;" title="Carton ini anggota Carton Besar (Bundle)">
+                        </span>` :
+                        '';
+                    const bundleInfoHtml = anyBundle ?
+                        `<span class="inspec-badge-soft" style="background:#fdf3e7;color:#92400e;border-color:#f3dcb8;" title="Carton ini anggota Carton Besar (Bundle)">
                             <i class="fas fa-box-open" style="font-size:9px;"></i> Bundle
-                        </span>`
-                        : '';
+                        </span>` :
+                        '';
 
                     let sizePillsHtml = '';
                     packRowsInCarton.forEach(function(row) {
@@ -4444,10 +4694,10 @@
                     showToast('warning', 'Ada baris berstatus Defect yang belum dipilih tipe defect-nya.');
                     return;
                 }
-            
+
                 const isEdit = !!window.editingInspecpk;
                 const url = isEdit ? `${R.inspectUpdate}/${window.editingInspecpk}` : R.inspectStore;
-            
+
                 $('#btnSubmitInspecDoc').prop('disabled', true);
                 $.ajax({
                     url: url,
@@ -4464,17 +4714,20 @@
                             defects: l.defects.map(d => d.defectpk),
                         })),
                     },
-                    success: function (res) {
+                    success: function(res) {
                         showToast(res.icon, res.title);
                         bootstrap.Modal.getInstance(document.getElementById('inspectDocumentModal')).hide();
                         window.editingInspecpk = null;
                         if (window.inspectionActiveTab === 'documents') loadInspectDocuments();
                     },
-                    error: function (xhr) {
-                        const res = xhr.responseJSON || { icon: 'error', title: 'Gagal menyimpan dokumen inspect.' };
+                    error: function(xhr) {
+                        const res = xhr.responseJSON || {
+                            icon: 'error',
+                            title: 'Gagal menyimpan dokumen inspect.'
+                        };
                         showToast(res.icon, res.title);
                     },
-                    complete: function () {
+                    complete: function() {
                         $('#btnSubmitInspecDoc').prop('disabled', false);
                     }
                 });

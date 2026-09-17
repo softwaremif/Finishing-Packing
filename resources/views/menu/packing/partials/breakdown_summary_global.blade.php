@@ -207,6 +207,8 @@
     $ctnPlan    = $ctnSummary['ctnPlan']    ?? 0;
     $ctnActual  = $ctnSummary['ctnActual']  ?? 0;
     $ctnBalance = $ctnSummary['ctnBalance'] ?? 0;
+    $polibagGroups = $polibagGroups ?? collect();
+    $polibagAggQty = $polibagAggQty ?? ['orderQty' => [], 'transQty' => [], 'totOrder' => 0, 'totTrans' => 0];
 @endphp
 <div class="row g-4">
     {{-- ===================== SEKSI KIRI: BREAKDOWN SIZE (SATU TABEL) ===================== --}}
@@ -224,8 +226,8 @@
                 </div>
                 <div class="matrix-tab-toggle" role="group">
                     <button type="button" class="active" id="matrixTabPlanning" onclick="setMatrixTab('planning')">Planning</button>
+                    <button type="button" id="matrixTabCoverage" onclick="setMatrixTab('coverage')">Polibag</button>
                     <button type="button" id="matrixTabPacking" onclick="setMatrixTab('packing')">Packing</button>
-                    {{-- <button type="button" id="matrixTabCoverage" onclick="setMatrixTab('coverage')">Coverage</button> --}}
                 </div>
             </div>
 
@@ -256,90 +258,156 @@
 
                 <div class="table-responsive style-scrollbar">
                     <table class="table table-sm text-center align-middle mb-0" id="matrixTable">
-                        <thead>
-                            <tr style="font-size:11px; text-transform:uppercase; color:#94a3b8; letter-spacing:.4px;">
-                                <th class="text-start sticky-col-start" style="min-width:170px;">Color \ Sec Size</th>
-                                @foreach ($activeSizes as $i => $sz)
-                                    <th style="min-width:75px;">{{ $sz }}</th>
-                                @endforeach
-                                <th class="sticky-col-end" style="min-width:90px;">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($groups as $group)
-                                @php
-                                    $rowOrderTotal = array_sum($group['orderQty'] ?? []);
-                                    $rowTransTotal = array_sum($group['transQty'] ?? []);
-                                    $rowPlanTotal  = array_sum($group['planQty'] ?? []);
-                                    $rowReadyTotal = array_sum($group['readyQty'] ?? []);
-                                @endphp
-                                <tr>
-                                    <td class="text-start sticky-col-start">
-                                        <span class="matrix-color-dot" data-name="{{ $group['material'] ?? '-' }}"></span>
-                                        <strong style="font-size:14px;">{{ $group['material'] ?? '-' }}</strong>
-                                        @if (!empty($group['secsz']))
-                                            <div class="text-muted" style="font-size:11px;">{{ $group['secsz'] }}</div>
-                                        @endif
-                                        @if (!empty($group['customer']))
-                                            <div class="text-muted" style="font-size:10.5px;">{{ $group['customer'] }}</div>
-                                        @endif
-                                    </td>
-                                    @foreach ($activeSizes as $i => $sz)
-                                        @php
-                                            $order  = $group['orderQty'][$i] ?? 0;
-                                            $trans  = $group['transQty'][$i] ?? 0;
-                                            $plan   = $group['planQty'][$i] ?? 0;
-                                            $actual = $group['readyQty'][$i] ?? 0;
-                                        @endphp
-                                        <td class="matrix-cell"
-                                            data-material="{{ $group['material'] ?? '' }}"
-                                            data-secsz="{{ $group['secsz'] ?? '' }}"
-                                            data-size="{{ $i }}"
-                                            data-order="{{ $order }}"
-                                            data-trans="{{ $trans }}"
-                                            data-plan="{{ $plan }}"
-                                            data-actual="{{ $actual }}"
-                                            onclick="onMatrixCellClick(this)">
-                                            <div class="cov d-none">
-                                                <span class="matrix-frac">{{ $trans }}/{{ $order }}</span>
-                                                <div class="matrix-bar-track"><div class="matrix-bar-fill"></div></div>
-                                            </div>
-                                            <div class="planning">
-                                                <span class="matrix-frac">{{ $plan }}/{{ $order }}</span>
-                                                <div class="matrix-bar-track"><div class="matrix-bar-fill"></div></div>
-                                            </div>
-                                            <div class="pack d-none">
-                                                <span class="matrix-frac">{{ $actual }}/{{ $plan }}</span>
-                                                <div class="matrix-bar-track"><div class="matrix-bar-fill"></div></div>
-                                            </div>
-                                        </td>
-                                    @endforeach
-                                    <td class="fw-bold sticky-col-end">
-                                        <span class="cov d-none">{{ $rowTransTotal }}/{{ $rowOrderTotal }}</span>
-                                        <span class="planning">{{ $rowPlanTotal }}/{{ $rowOrderTotal }}</span>
-                                        <span class="pack d-none">{{ $rowReadyTotal }}/{{ $rowPlanTotal }}</span>
-                                    </td>
-                                </tr>
-                            @endforeach
-                    
-                            {{-- Baris TOTAL keseluruhan -- tambahkan class matrix-total-row --}}
-                            <tr class="fw-bold matrix-total-row" style="background:#f8fafc;">
-                                <td class="text-start sticky-col-start">TOTAL</td>
-                                @foreach ($activeSizes as $i => $sz)
-                                    <td>
-                                        <span class="cov d-none">{{ $aggQty['transQty'][$i] ?? 0 }}/{{ $aggQty['orderQty'][$i] ?? 0 }}</span>
-                                        <span class="planning">{{ $aggQty['planQty'][$i] ?? 0 }}/{{ $aggQty['orderQty'][$i] ?? 0 }}</span>
-                                        <span class="pack d-none">{{ $aggQty['readyQty'][$i] ?? 0 }}/{{ $aggQty['planQty'][$i] ?? 0 }}</span>
-                                    </td>
-                                @endforeach
-                                <td class="sticky-col-end">
-                                    <span class="cov d-none">{{ $aggQty['totTrans'] ?? 0 }}/{{ $aggQty['totOrder'] ?? 0 }}</span>
-                                    <span class="planning">{{ $aggQty['totPlan'] ?? 0 }}/{{ $aggQty['totOrder'] ?? 0 }}</span>
-                                    <span class="pack d-none">{{ $aggQty['totReady'] ?? 0 }}/{{ $aggQty['totPlan'] ?? 0 }}</span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+    <thead>
+        <tr style="font-size:11px; text-transform:uppercase; color:#94a3b8; letter-spacing:.4px;">
+            <th class="text-start sticky-col-start" style="min-width:170px;">Color \ Sec Size</th>
+            @foreach ($activeSizes as $i => $sz)
+                <th style="min-width:75px;">{{ $sz }}</th>
+            @endforeach
+            <th class="sticky-col-end" style="min-width:90px;">Total</th>
+        </tr>
+    </thead>
+ 
+    {{-- ===================== TBODY UTAMA -- Planning & Packing (TIDAK BERUBAH) ===================== --}}
+    <tbody id="matrixBodyMain">
+        @foreach ($groups as $group)
+            @php
+                $rowOrderTotal = array_sum($group['orderQty'] ?? []);
+                $rowTransTotal = array_sum($group['transQty'] ?? []);
+                $rowPlanTotal  = array_sum($group['planQty'] ?? []);
+                $rowReadyTotal = array_sum($group['readyQty'] ?? []);
+            @endphp
+            <tr>
+                <td class="text-start sticky-col-start">
+                    <span class="matrix-color-dot" data-name="{{ $group['material'] ?? '-' }}"></span>
+                    <strong style="font-size:14px;">{{ $group['material'] ?? '-' }}</strong>
+                    @if (!empty($group['secsz']))
+                        <div class="text-muted" style="font-size:11px;">{{ $group['secsz'] }}</div>
+                    @endif
+                    @if (!empty($group['customer']))
+                        <div class="text-muted" style="font-size:10.5px;">{{ $group['customer'] }}</div>
+                    @endif
+                </td>
+                @foreach ($activeSizes as $i => $sz)
+                    @php
+                        $order  = $group['orderQty'][$i] ?? 0;
+                        $trans  = $group['transQty'][$i] ?? 0;
+                        $plan   = $group['planQty'][$i] ?? 0;
+                        $actual = $group['readyQty'][$i] ?? 0;
+                    @endphp
+                    <td class="matrix-cell"
+                        data-material="{{ $group['material'] ?? '' }}"
+                        data-secsz="{{ $group['secsz'] ?? '' }}"
+                        data-size="{{ $i }}"
+                        data-order="{{ $order }}"
+                        data-trans="{{ $trans }}"
+                        data-plan="{{ $plan }}"
+                        data-actual="{{ $actual }}"
+                        onclick="onMatrixCellClick(this)">
+                        <div class="planning">
+                            <span class="matrix-frac">{{ $plan }}/{{ $order }}</span>
+                            <div class="matrix-bar-track"><div class="matrix-bar-fill"></div></div>
+                        </div>
+                        <div class="pack d-none">
+                            <span class="matrix-frac">{{ $actual }}/{{ $plan }}</span>
+                            <div class="matrix-bar-track"><div class="matrix-bar-fill"></div></div>
+                        </div>
+                    </td>
+                @endforeach
+                <td class="fw-bold sticky-col-end">
+                    <span class="planning">{{ $rowPlanTotal }}/{{ $rowOrderTotal }}</span>
+                    <span class="pack d-none">{{ $rowReadyTotal }}/{{ $rowPlanTotal }}</span>
+                </td>
+            </tr>
+        @endforeach
+ 
+        <tr class="fw-bold matrix-total-row" style="background:#f8fafc;">
+            <td class="text-start sticky-col-start">TOTAL</td>
+            @foreach ($activeSizes as $i => $sz)
+                <td>
+                    <span class="planning">{{ $aggQty['planQty'][$i] ?? 0 }}/{{ $aggQty['orderQty'][$i] ?? 0 }}</span>
+                    <span class="pack d-none">{{ $aggQty['readyQty'][$i] ?? 0 }}/{{ $aggQty['planQty'][$i] ?? 0 }}</span>
+                </td>
+            @endforeach
+            <td class="sticky-col-end">
+                <span class="planning">{{ $aggQty['totPlan'] ?? 0 }}/{{ $aggQty['totOrder'] ?? 0 }}</span>
+                <span class="pack d-none">{{ $aggQty['totReady'] ?? 0 }}/{{ $aggQty['totPlan'] ?? 0 }}</span>
+            </td>
+        </tr>
+    </tbody>
+ 
+    {{-- ===================== TBODY BARU -- Polibag/Coverage (grouping berbeda) ===================== --}}
+    <tbody id="matrixBodyPolibag" class="d-none">
+        @foreach ($polibagGroups as $pg)
+            @php
+                $rowOrderTotal = array_sum($pg['orderQty'] ?? []);
+                $rowTransTotal = array_sum($pg['transQty'] ?? []);
+            @endphp
+            <tr>
+                <td class="text-start sticky-col-start">
+                    <span class="matrix-color-dot" data-name="{{ $pg['material'] ?? '-' }}"></span>
+                    <strong style="font-size:14px;">{{ $pg['material'] ?? '-' }}</strong>
+                    @if (!empty($pg['secsz']))
+                        <div class="text-muted" style="font-size:11px;">{{ $pg['secsz'] }}</div>
+                    @endif
+                    <div class="text-muted" style="font-size:10.5px;">
+                        {{ $pg['poNoList']->isNotEmpty() ? $pg['poNoList']->implode(', ') : '-' }} &middot; {{ $pg['OP'] ?? '-' }}
+                        @if (!empty($pg['style']))
+                            &middot; {{ $pg['style'] }}
+                        @endif
+                    </div>
+                </td>
+                @foreach ($activeSizes as $i => $sz)
+                    @php
+                        $order = $pg['orderQty'][$i] ?? 0;
+                        $trans = $pg['transQty'][$i] ?? 0;
+                        $ready = $pg['readyQty'][$i] ?? 0; 
+                    @endphp
+                    <td class="matrix-cell"
+                        data-material="{{ $pg['material'] ?? '' }}"
+                        data-secsz="{{ $pg['secsz'] ?? '' }}"
+                        data-size="{{ $i }}"
+                        data-order="{{ $order }}"
+                        data-trans="{{ $trans }}"
+                        onclick="onMatrixCellClick(this)">
+                        <div class="cov">
+                            <span class="matrix-frac">{{ $trans }}/{{ $order }}</span>
+                            <div class="matrix-bar-track"><div class="matrix-bar-fill"></div></div>
+                            <div style="font-size:8.5px; color:#64748b; margin-top:2px; white-space:nowrap;">
+                                Masuk Ctn: <strong style="color:#0f172a;">{{ $ready }}</strong>/{{ $trans }}
+                            </div>
+                        </div>
+                    </td>
+                @endforeach
+                @php $rowReadyTotal = array_sum($pg['readyQty'] ?? []); @endphp
+                <td class="fw-bold sticky-col-end">
+                    <span class="cov">{{ $rowTransTotal }}/{{ $rowOrderTotal }}</span>
+                    <div style="font-size:8.5px; color:#64748b; margin-top:2px;">
+                        Masuk Ctn: <strong style="color:#0f172a;">{{ $rowReadyTotal }}</strong>/{{ $rowTransTotal }}
+                    </div>
+                </td>
+            </tr>
+        @endforeach
+ 
+        <tr class="fw-bold matrix-total-row" style="background:#f8fafc;">
+            <td class="text-start sticky-col-start">TOTAL</td>
+            @foreach ($activeSizes as $i => $sz)
+                <td>
+                    <span class="cov">{{ $polibagAggQty['transQty'][$i] ?? 0 }}/{{ $polibagAggQty['orderQty'][$i] ?? 0 }}</span>
+                    <div style="font-size:8.5px; color:#64748b; margin-top:2px;">
+                        Masuk Ctn: <strong style="color:#0f172a;">{{ $polibagAggQty['readyQty'][$i] ?? 0 }}</strong>/{{ $polibagAggQty['transQty'][$i] ?? 0 }}
+                    </div>
+                </td>
+            @endforeach
+            <td class="sticky-col-end">
+                <span class="cov">{{ $polibagAggQty['totTrans'] ?? 0 }}/{{ $polibagAggQty['totOrder'] ?? 0 }}</span>
+                <div style="font-size:8.5px; color:#64748b; margin-top:2px;">
+                    Masuk Ctn: <strong style="color:#0f172a;">{{ $polibagAggQty['totReady'] ?? 0 }}</strong>/{{ $polibagAggQty['totTrans'] ?? 0 }}
+                </div>
+            </td>
+        </tr>
+    </tbody>
+</table>
                 </div>
             </div>
         </div>
