@@ -129,48 +129,54 @@
         const activeIdx = Object.keys(window.activeSizesGlobal || {});
         const sizeIndexes = (size === '' || size === null) ? activeIdx : [size];
     
-        // grup berdasarkan POPK (BUKAN lagi material+secsz) --
-        // popk kembaran warna (material+secsz SAMA, popk BEDA) punya pool
-        // Transfer/Polibag masing-masing SENDIRI, tidak boleh dianggap
-        // berbagi satu pool.
-        const popkGroups = {};
+        // BARU -- helper cari combo & poolKey utk 1 popk.
+        function findComboForPopk(popk) {
+            return (window.pgCombos || []).find(c => String(c.popk) === String(popk));
+        }
+    
+        // GANTI -- kelompokkan per poolKey (bukan per popk mentah). Kalau
+        // combo/poolKey tidak ditemukan (seharusnya tidak terjadi), fallback
+        // ke popk sendiri supaya tetap aman (tidak error).
+        const poolGroups = {};
         rows.forEach(function (r) {
-            const key = String(r.popk);
-            if (!popkGroups[key]) popkGroups[key] = [];
-            popkGroups[key].push(r);
+            const combo = findComboForPopk(r.popk);
+            const poolKey = combo?.poolKey || ('_fallback_' + r.popk);
+            if (!poolGroups[poolKey]) poolGroups[poolKey] = [];
+            poolGroups[poolKey].push(r);
         });
     
         const remaining = {};
         const isFilled  = {};
     
-        Object.keys(popkGroups).forEach(function (popkKey) {
-            const popkRows = popkGroups[popkKey];
+        Object.keys(poolGroups).forEach(function (poolKey) {
+            const poolRows = poolGroups[poolKey];
     
-            // cari combo via popk LANGSUNG (window.pgCombos sekarang
-            // sudah 1 entry per popk), bukan lagi via string material+secsz.
-            const comboData = (window.pgCombos || []).find(function (c) {
-                return String(c.popk) === popkKey;
-            });
+            // Ambil combo REPRESENTATIF pool ini (semua popk di pool yang
+            // sama SEHARUSNYA menghasilkan readyQty/transQty yang IDENTIK,
+            // karena keduanya dihitung dari pool agregat yang sama).
+            const repRow = poolRows[0];
+            const comboData = findComboForPopk(repRow.popk);
     
-            remaining[popkKey] = {};
-            isFilled[popkKey] = {};
+            remaining[poolKey] = {};
+            isFilled[poolKey] = {};
     
             sizeIndexes.forEach(function (i) {
                 const ready    = Number(comboData?.readyQty?.[i] || 0);
                 const transfer = Number(comboData?.transQty?.[i] || 0);
     
-                isFilled[popkKey][i] = {};
-                popkRows.forEach(function (r) {
+                isFilled[poolKey][i] = {};
+                // BARU -- cek isFilled utk SEMUA baris di pool ini (lintas popk).
+                poolRows.forEach(function (r) {
                     const plan  = Number(r[`qtyp${i}`] || 0);
                     const exist = Number(r[`qty${i}`] || 0);
                     if (plan <= 0) {
-                        isFilled[popkKey][i][r.packpk] = null;
+                        isFilled[poolKey][i][r.packpk] = null;
                         return;
                     }
-                    isFilled[popkKey][i][r.packpk] = (exist >= plan);
+                    isFilled[poolKey][i][r.packpk] = (exist >= plan);
                 });
     
-                remaining[popkKey][i] = transfer - ready;
+                remaining[poolKey][i] = transfer - ready;
             });
         });
     
@@ -178,7 +184,9 @@
         let adaMasalah = false;
     
         rows.forEach(function (row, index) {
-            const popkKey = String(row.popk);
+            const combo = findComboForPopk(row.popk);
+            const poolKey = combo?.poolKey || ('_fallback_' + row.popk);
+    
             const parts = [];
             let adaPlan = false;
     
@@ -190,21 +198,21 @@
                 const namaSize = window.activeSizesGlobal[i] || `Size ${i}`;
                 const exist = Number(row[`qty${i}`] || 0);
     
-                if (isFilled[popkKey][i][row.packpk] === true) {
+                if (isFilled[poolKey][i][row.packpk] === true) {
                     parts.push(`<span class="text-primary">✔ ${namaSize}: sudah terisi penuh (${exist})</span>`);
                     return;
                 }
     
                 const butuh = plan - exist;
-                const avail = Math.max(0, remaining[popkKey][i]);
+                const avail = Math.max(0, remaining[poolKey][i]);
     
                 if (avail >= butuh) {
                     const label = exist > 0 ? `OK (+${butuh})` : `OK (${plan})`;
                     parts.push(`<span class="text-success">✅ ${namaSize}: ${label}</span>`);
-                    remaining[popkKey][i] -= butuh;
+                    remaining[poolKey][i] -= butuh;
                 } else if (avail > 0) {
                     parts.push(`<span class="text-warning fw-semibold">⚠ ${namaSize}: hanya bisa +${avail} pcs (total ${exist + avail})</span>`);
-                    remaining[popkKey][i] -= avail;
+                    remaining[poolKey][i] -= avail;
                     adaMasalah = true;
                 } else {
                     parts.push(`<span class="text-danger">❌ ${namaSize}: Polibag sudah habis</span>`);
@@ -214,18 +222,21 @@
     
             if (!adaPlan) parts.push('<span class="text-muted">Tidak ada Plan</span>');
     
-            // pakai getComboLabel() (helper yang sudah ada dari fix
-            // Detail Packing sebelumnya) -- konsisten tampil "BLACK 1",
-            // "BLACK 2" kalau row ini popk-nya kembaran warna.
             const materialLabel = getComboLabel(row);
             const secszTag = row.secsz ? ` (${row.secsz})` : '';
-    
+            const customerTag = row.customer
+                ? `<div class="text-muted" style="font-size:10.5px;">${row.customer}</div>`
+                : '';
+            
             html += `
                 <tr>
                     <td class="text-center">${index + 1}</td>
                     <td class="text-center">${row.nobar ?? ''}</td>
                     <td class="text-center"><strong>${row.carton}</strong></td>
-                    <td class="text-center">${materialLabel}${secszTag}</td>
+                    <td class="text-center">
+                        <div>${materialLabel}${secszTag}</div>
+                        ${customerTag}
+                    </td>
                     <td class="text-start" style="font-size:12px; line-height:1.7;">
                         ${parts.join('<br>')}
                     </td>
@@ -236,6 +247,7 @@
         $('#bulkActualGlobalList').html(html);
         $('#bulkActualGlobalWarning').toggleClass('d-none', !adaMasalah);
     }
+ 
 
     function submitBulkActualCtnGlobal() {
         const packpks = window.selectedPackpksGlobal || [];

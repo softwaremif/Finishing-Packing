@@ -1810,6 +1810,30 @@ class PackingController extends Controller
         return sprintf('%04d/INS/%s/%d', $inspecpk, $month, $date->year);
     }
 
+    private function pgResolvePoolKey($poRow): string
+    {
+        return ($poRow->OP ?? '') . '|' . ($poRow->material ?? '') . '|' . ($poRow->secsz ?? '') . '|' . ($poRow->style ?? '');
+    }
+
+    private function getPolibagGroupPopks($db, int $mif, string $op, ?string $material, ?string $secsz, ?string $style)
+    {
+        return $db->table('po')
+            ->where('OP', $op)
+            ->where('mif', $mif)
+            ->where('material', $material)
+            ->when(
+                $secsz !== null && $secsz !== '',
+                fn ($q) => $q->where('secsz', $secsz),
+                fn ($q) => $q->where(fn ($qq) => $qq->whereNull('secsz')->orWhere('secsz', ''))
+            )
+            ->when(
+                $style !== null && $style !== '',
+                fn ($q) => $q->where('style', $style),
+                fn ($q) => $q->where(fn ($qq) => $qq->whereNull('style')->orWhere('style', ''))
+            )
+            ->pluck('popk');
+    }
+
         // Proses tambah/edit carton dari modal "Add Packing" di halaman Input
         // Packing List Global -- termasuk mode Auto Split.
     public function storeGlobal(Request $request)
@@ -2230,19 +2254,26 @@ class PackingController extends Controller
             
                 if ($totalActualGroup > 0) {
                     $existingRow = $packpk > 0 ? $db->table('pack')->where('packpk', $packpk)->first() : null;
-            
+                
+                    // BARU -- resolve pool Polibag SEKALI per grup (di luar loop size).
+                    $polibagPopks = $this->getPolibagGroupPopks(
+                        $db, $mif, $poRow->OP, $poRow->material, $poRow->secsz, $poRow->style
+                    );
+                
                     for ($i = 1; $i <= 40; $i++) {
                         $actualBaru = (int) ($qty[$i] ?? 0);
                         if ($actualBaru <= 0) continue;
-            
+                
                         $actualLama = (int) ($existingRow->{"qty{$i}"} ?? 0);
-                        $readyTotal = (int) $db->table('pack')->where('popk', $poRow->popk)->sum("qty{$i}");
-            
+                
+                        // GANTI -- whereIn pool, bukan where popk tunggal.
+                        $readyTotal = (int) $db->table('pack')->whereIn('popk', $polibagPopks)->sum("qty{$i}");
+                
                         $sizeLabel = $poRow->{"size{$i}"} ?? null;
-                        $transfer  = $this->getTransferQtyGlobal($db, $poRow->popk, $i, $sizeLabel);
-            
+                        $transfer  = $this->getTransferQtyGlobal($db, $polibagPopks, $i, $sizeLabel);
+                
                         $totalReady = ($readyTotal - $actualLama) + $actualBaru;
-            
+                
                         if ($totalReady > $transfer) {
                             DB::connection($connection)->rollBack();
                             $maksimal = max(0, $transfer - ($readyTotal - $actualLama));
@@ -2410,35 +2441,56 @@ class PackingController extends Controller
 
             $sizeIndexes = ($size !== '' && $size !== null) ? [(int) $size] : range(1, 40);
 
-            $packsByPopk = $orderedPacks->groupBy('popk');
-
+            $poRowsByPopk = $db->table('po')
+                ->whereIn('popk', $orderedPacks->pluck('popk')->unique())
+                ->get()
+                ->keyBy('popk');
+            
+            $packsByPoolKey = $orderedPacks->groupBy(function ($pack) use ($poRowsByPopk) {
+                $poRow = $poRowsByPopk->get($pack->popk);
+                return $poRow ? $this->pgResolvePoolKey($poRow) : ('_fallback_' . $pack->popk);
+            });
+            
             $remaining = [];
             $isFilled  = [];
-
-            foreach ($packsByPopk as $popkKey => $packsInPopk) {
-                $remaining[$popkKey] = [];
-                $isFilled[$popkKey]  = [];
-
+            
+            foreach ($packsByPoolKey as $poolKey => $packsInPool) {
+                $remaining[$poolKey] = [];
+                $isFilled[$poolKey]  = [];
+            
+                $repPack  = $packsInPool->first();
+                $repPoRow = $poRowsByPopk->get($repPack->popk);
+            
+                // Resolve pool Polibag SEKALI per pool (bukan per popk) -- semua
+                // popk dalam pool ini SEHARUSNYA menghasilkan set popk yang SAMA.
+                $polibagPopks = $repPoRow
+                    ? $this->getPolibagGroupPopks(
+                        $db, (int) $repPoRow->mif, $repPoRow->OP, $repPoRow->material, $repPoRow->secsz, $repPoRow->style
+                    )
+                    : collect($packsInPool->pluck('popk')->unique());
+            
                 foreach ($sizeIndexes as $i) {
-                    $ready    = (int) $db->table('pack')->where('popk', $popkKey)->sum("qty{$i}");
-                    $transfer = $this->getTransferQtyGlobal($db, $popkKey, $i);
-
-                    $isFilled[$popkKey][$i] = [];
-
-                    foreach ($packsInPopk as $x) {
+                    $ready    = (int) $db->table('pack')->whereIn('popk', $polibagPopks)->sum("qty{$i}");
+                    $transfer = $this->getTransferQtyGlobal($db, $polibagPopks, $i);
+            
+                    $isFilled[$poolKey][$i] = [];
+            
+                    // BARU -- isFilled sekarang dicek utk SEMUA pack di pool ini
+                    // (lintas popk), bukan cuma packsInPopk lama.
+                    foreach ($packsInPool as $x) {
                         $plan  = (int) ($x->{"qtyp{$i}"} ?? 0);
                         $exist = (int) ($x->{"qty{$i}"} ?? 0);
-
+            
                         if ($plan <= 0) {
-                            $isFilled[$popkKey][$i][$x->packpk] = null;
+                            $isFilled[$poolKey][$i][$x->packpk] = null;
                         } elseif ($exist >= $plan) {
-                            $isFilled[$popkKey][$i][$x->packpk] = true;
+                            $isFilled[$poolKey][$i][$x->packpk] = true;
                         } else {
-                            $isFilled[$popkKey][$i][$x->packpk] = false;
+                            $isFilled[$poolKey][$i][$x->packpk] = false;
                         }
                     }
-
-                    $remaining[$popkKey][$i] = $transfer - $ready;
+            
+                    $remaining[$poolKey][$i] = $transfer - $ready;
                 }
             }
 
@@ -2448,38 +2500,40 @@ class PackingController extends Controller
             $jumlahSkip    = 0;
 
             foreach ($orderedPacks as $x) {
-                $popkKey = $x->popk;
+                $poRowForThis = $poRowsByPopk->get($x->popk);
+                $poolKey = $poRowForThis ? $this->pgResolvePoolKey($poRowForThis) : ('_fallback_' . $x->popk);
+            
                 $upd = [];
                 $adaPerubahan  = false;
                 $adaPartialRow = false;
                 $adaGagalRow   = false;
-
+            
                 foreach ($sizeIndexes as $i) {
                     $plan = (int) ($x->{"qtyp{$i}"} ?? 0);
                     if ($plan <= 0) continue;
-
-                    if ($isFilled[$popkKey][$i][$x->packpk] === true) {
+            
+                    if ($isFilled[$poolKey][$i][$x->packpk] === true) {
                         continue;
                     }
-
+            
                     $exist = (int) ($x->{"qty{$i}"} ?? 0);
                     $butuh = $plan - $exist;
-                    $avail = max(0, $remaining[$popkKey][$i]);
-
+                    $avail = max(0, $remaining[$poolKey][$i]);
+            
                     if ($avail >= $butuh) {
                         $upd["qty{$i}"] = $plan;
-                        $remaining[$popkKey][$i] -= $butuh;
+                        $remaining[$poolKey][$i] -= $butuh;
                         $adaPerubahan = true;
                     } elseif ($avail > 0) {
                         $upd["qty{$i}"] = $exist + $avail;
-                        $remaining[$popkKey][$i] -= $avail;
+                        $remaining[$poolKey][$i] -= $avail;
                         $adaPerubahan  = true;
                         $adaPartialRow = true;
                     } else {
                         $adaGagalRow = true;
                     }
                 }
-
+            
                 if (!$adaPerubahan) {
                     $jumlahSkip++;
                     if ($adaGagalRow) $jumlahGagal++;
@@ -2531,24 +2585,26 @@ class PackingController extends Controller
     }
 
     // Dipakai buat hitung sisa Transfer/Polibag
-    private function getTransferQtyGlobal($db, $popk, int $sizeIdx, ?string $sizeLabel = null): int
+    private function getTransferQtyGlobal($db, $popks, int $sizeIdx, ?string $sizeLabel = null): int
     {
-        $bjQty = (int) $db->table('bj')->where('popk', $popk)->sum("qty{$sizeIdx}");
-
+        $popks = collect($popks)->values();
+    
+        $bjQty = (int) $db->table('bj')->whereIn('popk', $popks)->sum("qty{$sizeIdx}");
+    
         if ($sizeLabel === null) {
-            $sizeLabel = $db->table('po')->where('popk', $popk)->value("size{$sizeIdx}");
+            $sizeLabel = $db->table('po')->whereIn('popk', $popks)->value("size{$sizeIdx}");
         }
-
+    
         $outputQty = 0;
         if (!empty($sizeLabel)) {
             $outputQty = (int) DB::connection('mysql_polibag')
                 ->table('output')
-                ->where('popk', $popk)
+                ->whereIn('popk', $popks)
                 ->where('jnspk', 4)
                 ->where('size', $sizeLabel)
                 ->sum('jmlpcs');
         }
-
+    
         return $bjQty + $outputQty;
     }
 
@@ -3284,17 +3340,23 @@ class PackingController extends Controller
 
     private function getSinglePopkQtyBreakdown($db, int $popk, array $activeSizes): array
     {
-        $sumQtyExpr  = collect(range(1, 40))->map(fn($i) => "SUM(qty$i) as qty$i")->implode(', ');
-        $sumQtyPExpr = collect(range(1, 40))->map(fn($i) => "SUM(qtyp$i) as qtyp$i")->implode(', ');
-
-        $dt2Sum  = $db->table('po')->selectRaw("SUM(qty) as qty, {$sumQtyExpr}")->where('popk', $popk)->first();
-        $dt3     = $db->table('pack')->selectRaw("SUM(pcs) as pcs, SUM(jmlpcs) as pack, SUM(pcsp) as pcsp, {$sumQtyExpr}, {$sumQtyPExpr}")->where('popk', $popk)->first();
-        $summary = $db->table('bj')->selectRaw("SUM(pcs) as pcs, {$sumQtyExpr}")->where('popk', $popk)->first();
-
+        $sumQtyExpr  = collect(range(1, 40))->map(fn ($i) => "SUM(qty$i) as qty$i")->implode(', ');
+        $sumQtyPExpr = collect(range(1, 40))->map(fn ($i) => "SUM(qtyp$i) as qtyp$i")->implode(', ');
+    
+        $poRow = $db->table('po')->where('popk', $popk)->first();
+    
+        $dt2Sum = $db->table('po')->selectRaw("SUM(qty) as qty, {$sumQtyExpr}")->where('popk', $popk)->first();
+        $dt3    = $db->table('pack')->selectRaw("SUM(pcsp) as pcsp, {$sumQtyPExpr}")->where('popk', $popk)->first();
+    
+        $polibagPopks = $this->getPolibagGroupPopks($db, (int) $poRow->mif, $poRow->OP, $poRow->material, $poRow->secsz, $poRow->style);
+    
+        $summary  = $db->table('bj')->selectRaw($sumQtyExpr)->whereIn('popk', $polibagPopks)->first();
+        $readyAgg = $db->table('pack')->selectRaw($sumQtyExpr)->whereIn('popk', $polibagPopks)->first();
+    
         $outputSizeSums = DB::connection('mysql_polibag')->table('output')
-            ->where('popk', $popk)->where('jnspk', 4)
+            ->whereIn('popk', $polibagPopks)->where('jnspk', 4)
             ->select('size')->selectRaw('SUM(jmlpcs) as total')->groupBy('size')->get();
-
+    
         $sizeLabelToIndex = array_flip($activeSizes);
         foreach ($outputSizeSums as $osRow) {
             $idx = $sizeLabelToIndex[$osRow->size] ?? null;
@@ -3303,19 +3365,24 @@ class PackingController extends Controller
                 $summary->{$qtyField} = (int) ($summary->{$qtyField} ?? 0) + (int) $osRow->total;
             }
         }
-
+    
         $orderQty = [];
         $readyQty = [];
         $planQty  = [];
         $transQty = [];
         foreach ($activeSizes as $i => $sz) {
             $orderQty[$i] = $dt2Sum->{"qty$i"} ?? 0;
-            $readyQty[$i] = $dt3->{"qty$i"} ?? 0;
             $planQty[$i]  = $dt3->{"qtyp$i"} ?? 0;
             $transQty[$i] = $summary->{"qty$i"} ?? 0;
+            $readyQty[$i] = $readyAgg->{"qty$i"} ?? 0;
         }
-
-        return [$orderQty, $planQty, $readyQty, $transQty];
+    
+        // BARU -- poolKey, supaya FE bisa mengelompokkan baris/carton yang
+        // BERBAGI pool Polibag yang sama (walau popk-nya beda), bukan lagi
+        // mengelompokkan per popk mentah.
+        $poolKey = ($poRow->OP ?? '') . '|' . ($poRow->material ?? '') . '|' . ($poRow->secsz ?? '') . '|' . ($poRow->style ?? '');
+    
+        return [$orderQty, $planQty, $readyQty, $transQty, $poolKey];
     }
 
     private function buildColorSecszCombos($db, $groups, array $activeSizes)
@@ -3325,35 +3392,21 @@ class PackingController extends Controller
         foreach ($groups as $g) {
             $popks = collect($g['popks'])->values();
     
-            if ($popks->count() <= 1) {
-                $colorSecszCombos->push([
-                    'material'        => $g['material'],
-                    'secsz'           => $g['secsz'],
-                    'popk'            => $popks->first(),
-                    'customer'        => $g['customer'] ?? null,   // BARU
-                    'orderQty'        => $g['orderQty'],
-                    'planQty'         => $g['planQty'],
-                    'readyQty'        => $g['readyQty'],
-                    'transQty'        => $g['transQty'],
-                    'duplicateMarker' => null,
-                ]);
-                continue;
-            }
-    
             foreach ($popks as $idx => $popk) {
-                [$orderQty, $planQty, $readyQty, $transQty] = $this->getSinglePopkQtyBreakdown($db, (int) $popk, $activeSizes);
-                $customerForPopk = $db->table('po')->where('popk', $popk)->value('customer'); // BARU
+                [$orderQty, $planQty, $readyQty, $transQty, $poolKey] = $this->getSinglePopkQtyBreakdown($db, (int) $popk, $activeSizes);
+                $customerForPopk = $db->table('po')->where('popk', $popk)->value('customer');
     
                 $colorSecszCombos->push([
                     'material'        => $g['material'],
                     'secsz'           => $g['secsz'],
                     'popk'            => $popk,
-                    'customer'        => $customerForPopk,   // BARU
+                    'customer'        => $customerForPopk,
                     'orderQty'        => $orderQty,
                     'planQty'         => $planQty,
                     'readyQty'        => $readyQty,
                     'transQty'        => $transQty,
-                    'duplicateMarker' => $idx + 1,
+                    'poolKey'         => $poolKey, // BARU
+                    'duplicateMarker' => $popks->count() > 1 ? ($idx + 1) : null,
                 ]);
             }
         }
