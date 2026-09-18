@@ -1523,6 +1523,7 @@
         @include($cfg['routes']['modalBulkDimensiCtn'])
         @include('menu.packing.modal-cross-po-mix')
         @include('menu.packing.modal-bundle-carton')
+        @include('menu.packing.modal-bundle-carton-konfirm')
     @endif
     @if ($cfg['showSealAction'])
         @include($cfg['routes']['modalSegelCtn'])
@@ -1865,7 +1866,7 @@
             }).join('');
 
             return `
-                <div class="packing-bundle-compact-group" style="border:2px solid #92400e; border-radius:10px; padding:8px; background:#fdf3e7; grid-column: 1 / -1;">
+                <div class="packing-bundle-compact-group" style="border:2px solid #92400e; border-radius:10px; padding:8px; grid-column: 1 / -1;">
                     <div class="d-flex align-items-center justify-content-between mb-2" style="cursor:pointer;" onclick="editBundleCarton(${unit.bundlepk})">
                         <div class="d-flex align-items-center gap-1">
                             <i class="fas fa-boxes-stacked" style="font-size:11px; color:#92400e;"></i>
@@ -2999,11 +3000,12 @@
             const isPackingAdmin = !!window.pageCfg.showAddPacking;
 
             const editBundleBtnHtml = isPackingAdmin ?
-                `<i class="fas fa-pen icon-btn" title="Edit Carton Besar" onclick="event.stopPropagation(); editBundleCarton(${unit.bundlepk})"></i>` :
+                `<i class="fas fa-pen icon-btn " style="cursor:pointer;font-size:11px;" title="Edit Carton Besar" onclick="event.stopPropagation(); editBundleCarton(${unit.bundlepk})"></i>` :
                 '';
 
-            const sealBadgeHtml =
-                `<span class="badge-status ${allSealed ? 'sealed' : 'planned'}">${allSealed ? 'Sealed' : `${sealedCount}/${totalCount} Sealed`}</span>`;
+            const sealBadgeHtml = allSealed
+                ? `<span class="badge-status sealed">Sealed</span>`
+                : `<span class="badge-status packing">${sealedCount}/${totalCount} Sealed</span>`;
 
             const bundleSealBtnHtml = (!isPackingAdmin && window.canManageSegel) ?
                 (allSealed ?
@@ -3012,7 +3014,7 @@
                 ) :
                 '';
 
-            return `<div class="col-12 col-md-6 col-xl-4"><div class="packing-bundle-card" style="border:2px solid #92400e; border-radius:12px; padding:12px; background:#fdf3e7; position:relative;">
+            return `<div class="col-12 col-md-6 col-xl-4"><div class="packing-card" style="height:auto; min-height:220px; border:2px solid #92400e; border-radius:12px; cursor:default;">
                 ${ribbonHtml}
                 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                     <span class="ctn-code" style="color:#78350f;"><i class="fas fa-boxes-stacked me-1"></i>${unit.bundleCartonName ?? 'Carton Besar'}</span>
@@ -3025,19 +3027,19 @@
                     <div class="progress-main flex-grow-1"><span class="bar" style="width:${Math.min(100,pct)}%; background:${barColor};"></span></div>
                     <div class="text-nowrap" style="font-size:12.5px;"><strong>${totalActual}</strong> / ${totalPlan} pcs <span class="text-muted">${pct}%</span></div>
                 </div>
-        
+            
                 ${bundleNobar ? `<div class="card-barcode"><span class="barcode-text"><i class="fas fa-barcode me-1"></i>${bundleNobar}</span></div>` : ''}
-        
+            
                 <div class="card-actions">
                     <button type="button" class="btn btn-outline-dark w-100" onclick="event.stopPropagation(); toggleBundleDetailExpand('${uid}', this, ${totalCount})">
                         <i class="fas fa-chevron-down me-1" id="${uid}_icon"></i> Lihat Detail Carton (${totalCount})
                     </button>
                 </div>
-        
+            
                 <div id="${uid}" class="row g-2 mt-1" style="display:none;">
                     ${membersHtml}
                 </div>
-        
+            
                 ${bundleSealBtnHtml ? `<div class="card-actions mt-2">${bundleSealBtnHtml}</div>` : ''}
             </div></div>`;
         }

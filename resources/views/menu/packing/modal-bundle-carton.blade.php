@@ -129,38 +129,56 @@
     }
 
     function editBundleCarton(bundlepk) {
-        if (!bundlepk) return;
-    
-        $.get(R.bundleDetail, { bundlepk: bundlepk }, function (data) {
-            const bundle = data.bundle;
-            const members = data.members || [];
-    
-            window.bcmSelectedCartons = members.map(function (m) {
-                return { carton: m.carton, POno: m.POno, OP: m.OP, packpks: m.packpks };
-            });
-            window.bcmEditingBundlepk = bundle.bundlepk;
-    
-            $('#bcmCartonBesar').val(bundle.bundle_carton || '');
-            $('#bcmNobarBesar').val(bundle.bundle_nobar || '');
-            $('#bcmNw').val(bundle.nw || '');
-            $('#bcmGw').val(bundle.gw || '');
-            $('#bcmPanjang').val(bundle.panjang || '');
-            $('#bcmLebar').val(bundle.lebar || '');
-            $('#bcmTinggi').val(bundle.tinggi || '');
-            $('#bcmKeterangan').val(bundle.keterangan || '');
-    
-            bcmRenderSelectedSummary();
-            bcmShowStep1();
-            bcmLoadPoOpList('');
-    
-            $('#bcmModalTitle').text('Edit Carton Besar');
-            $('#bcmBtnSubmit').text('Simpan Perubahan');
-    
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('bundleCartonModal')).show();
-        }).fail(function () {
-            showToast('error', 'Gagal memuat detail Carton Besar.');
+    if (!bundlepk) return;
+ 
+    // ---- 1) Reset & tampilkan modal SEGERA (feedback instan) ----
+    window.bcmSelectedCartons = [];
+    window.bcmEditingBundlepk = bundlepk;
+    $('#bcmSearchPoOp').val('');
+    $('#bcmCartonBesar, #bcmNobarBesar, #bcmNw, #bcmGw, #bcmPanjang, #bcmLebar, #bcmTinggi, #bcmKeterangan').val('');
+    $('#bcmModalTitle').text('Edit Carton Besar');
+    $('#bcmBtnSubmit').text('Simpan Perubahan');
+    bcmShowStep1();
+ 
+    // Placeholder loading -- ganti tempat "ringkasan carton terpilih"
+    // yang biasanya kosong (d-none) jadi tampil dengan spinner, supaya
+    // user tahu sedang memuat (BUKAN diam/kosong seperti sebelumnya).
+    $('#bcmSelectedSummary').removeClass('d-none').html(
+        '<div class="text-muted text-center py-2"><i class="fas fa-spinner fa-spin me-1"></i>Memuat detail Carton Besar...</div>'
+    );
+    $('#bcmFinalForm').addClass('d-none');
+    $('#bcmBtnSubmit').addClass('d-none');
+ 
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('bundleCartonModal')).show();
+ 
+    // Daftar PO/OP (search kosong) -- ringan, backend langsung balas
+    // array kosong kalau search < 2 karakter, jadi TIDAK perlu ditunda.
+    bcmLoadPoOpList('');
+ 
+    // ---- 2) Fetch detail Bundle -- isi field SETELAH data datang ----
+    $.get(R.bundleDetail, { bundlepk: bundlepk }, function (data) {
+        const bundle = data.bundle;
+        const members = data.members || [];
+ 
+        window.bcmSelectedCartons = members.map(function (m) {
+            return { carton: m.carton, POno: m.POno, OP: m.OP, packpks: m.packpks };
         });
-    }
+ 
+        $('#bcmCartonBesar').val(bundle.bundle_carton || '');
+        $('#bcmNobarBesar').val(bundle.bundle_nobar || '');
+        $('#bcmNw').val(bundle.nw || '');
+        $('#bcmGw').val(bundle.gw || '');
+        $('#bcmPanjang').val(bundle.panjang || '');
+        $('#bcmLebar').val(bundle.lebar || '');
+        $('#bcmTinggi').val(bundle.tinggi || '');
+        $('#bcmKeterangan').val(bundle.keterangan || '');
+ 
+        bcmRenderSelectedSummary(); // timpa placeholder loading dgn ringkasan carton asli
+    }).fail(function () {
+        showToast('error', 'Gagal memuat detail Carton Besar.');
+        $('#bcmSelectedSummary').html('<div class="text-danger text-center py-2">Gagal memuat data. Tutup dan coba lagi.</div>');
+    });
+}
 
     function bcmShowStep1() {
         $('#bcmStep1').removeClass('d-none');
@@ -363,8 +381,8 @@
         const wrap = $('#bcmSelectedSummary');
         if (!window.bcmSelectedCartons.length) {
             wrap.addClass('d-none').empty();
-            $('#bcmFinalForm').addClass('d-none');
-            $('#bcmBtnSubmit').addClass('d-none');
+            // $('#bcmFinalForm').addClass('d-none');
+            // $('#bcmBtnSubmit').addClass('d-none');
             return;
         }
 
@@ -389,16 +407,32 @@
     }
 
     function bcmSubmit() {
-        const cartonBesar = $('#bcmCartonBesar').val().trim();
-        if (!cartonBesar) {
-            showToast('warning', 'No Carton Besar wajib diisi.');
-            return;
-        }
-        if (!window.bcmSelectedCartons.length) {
-            showToast('warning', 'Pilih minimal 1 carton untuk digabung.');
+        const allPackpks = window.bcmSelectedCartons.flatMap(c => c.packpks);
+    
+        // BARU -- kalau EDIT + kosong = Bundle akan DIBUBARKAN -- tampilkan
+        // modal konfirmasi (BUKAN confirm() bawaan browser), baru lanjut ke
+        // bcmDoSubmit() kalau user menekan "Ya, Bubarkan" di modal itu.
+        if (window.bcmEditingBundlepk && allPackpks.length === 0) {
+            const namaBundle = $('#bcmCartonBesar').val().trim() || '-';
+            $('#bcmDissolveTargetName').text(namaBundle);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('bcmDissolveConfirmModal')).show();
             return;
         }
     
+        bcmDoSubmit();
+    }
+    
+    // BARU -- dipanggil tombol "Ya, Bubarkan" di modal konfirmasi.
+    function bcmConfirmDissolve() {
+        bootstrap.Modal.getInstance(document.getElementById('bcmDissolveConfirmModal')).hide();
+        bcmDoSubmit();
+    }
+    
+    // BARU -- isi asli bcmSubmit() (proses AJAX), dipisah supaya bisa
+    // dipanggil dari 2 alur: langsung (kondisi normal) atau setelah user
+    // konfirmasi di modal (kondisi bubarkan Bundle).
+    function bcmDoSubmit() {
+        const cartonBesar = $('#bcmCartonBesar').val().trim();
         const allPackpks = window.bcmSelectedCartons.flatMap(c => c.packpks);
     
         $('#bcmBtnSubmit').prop('disabled', true);
@@ -407,7 +441,7 @@
             method: 'POST',
             data: {
                 mif: MIF,
-                bundlepk: window.bcmEditingBundlepk || null,   // BARU
+                bundlepk: window.bcmEditingBundlepk || null,
                 bundle_carton: cartonBesar,
                 bundle_nobar: $('#bcmNobarBesar').val(),
                 nw: $('#bcmNw').val(),

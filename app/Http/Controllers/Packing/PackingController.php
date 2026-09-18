@@ -4036,8 +4036,11 @@ class PackingController extends Controller
     public function storeCartonBundle(Request $request)
     {
         $validated = $request->validate([
-            'bundlepk'      => 'nullable|integer',   // BARU -- ada isinya kalau mode EDIT
-            'bundle_carton' => 'required|string|max:50',
+            'bundlepk'      => 'nullable|integer',
+            // GANTI -- 'bundle_carton' sekarang nullable di level validasi;
+            // wajib-nya dicek MANUAL di bawah, HANYA kalau memang masih ada
+            // carton yang mau digabung (bukan skenario bubarkan Bundle).
+            'bundle_carton' => 'nullable|string|max:50',
             'bundle_nobar'  => 'nullable|string|max:50',
             'nw'            => 'nullable|numeric',
             'gw'            => 'nullable|numeric',
@@ -4045,7 +4048,11 @@ class PackingController extends Controller
             'lebar'         => 'nullable|numeric',
             'tinggi'        => 'nullable|numeric',
             'keterangan'    => 'nullable|string',
-            'packpks'       => 'required|array|min:1',
+            // GANTI -- FIX UTAMA: 'packpks' SEKARANG boleh array KOSONG
+            // (nullable, tanpa min:1) -- supaya mode EDIT bisa mengosongkan
+            // SEMUA anggota (uncheck semua carton kecil) sebagai cara
+            // membubarkan Bundle itu.
+            'packpks'       => 'nullable|array',
             'packpks.*'     => 'integer',
         ]);
 
@@ -4054,7 +4061,56 @@ class PackingController extends Controller
 
         try {
             $editingBundlepk = $validated['bundlepk'] ?? null;
-            $packpks = collect($validated['packpks'])->map(fn ($v) => (int) $v)->unique()->values();
+            $packpks = collect($validated['packpks'] ?? [])->map(fn ($v) => (int) $v)->unique()->values();
+
+            // BARU -- bikin Bundle BARU (bukan edit) TAPI tidak ada carton
+            // dipilih sama sekali -> tidak masuk akal, tetap ditolak.
+            if (!$editingBundlepk && $packpks->isEmpty()) {
+                DB::connection('mysql')->rollBack();
+                return response()->json(['icon' => 'warning', 'title' => 'Pilih minimal 1 carton untuk digabung.'], 422);
+            }
+
+            // ============================================================
+            // BARU -- FIX UTAMA: mode EDIT dengan packpks DIKOSONGKAN SEMUA
+            // (semua carton kecil di-uncheck) = user MEMBUBARKAN Bundle ini.
+            // Lepaskan SEMUA anggota lama (bundlepk/exportpk/contpk/part jadi
+            // null lagi, kembali jadi carton biasa), lalu HAPUS baris
+            // carton_bundle-nya. Proses ini SELESAI di sini, tidak lanjut ke
+            // logic insert/update carton_bundle di bawah.
+            // ============================================================
+            if ($editingBundlepk && $packpks->isEmpty()) {
+                $existingBundle = $db->table('carton_bundle')->where('bundlepk', $editingBundlepk)->lockForUpdate()->first();
+                if (!$existingBundle) {
+                    DB::connection('mysql')->rollBack();
+                    return response()->json(['icon' => 'warning', 'title' => 'Carton Besar tidak ditemukan (mungkin sudah dihapus).'], 422);
+                }
+
+                $originalMemberPackpks = $db->table('pack')->where('bundlepk', $editingBundlepk)->pluck('packpk');
+                if ($originalMemberPackpks->isNotEmpty()) {
+                    $db->table('pack')->whereIn('packpk', $originalMemberPackpks)->update([
+                        'bundlepk' => null,
+                        'exportpk' => null,
+                        'contpk'   => null,
+                        'part'     => null,
+                    ]);
+                }
+
+                $db->table('carton_bundle')->where('bundlepk', $editingBundlepk)->delete();
+
+                DB::connection('mysql')->commit();
+
+                return response()->json([
+                    'icon'  => 'success',
+                    'title' => "Carton Besar <b>{$existingBundle->bundle_carton}</b> dibubarkan -- {$originalMemberPackpks->count()} carton kecil dilepaskan kembali menjadi carton biasa.",
+                ]);
+            }
+
+            // BARU -- ada carton yang mau digabung (bukan skenario bubarkan) --
+            // di titik ini bundle_carton WAJIB diisi.
+            if (empty($validated['bundle_carton'])) {
+                DB::connection('mysql')->rollBack();
+                return response()->json(['icon' => 'warning', 'title' => 'No Carton Besar wajib diisi.'], 422);
+            }
 
             $packRows = $db->table('pack')->whereIn('packpk', $packpks)->lockForUpdate()->get();
             if ($packRows->isEmpty()) {
@@ -4072,11 +4128,6 @@ class PackingController extends Controller
             }
             $newExportpk = $distinctExportpks->first();
 
-            // GANTI -- FIX UTAMA: kalau mode EDIT (ada $editingBundlepk), cari
-            // bundle-nya lewat ID -- BUKAN lewat nama teks lagi. Ini penting
-            // karena admin BISA mengubah nama/nomor Carton Besar saat edit --
-            // kalau masih cari-by-nama, rename akan dikira "bundle baru" dan
-            // bikin baris carton_bundle duplikat, bukan meng-update yang lama.
             $existingBundle = $editingBundlepk
                 ? $db->table('carton_bundle')->where('bundlepk', $editingBundlepk)->lockForUpdate()->first()
                 : $db->table('carton_bundle')->where('bundle_carton', $validated['bundle_carton'])->lockForUpdate()->first();
@@ -4086,8 +4137,6 @@ class PackingController extends Controller
                 return response()->json(['icon' => 'warning', 'title' => 'Carton Besar yang diedit tidak ditemukan (mungkin sudah dihapus).'], 422);
             }
 
-            // BARU -- validasi: kalau EDIT dan admin ganti nama, pastikan nama
-            // baru itu TIDAK bentrok dengan bundle LAIN (bundlepk berbeda).
             if ($editingBundlepk) {
                 $nameCollision = $db->table('carton_bundle')
                     ->where('bundle_carton', $validated['bundle_carton'])
@@ -4102,8 +4151,6 @@ class PackingController extends Controller
                 }
             }
 
-            // Tolak kalau ADA packpk yang SUDAH tergabung bundle LAIN (beda
-            // dari carton besar yang sedang dituju/diedit).
             $conflictRow = $packRows->first(function ($r) use ($existingBundle) {
                 if (empty($r->bundlepk)) return false;
                 return !$existingBundle || (int) $r->bundlepk !== (int) $existingBundle->bundlepk;
@@ -4132,7 +4179,7 @@ class PackingController extends Controller
                 $resolvedPart     = $existingBundle->part ?: optional($packRows->first(fn ($r) => !empty($r->part)))->part;
 
                 $db->table('carton_bundle')->where('bundlepk', $bundlepk)->update([
-                    'bundle_carton' => $validated['bundle_carton'], // BARU -- ikut di-update (mendukung rename saat edit)
+                    'bundle_carton' => $validated['bundle_carton'],
                     'bundle_nobar'  => $validated['bundle_nobar'] ?? $existingBundle->bundle_nobar,
                     'nw'            => $validated['nw'] ?? $existingBundle->nw,
                     'gw'            => $validated['gw'] ?? $existingBundle->gw,
@@ -4161,12 +4208,10 @@ class PackingController extends Controller
                 ]);
             }
 
-            // BARU -- FIX UTAMA (mode EDIT): carton yang SEBELUMNYA ada di
-            // bundle ini tapi SEKARANG tidak ikut lagi (di-uncheck/dihapus
-            // admin dari daftar) -- LEPASKAN sepenuhnya: bundlepk DAN
-            // exportpk/contpk/part-nya, supaya carton itu kembali jadi carton
-            // biasa (tidak nyangkut ke Export Plan yang tadinya hanya
-            // dititipkan dari bundle).
+            // Carton yang SEBELUMNYA ada di bundle ini tapi SEKARANG tidak
+            // ikut lagi (di-uncheck admin, TAPI masih ada carton LAIN yang
+            // tetap dipilih -- kalau SEMUA di-uncheck sudah ditangani di blok
+            // "bubarkan Bundle" di atas) -- LEPASKAN sepenuhnya.
             if ($editingBundlepk) {
                 $originalMemberPackpks = $db->table('pack')->where('bundlepk', $editingBundlepk)->pluck('packpk');
                 $removedPackpks = $originalMemberPackpks->diff($packpks)->values();
@@ -4202,7 +4247,7 @@ class PackingController extends Controller
             return response()->json(['icon' => 'success', 'title' => $pesan]);
         } catch (\Throwable $e) {
             DB::connection('mysql')->rollBack();
-            return response()->json(['icon' => 'error', 'title' => 'Gagal menggabungkan carton.', 'error' => $e,], 500);
+            return response()->json(['icon' => 'error', 'title' => 'Gagal menggabungkan carton.', 'error' => $e], 500);
         }
     }
 
