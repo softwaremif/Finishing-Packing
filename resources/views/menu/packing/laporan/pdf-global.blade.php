@@ -1,388 +1,653 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="shortcut icon" href="{{ asset('/public/css/images/morich.gif') }}" />
-    <title>Morich Indo Fashion - Print Packing (Global)</title>
-    <link href="{{ asset('config/stylist.css') }}" rel="stylesheet" type="text/css" media="screen" />
+    <title>Packing List - {{ $dt2->POno ?? '' }} / {{ $dt2->OP ?? '' }}</title>
     <style type="text/css">
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: "Book Antiqua", Palatino, serif;
+            font-family: "Helvetica Neue", Arial, sans-serif;
             font-size: 11px;
             color: #1e293b;
             line-height: 1.4;
             margin: 0;
-            padding: 10px;
+            padding: 18px 20px;
         }
-        .info-table {
+
+        /* ===================== LETTERHEAD ===================== */
+        .lh-wrap {
+            display: table;
             width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
+            border-bottom: 2.5px solid #1e293b;
+            padding-bottom: 10px;
+            margin-bottom: 14px;
         }
-        .info-table td {
-            padding: 5px 6px;
-            vertical-align: top;
-            border-bottom: 1px dashed #e2e8f0;
+
+        .lh-left {
+            display: table-cell;
+            vertical-align: middle;
+            width: 70%;
         }
-        .print-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            font-size: 11px;
+
+        .lh-right {
+            display: table-cell;
+            vertical-align: middle;
+            width: 30%;
+            text-align: right;
         }
-        .print-table th,
-        .print-table td {
-            border: 1px solid #94a3b8;
-            padding: 6px 4px;
-            text-align: center;
-        }
-        .print-table th {
-            background-color: #cbd5e1 !important;
-            font-weight: bold;
-        }
-        .ftitle {
-            font-size: 14px;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin: 15px 0 8px 0;
+
+        .lh-company {
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: .3px;
             color: #0f172a;
-            border-left: 4px solid #475569;
-            padding-left: 8px;
-            text-align: left;
         }
-        .carton-input {
+
+        .lh-sub {
+            font-size: 9.5px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        .lh-doctitle {
+            font-size: 15px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #0f172a;
+            letter-spacing: .5px;
+        }
+
+        .lh-docref {
+            font-size: 9.5px;
+            color: #64748b;
+            margin-top: 3px;
+        }
+
+        /* ===================== INFO GRID ===================== */
+        .info-grid {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+            margin-bottom: 14px;
+        }
+
+        .info-col {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+            padding-right: 14px;
+        }
+
+        .info-col:last-child {
+            padding-right: 0;
+            padding-left: 14px;
+            border-left: 1px solid #e2e8f0;
+        }
+
+        .info-row {
+            display: table;
+            width: 100%;
+            padding: 3px 0;
+        }
+
+        .info-label {
+            display: table-cell;
+            width: 34%;
+            font-size: 9.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #64748b;
+            letter-spacing: .2px;
+            vertical-align: top;
+            padding: 2px 0;
+        }
+
+        .info-value {
+            display: table-cell;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #0f172a;
+            vertical-align: top;
+            padding: 2px 0;
+        }
+
+        /* ===================== SECTION TITLE ===================== */
+        .sec-title {
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #fff;
+            background: #1e293b;
+            letter-spacing: .4px;
+            padding: 5px 10px;
+            margin: 14px 0 6px 0;
+        }
+
+        /* ===================== TABLES ===================== */
+        table.pl-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 4px;
+            font-size: 10.5px;
+        }
+
+        table.pl-table th,
+        table.pl-table td {
             border: 1px solid #cbd5e1;
-            border-radius: 3px;
-            padding: 2px 4px;
-            margin: 2px;
-            font-family: inherit;
-            font-size: 10px;
+            padding: 5px 4px;
             text-align: center;
-            display: inline-block;
+            vertical-align: middle;
         }
+
+        table.pl-table th {
+            background: #f1f5f9;
+            color: #334155;
+            font-weight: 700;
+            font-size: 9.5px;
+            text-transform: uppercase;
+            letter-spacing: .2px;
+        }
+
+        table.pl-table .row-label {
+            background: #f8fafc;
+            font-weight: 700;
+            text-align: left;
+            padding-left: 8px;
+        }
+
+        table.pl-table tr.total-row td,
+        table.pl-table tr.total-row th {
+            background: #e2e8f0;
+            font-weight: 800;
+        }
+
+        table.pl-table td.text-left {
+            text-align: left;
+            padding-left: 8px;
+        }
+
+        /* ===================== SHIPPING SUMMARY (standar wajib PL garment) ===================== */
+        .ship-summary {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+            border: 1.5px solid #1e293b;
+            border-radius: 4px;
+            margin: 6px 0 14px 0;
+            overflow: hidden;
+        }
+
+        .ship-summary .cell {
+            display: table-cell;
+            text-align: center;
+            padding: 10px 6px;
+            border-right: 1px solid #cbd5e1;
+        }
+
+        .ship-summary .cell:last-child {
+            border-right: none;
+        }
+
+        .ship-summary .cell-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+            color: #64748b;
+            font-weight: 700;
+        }
+
+        .ship-summary .cell-value {
+            font-size: 17px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-top: 3px;
+        }
+
+        .ship-summary .cell-unit {
+            font-size: 9px;
+            color: #94a3b8;
+        }
+
+        /* ===================== CARTON STATUS DOT (ganti dari full-bg input box) ===================== */
+        .ctn-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 2px 8px;
+            margin: 2px;
+            font-size: 9.5px;
+            font-weight: 600;
+            background: #fff;
+            color: #334155;
+        }
+
+        .ctn-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+            background: #94a3b8;
+            flex-shrink: 0;
+        }
+
+        .ctn-dot.ok {
+            background: #16a34a;
+        }
+
+        .ctn-dot.short {
+            background: #dc2626;
+        }
+
+        .ctn-dot.sealed {
+            background: #0369a1;
+        }
+
+        /* ===================== SIGNATURE ===================== */
         .signature-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 30px;
-            font-size: 11px;
+            margin-top: 26px;
+            font-size: 10.5px;
             page-break-inside: avoid;
         }
-        .signature-table th,
+
+        .signature-table th {
+            border: 1px solid #cbd5e1;
+            background: #f1f5f9;
+            text-align: center;
+            padding: 6px;
+            font-weight: 700;
+        }
+
         .signature-table td {
             border: 1px solid #cbd5e1;
             text-align: center;
             padding: 6px;
+            height: 54px;
+            vertical-align: bottom;
         }
+
+        .footnote {
+            font-size: 9px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
         @media print {
-            body { padding: 0; margin: 0; color: #000; }
-            .ftitle { page-break-after: avoid; }
-            table { page-break-inside: auto; }
-            tr { page-break-inside: avoid; page-break-after: auto; }
+            body {
+                padding: 0;
+                margin: 0;
+                color: #000;
+            }
+
+            .sec-title {
+                page-break-after: avoid;
+            }
+
+            table {
+                page-break-inside: auto;
+            }
+
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+
             * {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
-            .carton-input { border: .5px solid #94a3b8 !important; }
         }
+
+        .ctn-dot.pending {
+            background: #94a3b8;
+        }
+
+        /* abu -- belum ada Actual */
+        .ctn-dot.partial {
+            background: #dc2626;
+        }
+
+        /* merah -- Actual masih kurang */
+        .ctn-dot.complete {
+            background: #16a34a;
+        }
+
+        /* hijau -- Actual sudah penuh */
+        .ctn-dot.sealed {
+            background: #0369a1;
+        }
+
+        /* biru -- sudah Segel */
     </style>
 </head>
+
 <body>
-    {{-- Timestamp Terakhir Diupdate -- dari baris pack TERBARU di
-         seluruh scope PO+OP+poref ini ($dtp dikirim dari printGlobal()). --}}
-    <table width="100%" style="font-size: 10px; margin-bottom: 10px;">
-        <tr>
-            <td style="color: #64748b;">
-                <i>Last updated: {{ $dtp ? $dtp->tanggal . ' ' . $dtp->waktu : '-' }}</i>
-            </td>
-        </tr>
-    </table>
 
-    {{-- Informasi Detail Utama PO --}}
-    <table class="info-table">
-        <tr>
-            <td width="12%"><strong>Customer</strong></td>
-            <td width="18%">:
-                {{-- FIX: tidak lagi berdasarkan $dt->gabung (konsep itu
-                     tidak ada di versi Global) -- cukup cek apakah scope
-                     ini memang mencakup lebih dari 1 customer. --}}
-                @if ($customersList->count() > 1)
-                    @foreach ($customersList as $c)
-                        {{ $c }};<br>
-                    @endforeach
-                @else
-                    {{ $customersList->first() ?? ($dt2->customer ?? '') }}
-                @endif
-            </td>
-            <td width="10%"><strong>Season</strong></td>
-            <td width="15%">: {{ $dt2->season ?? '' }}</td>
-            <td width="10%"><strong>PO.No</strong></td>
-            <td width="15%">: {{ $dt2->POno ?? '' }}</td>
-            <td width="10%"><strong>OP#</strong></td>
-            <td width="15%">: {{ $dt2->OP ?? '' }}</td>
-        </tr>
-        <tr>
-            <td><strong>Buyer</strong></td>
-            <td>: {{ $dt2->buyer ?? '' }}</td>
-            <td><strong>Style</strong></td>
-            <td>: {{ $dt2->style ?? '' }}</td>
-            <td><strong>Color</strong></td>
-            <td>:
-                {{-- FIX: versi Global SELALU bisa mencakup banyak warna,
-                     jadi tampilkan daftar kalau lebih dari 1, bukan
-                     tergantung flag gabung. --}}
-                @if ($materialsList->count() > 1)
-                    @foreach ($materialsList as $m)
-                        {{ $m }};<br>
-                    @endforeach
-                @else
-                    {{ $materialsList->first() ?? ($dt2->material ?? '') }}
-                @endif
-            </td>
-            <td><strong>Silhouette</strong></td>
-            <td>: {{ $dt2->silhouette ?? '' }}</td>
-        </tr>
-        <tr>
-            <td><strong>Shipdate Plan</strong></td>
-            <td>: {{ $dt2->shipdate1 ?? '' }}</td>
-            <td><strong>Shipdate Aktual</strong></td>
-            <td>: {{ $dt2->shipdate2 ?? '' }}</td>
-            <td><strong>SAP ID</strong></td>
-            <td>: {{ $dt2->sap1 ?? '' }}</td>
-            <td><strong>SAP No.</strong></td>
-            <td>: {{ $dt2->sap2 ?? '' }}</td>
-        </tr>
-        <tr>
-            <td><strong>Total CTN</strong></td>
-            <td>: <strong>{{ $totalCtn }}</strong></td>
-            <td><strong>MEAS CTN</strong></td>
-            <td>:
-                {{-- FIX: $measList sekarang koleksi STRING biasa (bukan
-                     object ->meas) -- dipakai langsung sebagai {{ $x3 }}. --}}
-                @foreach ($measList as $x3)
-                    {{ $x3 }}; <br>
-                @endforeach
-            </td>
-            <td><strong>Warehouse</strong></td>
-            <td>: {{ $dt2->wh ?? '' }}</td>
-            <td><strong>Keterangan</strong></td>
-            <td>: {{ $dt2->ket ?? '' }}</td>
-        </tr>
-    </table>
+    {{-- ===================== LETTERHEAD ===================== --}}
+    <div class="lh-wrap">
+        <div class="lh-left">
+            <div class="lh-company">PT. MORICH INDO FASHION</div>
+            <div class="lh-sub">Garment Manufacturer &middot; Finishing & Packing </div>
+        </div>
+        <div class="lh-right">
+            <div class="lh-doctitle">Packing List</div>
+            <div class="lh-docref">
+                No: {{ $dt2->POno ?? '-' }}/{{ $dt2->OP ?? '-' }}<br>
+                {{-- Printed: {{ now()->format('d M Y H:i') }} --}}
+            </div>
+        </div>
+    </div>
 
-    {{-- Isi Laporan: Breakdown Size & Qty + Detail Packing --}}
-    <div class="pdf-content-container">
-        @php
-            $cjml    = count($activeSizes);
-            $cheader = $cjml + 1;
-        @endphp
+    {{-- ===================== INFO GRID ===================== --}}
+    <div class="info-grid">
+        <div class="info-col">
+            <div class="info-row">
+                <div class="info-label">Buyer</div>
+                <div class="info-value">{{ $dt2->buyer ?? '-' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Customer</div>
+                <div class="info-value">
+                    @if ($customersList->count() > 1)
+                        {{ $customersList->implode(', ') }}
+                    @else
+                        {{ $customersList->first() ?? ($dt2->customer ?? '-') }}
+                    @endif
+                </div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Season</div>
+                <div class="info-value">{{ $dt2->season ?? '-' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Style</div>
+                <div class="info-value">{{ $dt2->style ?? '-' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Silhouette</div>
+                <div class="info-value">{{ $dt2->silhouette ?? '-' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Color</div>
+                <div class="info-value">
+                    @if ($materialsList->count() > 1)
+                        {{ $materialsList->implode(', ') }}
+                    @else
+                        {{ $materialsList->first() ?? ($dt2->material ?? '-') }}
+                    @endif
+                </div>
+            </div>
+        </div>
+        <div class="info-col">
+            <div class="info-row">
+                <div class="info-label">PO No.</div>
+                <div class="info-value">{{ $dt2->POno ?? '-' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">OP No.</div>
+                <div class="info-value">{{ $dt2->OP ?? '-' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Ship Date Plan</div>
+                <div class="info-value">{{ $dt2->shipdate1 ?? '-' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Ship Date Actual</div>
+                <div class="info-value">{{ $dt2->shipdate2 ?? '-' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Warehouse</div>
+                <div class="info-value">{{ $dt2->wh ?? '-' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Remark</div>
+                <div class="info-value">{{ $dt2->ket ?? '-' }}</div>
+            </div>
+        </div>
+    </div>
 
-        <div align="center" class="ftitle">Breakdown Size &amp; Qty</div>
-        <table align="center" width="100%" border="1" id="hor-minimalist-a"
-            style="font-family:Book Antiqua; font-size:12px;">
-            <tr align="center" bgcolor="#CCCCCC">
-                <th width="10%">Color</th>
-                <th width="8%">Sec Size</th>
-                <th width="12%">Item</th>
+    {{-- ===================== SHIPPING SUMMARY -- standar wajib PL garment ===================== --}}
+    <div class="sec-title">Shipping Summary</div>
+    <div class="ship-summary">
+        <div class="cell">
+            <div class="cell-label">Total Carton</div>
+            <div class="cell-value">{{ number_format($totalCtn) }}</div>
+            <div class="cell-unit">Ctn</div>
+        </div>
+        <div class="cell">
+            <div class="cell-label">Total Qty Shipped</div>
+            <div class="cell-value">{{ number_format($orderShip['ship_total'] ?? 0) }}</div>
+            <div class="cell-unit">Pcs</div>
+        </div>
+        <div class="cell">
+            <div class="cell-label">Total N.W</div>
+            <div class="cell-value">{{ number_format($totalNw, 1) }}</div>
+            <div class="cell-unit">Kg</div>
+        </div>
+        <div class="cell">
+            <div class="cell-label">Total G.W</div>
+            <div class="cell-value">{{ number_format($totalGw, 1) }}</div>
+            <div class="cell-unit">Kg</div>
+        </div>
+        <div class="cell">
+            <div class="cell-label">Total Volume</div>
+            <div class="cell-value">{{ number_format($totalCbm, 3) }}</div>
+            <div class="cell-unit">m&sup3; (CBM)</div>
+        </div>
+    </div>
+    @if ($measCells->isNotEmpty())
+        <div class="footnote">
+            Carton Measurement (L &times; W &times; H): {{ $measCells->implode('  |  ') }}
+        </div>
+    @endif
+
+    {{-- ===================== ORDER VS SHIPPED ===================== --}}
+    <div class="sec-title">Order vs Shipped Quantity</div>
+    <table class="pl-table">
+        <thead>
+            <tr>
+                <th style="width:18%;">Customer / Color / Sec Size</th> {{-- GANTI -- 3 kolom jadi 1 --}}
+                <th style="width:9%;">Qty Type</th>
                 @foreach ($activeSizes as $i => $sz)
                     <th>{{ $sz }}</th>
                 @endforeach
-                <th>Total</th>
+                <th style="width:8%;">Total</th>
             </tr>
-
-            {{-- BARU: 1 blok (4 baris: Order/Ship/+-/%) PER Color/Sec Size --
-                 kolom Color & Sec Size di-rowspan untuk 4 baris itu. --}}
+        </thead>
+        <tbody>
             @foreach ($orderShipByCombo as $combo)
                 @php $d = $combo['data']; @endphp
                 <tr>
-                    <td align="center" rowspan="4" style="vertical-align:middle;">{{ $combo['material'] }}</td>
-                    <td align="center" rowspan="4" style="vertical-align:middle;">{{ $combo['secsz'] ?: '-' }}</td>
-                    <th>Order Qty</th>
+                    <td rowspan="4" class="text-left" style="vertical-align:middle;">
+                        <div>{{ $combo['material'] }}@if ($combo['secsz'])
+                                &middot; {{ $combo['secsz'] }}
+                            @endif
+                        </div>
+                        <div style="font-weight:700;">{{ $combo['customer'] }}</div>
+                    </td>
+                    <td class="row-label">Order Qty</td>
                     @foreach ($activeSizes as $i => $sz)
                         <td>{{ $d['order'][$i] ?? '' }}</td>
                     @endforeach
-                    <th>{{ $d['order_total'] ?? 0 }}</th>
+                    <td style="font-weight:700;">{{ $d['order_total'] ?? 0 }}</td>
                 </tr>
                 <tr>
-                    <th>Ship Qty</th>
+                    <td class="row-label">Shipped Qty</td>
                     @foreach ($activeSizes as $i => $sz)
                         <td>{{ $d['ship'][$i] ?? '' }}</td>
                     @endforeach
-                    <th>{{ $d['ship_total'] ?? 0 }}</th>
+                    <td style="font-weight:700;">{{ $d['ship_total'] ?? 0 }}</td>
                 </tr>
                 <tr>
-                    <th>+/-</th>
+                    <td class="row-label">Balance (+/-)</td>
                     @foreach ($activeSizes as $i => $sz)
                         <td>{{ $d['diff'][$i] ?? '' }}</td>
                     @endforeach
-                    <th>{{ $d['diff_total'] ?? 0 }}</th>
+                    <td style="font-weight:700;">{{ $d['diff_total'] ?? 0 }}</td>
                 </tr>
                 <tr>
-                    <th>%</th>
+                    <td class="row-label">Shipped %</td>
                     @foreach ($activeSizes as $i => $sz)
-                        <td>{{ ($d['pct'][$i] ?? '') !== '' ? number_format($d['pct'][$i], 2, ',', '.') : '' }}</td>
+                        <td>{{ ($d['pct'][$i] ?? '') !== '' ? number_format($d['pct'][$i], 1) . '%' : '' }}</td>
                     @endforeach
-                    <th>{{ number_format($d['pct_total'] ?? 0, 2, ',', '.') }}</th>
+                    <td style="font-weight:700;">{{ number_format($d['pct_total'] ?? 0, 1) }}%</td>
                 </tr>
             @endforeach
 
-            {{-- Baris TOTAL keseluruhan (semua Color/Sec Size digabung) --}}
-            <tr align="center" bgcolor="#e5e7eb">
-                <th colspan="3">TOTAL</th>
-                @foreach ($activeSizes as $i => $sz)
-                    <th></th>
-                @endforeach
-                <th></th>
-            </tr>
-            <tr>
-                <td colspan="2" class="text-start" style="text-align:left; padding-left:6px;"></td>
-                <th>Order Qty</th>
+            <tr class="total-row">
+                <td class="text-left">GRAND TOTAL</td> {{-- GANTI colspan="3" -> tanpa colspan (1 kolom) --}}
+                <td class="row-label" style="background:#e2e8f0;">Order Qty</td>
                 @foreach ($activeSizes as $i => $sz)
                     <td>{{ $orderShip['order'][$i] ?? '' }}</td>
                 @endforeach
-                <th>{{ $orderShip['order_total'] ?? 0 }}</th>
+                <td>{{ $orderShip['order_total'] ?? 0 }}</td>
             </tr>
-            <tr>
-                <td colspan="2"></td>
-                <th>Ship Qty</th>
+            <tr class="total-row">
+                <td class="text-left"></td>
+                <td class="row-label" style="background:#e2e8f0;">Shipped Qty</td>
                 @foreach ($activeSizes as $i => $sz)
                     <td>{{ $orderShip['ship'][$i] ?? '' }}</td>
                 @endforeach
-                <th>{{ $orderShip['ship_total'] ?? 0 }}</th>
+                <td>{{ $orderShip['ship_total'] ?? 0 }}</td>
             </tr>
-            <tr>
-                <td colspan="2"></td>
-                <th>+/-</th>
+            <tr class="total-row">
+                <td class="text-left"></td>
+                <td class="row-label" style="background:#e2e8f0;">Balance (+/-)</td>
                 @foreach ($activeSizes as $i => $sz)
                     <td>{{ $orderShip['diff'][$i] ?? '' }}</td>
                 @endforeach
-                <th>{{ $orderShip['diff_total'] ?? 0 }}</th>
+                <td>{{ $orderShip['diff_total'] ?? 0 }}</td>
             </tr>
-            <tr>
-                <td colspan="2"></td>
-                <th>%</th>
+            <tr class="total-row">
+                <td class="text-left"></td>
+                <td class="row-label" style="background:#e2e8f0;">Shipped %</td>
                 @foreach ($activeSizes as $i => $sz)
-                    <td>{{ ($orderShip['pct'][$i] ?? '') !== '' ? number_format($orderShip['pct'][$i], 2, ',', '.') : '' }}</td>
+                    <td>{{ ($orderShip['pct'][$i] ?? '') !== '' ? number_format($orderShip['pct'][$i], 1) . '%' : '' }}
+                    </td>
                 @endforeach
-                <th>{{ number_format($orderShip['pct_total'] ?? 0, 2, ',', '.') }}</th>
+                <td>{{ number_format($orderShip['pct_total'] ?? 0, 1) }}%</td>
             </tr>
+        </tbody>
+    </table>
 
-            <tr align="center" bgcolor="#CCCCCC">
-                <th colspan="{{ count($activeSizes) + 4 }}"></th>
-            </tr>
+    {{-- ===================== CARTON BREAKDOWN ===================== --}}
+    <div class="sec-title">Carton Breakdown Detail</div>
+    <div class="footnote" style="margin-bottom:6px;">
+        <span class="ctn-dot pending" style="display:inline-block;"></span> Pending &nbsp;
+        <span class="ctn-dot partial" style="display:inline-block;"></span> Partial &nbsp;
+        <span class="ctn-dot complete" style="display:inline-block;"></span> Complete &nbsp;
+        <span class="ctn-dot sealed" style="display:inline-block;"></span> Sealed
+    </div>
+
+    <table class="pl-table">
+        <thead>
             <tr>
-                <th colspan="3">N.W</th>
-                @foreach ($nwCells as $cell)
-                    <td>{{ $cell }}</td>
-                @endforeach
+                <th style="width:16%;">Customer / Color / Sec Size</th> {{-- GANTI -- 3 kolom jadi 1 --}}
+                <th style="width:11%;">Size Ratio</th>
+                <th style="width:6%;">Ctn</th>
+                <th style="width:6%;">Pcs/Ctn</th>
+                <th>Carton No.</th>
             </tr>
-            <tr>
-                <th colspan="3">G.W</th>
-                @foreach ($gwCells as $cell)
-                    <td>{{ $cell }}</td>
-                @endforeach
-            </tr>
-        </table>
-
-        <div align="center" class="ftitle">Detail Packing</div>
-
-        {{-- BARU: 2 bagian --
-             1) Carton SIMPLE (1 Color/Sec Size per carton) yang breakdown
-                size-nya IDENTIK digabung jadi 1 baris -- CTN = jumlah
-                carton tergabung, CARTON NO berisi SEMUA nomornya.
-             2) Carton MIXED (lintas Color/Sec Size dalam 1 carton fisik)
-                -- TETAP 1 blok per carton (tidak digabung dengan carton
-                lain), Color/Sec Size di-rowspan DALAM carton itu saja. --}}
-        <table width="100%" align="center" border="1" id="hor-minimalist-a"
-            style="font-family:Book Antiqua; font-size:12px;">
-            <tr align="center" bgcolor="#CCCCCC">
-                <th width="10%">Color</th>
-                <th width="8%">Sec Size</th>
-                <th width="10%">Size</th>
-                <th width="5%">CTN</th>
-                <th width="5%">PCS</th>
-                <th width="62%">CARTON NO</th>
-            </tr>
-
-            {{-- 1) Carton simple, digabung kalau profilnya identik --}}
+        </thead>
+        <tbody>
+            {{-- 1) Carton simple --}}
             @foreach ($detailPackingSimpleRows as $row)
                 <tr>
-                    <td align="center">{{ $row['material'] }}</td>
-                    <td align="center">{{ $row['secsz'] ?: '-' }}</td>
-                    <td>
+                    <td class="text-left">
+                        <div>{{ $row['material'] }}@if ($row['secsz'])
+                                &middot; {{ $row['secsz'] }}
+                            @endif
+                        </div>
+                        <div style="font-weight:700;">{{ $row['customer'] }}</div>
+                    </td>
+                    <td class="text-left">
                         @foreach ($row['sizeLines'] as $line)
                             {{ $line }}<br>
                         @endforeach
                     </td>
-                    <td align="center">{{ $row['ctn'] }}</td>
-                    <td align="center">{{ $row['pcsp'] }}</td>
-                    <td>
+                    <td style="font-weight:700;">{{ $row['ctn'] }}</td>
+                    <td style="font-weight:700;">{{ $row['pcsp'] }}</td>
+                    <td class="text-left">
                         @foreach ($row['cartonRows'] as $c)
-                            <input type="text" value="{{ $c['label'] }}" style="{{ $c['style'] }}" readonly>
+                            <span class="ctn-tag"><span
+                                    class="ctn-dot {{ $c['statusKey'] }}"></span>{{ $c['label'] }}</span>
                         @endforeach
                     </td>
                 </tr>
             @endforeach
 
-            {{-- 2) Carton Mixed antar Color/Sec Size -- carton fisik yang
-                 breakdown-nya IDENTIK (sama semua Color/Sec Size/Size/Qty)
-                 sekarang DIGABUNG juga: CTN = jumlah carton yang cocok,
-                 CARTON NO berisi SEMUA nomor carton yang tergabung. --}}
+            {{-- 2) Carton Mixed antar Customer/Color/Sec Size -- rowspan SEKARANG
+             pakai colorRowspan (yang sudah dihitung dari customer+material
+             di controller), jadi 1 sel gabungan Customer/Color berlaku utk
+             sisa baris turunannya (Sec Size beda tetap baris terpisah). --}}
             @foreach ($detailPackingMixedRows as $row)
                 <tr>
                     @if ($row['showColor'])
-                        <td align="center" rowspan="{{ $row['colorRowspan'] }}" style="vertical-align:middle;">
-                            {{ $row['material'] }}
+                        <td rowspan="{{ $row['colorRowspan'] }}" class="text-left" style="vertical-align:middle;">
+                            <div>{{ $row['material'] }}</div>
+                            <div style="font-weight:700;">{{ $row['customer'] }}</div>
                         </td>
                     @endif
-                    @if ($row['showSecsz'])
-                        <td align="center" rowspan="{{ $row['secszRowspan'] }}" style="vertical-align:middle;">
-                            {{ $row['secsz'] ?: '-' }}
-                        </td>
-                    @endif
-                    <td>
+                    <td class="text-left">
+                        @if ($row['secsz'])
+                            <div style="font-size:9px; color:#64748b;">{{ $row['secsz'] }}</div>
+                        @endif
                         @foreach ($row['sizeLines'] as $line)
                             {{ $line }}<br>
                         @endforeach
                     </td>
                     @if ($row['isFirstOfCarton'])
-                        <td align="center" rowspan="{{ $row['rowspanCarton'] }}" style="vertical-align:middle;">
-                            {{ $row['ctn'] }}
-                        </td>
+                        <td rowspan="{{ $row['rowspanCarton'] }}" style="vertical-align:middle; font-weight:700;">
+                            {{ $row['ctn'] }}</td>
                     @endif
-                    <td align="center">{{ $row['pcsp'] }}</td>
+                    <td style="font-weight:700;">{{ $row['pcsp'] }}</td>
                     @if ($row['isFirstOfCarton'])
-                        <td rowspan="{{ $row['rowspanCarton'] }}" style="vertical-align:middle;">
+                        <td rowspan="{{ $row['rowspanCarton'] }}" style="vertical-align:middle;" class="text-left">
                             @foreach ($row['cartonInputs'] as $c)
-                                <input type="text" value="{{ $c['label'] }}" style="{{ $c['style'] }}" readonly>
+                                <span class="ctn-tag"><span
+                                        class="ctn-dot {{ $c['statusKey'] }}"></span>{{ $c['label'] }}</span>
                             @endforeach
                         </td>
                     @endif
                 </tr>
             @endforeach
-        </table>
-    </div>
+        </tbody>
+    </table>
 
-    {{-- Kolom Tanda Tangan Manajemen --}}
+
+    <div class="footnote">Last data update: {{ $dtp ? $dtp->tanggal . ' ' . $dtp->waktu : '-' }}</div>
+
+    {{-- ===================== SIGNATURE ===================== --}}
     <table class="signature-table">
-        <thead style="background-color: #f1f5f9;">
+        <thead>
             <tr>
-                <th width="20%">Pembuat</th>
-                <th width="20%">Chief Finishing</th>
-                <th width="20%">SPV Finishing</th>
-                <th width="20%">Akurasi</th>
-                <th width="20%">Manager Produksi</th>
+                <th style="width:20%;">Prepared By</th>
+                <th style="width:20%;">Chief Finishing</th>
+                <th style="width:20%;">SPV Finishing</th>
+                <th style="width:20%;">QA / Accuracy</th>
+                <th style="width:20%;">Production Manager</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td><br><br><br><br></td>
-                <td><br><br><br><br></td>
-                <td><br><br><br><br></td>
-                <td><br><br><br><br></td>
-                <td><br><br><br><br></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
             </tr>
         </tbody>
     </table>
+
 </body>
+
 </html>

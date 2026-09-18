@@ -181,16 +181,61 @@
         <table align="center" width="100%" border="1" id="hor-minimalist-a"
             style="font-family:Book Antiqua; font-size:12px;">
             <tr align="center" bgcolor="#CCCCCC">
-                <th colspan="{{ $cheader }}">Size &amp; Qty</th>
-                <th rowspan="2">Total</th>
-            </tr>
-            <tr>
-                <th>Size</th>
+                <th width="10%">Color</th>
+                <th width="8%">Sec Size</th>
+                <th width="12%">Item</th>
                 @foreach ($activeSizes as $i => $sz)
                     <th>{{ $sz }}</th>
                 @endforeach
+                <th>Total</th>
+            </tr>
+
+            {{-- BARU: 1 blok (4 baris: Order/Ship/+-/%) PER Color/Sec Size --
+                 kolom Color & Sec Size di-rowspan untuk 4 baris itu. --}}
+            @foreach ($orderShipByCombo as $combo)
+                @php $d = $combo['data']; @endphp
+                <tr>
+                    <td align="center" rowspan="4" style="vertical-align:middle;">{{ $combo['material'] }}</td>
+                    <td align="center" rowspan="4" style="vertical-align:middle;">{{ $combo['secsz'] ?: '-' }}</td>
+                    <th>Order Qty</th>
+                    @foreach ($activeSizes as $i => $sz)
+                        <td>{{ $d['order'][$i] ?? '' }}</td>
+                    @endforeach
+                    <th>{{ $d['order_total'] ?? 0 }}</th>
+                </tr>
+                <tr>
+                    <th>Ship Qty</th>
+                    @foreach ($activeSizes as $i => $sz)
+                        <td>{{ $d['ship'][$i] ?? '' }}</td>
+                    @endforeach
+                    <th>{{ $d['ship_total'] ?? 0 }}</th>
+                </tr>
+                <tr>
+                    <th>+/-</th>
+                    @foreach ($activeSizes as $i => $sz)
+                        <td>{{ $d['diff'][$i] ?? '' }}</td>
+                    @endforeach
+                    <th>{{ $d['diff_total'] ?? 0 }}</th>
+                </tr>
+                <tr>
+                    <th>%</th>
+                    @foreach ($activeSizes as $i => $sz)
+                        <td>{{ ($d['pct'][$i] ?? '') !== '' ? number_format($d['pct'][$i], 2, ',', '.') : '' }}</td>
+                    @endforeach
+                    <th>{{ number_format($d['pct_total'] ?? 0, 2, ',', '.') }}</th>
+                </tr>
+            @endforeach
+
+            {{-- Baris TOTAL keseluruhan (semua Color/Sec Size digabung) --}}
+            <tr align="center" bgcolor="#e5e7eb">
+                <th colspan="3">TOTAL</th>
+                @foreach ($activeSizes as $i => $sz)
+                    <th></th>
+                @endforeach
+                <th></th>
             </tr>
             <tr>
+                <td colspan="2" class="text-start" style="text-align:left; padding-left:6px;"></td>
                 <th>Order Qty</th>
                 @foreach ($activeSizes as $i => $sz)
                     <td>{{ $orderShip['order'][$i] ?? '' }}</td>
@@ -198,6 +243,7 @@
                 <th>{{ $orderShip['order_total'] ?? 0 }}</th>
             </tr>
             <tr>
+                <td colspan="2"></td>
                 <th>Ship Qty</th>
                 @foreach ($activeSizes as $i => $sz)
                     <td>{{ $orderShip['ship'][$i] ?? '' }}</td>
@@ -205,6 +251,7 @@
                 <th>{{ $orderShip['ship_total'] ?? 0 }}</th>
             </tr>
             <tr>
+                <td colspan="2"></td>
                 <th>+/-</th>
                 @foreach ($activeSizes as $i => $sz)
                     <td>{{ $orderShip['diff'][$i] ?? '' }}</td>
@@ -212,23 +259,25 @@
                 <th>{{ $orderShip['diff_total'] ?? 0 }}</th>
             </tr>
             <tr>
+                <td colspan="2"></td>
                 <th>%</th>
                 @foreach ($activeSizes as $i => $sz)
                     <td>{{ ($orderShip['pct'][$i] ?? '') !== '' ? number_format($orderShip['pct'][$i], 2, ',', '.') : '' }}</td>
                 @endforeach
                 <th>{{ number_format($orderShip['pct_total'] ?? 0, 2, ',', '.') }}</th>
             </tr>
+
             <tr align="center" bgcolor="#CCCCCC">
-                <th colspan="{{ $cjml + 2 }}"></th>
+                <th colspan="{{ count($activeSizes) + 4 }}"></th>
             </tr>
             <tr>
-                <th>N.W</th>
+                <th colspan="3">N.W</th>
                 @foreach ($nwCells as $cell)
                     <td>{{ $cell }}</td>
                 @endforeach
             </tr>
             <tr>
-                <th>G.W</th>
+                <th colspan="3">G.W</th>
                 @foreach ($gwCells as $cell)
                     <td>{{ $cell }}</td>
                 @endforeach
@@ -236,102 +285,80 @@
         </table>
 
         <div align="center" class="ftitle">Detail Packing</div>
+
+        {{-- BARU: 2 bagian --
+             1) Carton SIMPLE (1 Color/Sec Size per carton) yang breakdown
+                size-nya IDENTIK digabung jadi 1 baris -- CTN = jumlah
+                carton tergabung, CARTON NO berisi SEMUA nomornya.
+             2) Carton MIXED (lintas Color/Sec Size dalam 1 carton fisik)
+                -- TETAP 1 blok per carton (tidak digabung dengan carton
+                lain), Color/Sec Size di-rowspan DALAM carton itu saja. --}}
         <table width="100%" align="center" border="1" id="hor-minimalist-a"
             style="font-family:Book Antiqua; font-size:12px;">
             <tr align="center" bgcolor="#CCCCCC">
                 <th width="10%">Color</th>
                 <th width="8%">Sec Size</th>
-                <th width="5%">Size</th>
+                <th width="10%">Size</th>
                 <th width="5%">CTN</th>
                 <th width="5%">PCS</th>
-                <th width="67%">CARTON NO</th>
+                <th width="62%">CARTON NO</th>
             </tr>
 
-            {{-- BARU: 1 combo Color/Sec Size bisa punya BEBERAPA baris
-                 (1 per size + baris Mixed) -- kolom Color & Sec Size
-                 di-MERGE (rowspan) untuk SEMUA baris combo itu, supaya
-                 tidak diulang-ulang. Struktur Size/CTN/PCS/CARTON NO
-                 PERSIS sama seperti versi lama (Size = label 1 baris,
-                 BUKAN kolom terpisah per size). --}}
-            {{-- BARU: carton yang dipakai LINTAS Color/Sec Size (Mixed
-                 antar warna) -- ditampilkan sebagai 1 BARIS TUNGGAL di
-                 sini, MERANGKUM semua warna & size di dalamnya sekaligus.
-                 Carton-carton ini TIDAK muncul lagi di blok per-combo di
-                 bawah (sudah dikecualikan di controller), supaya nomor
-                 carton yang sama tidak diulang-ulang. --}}
-            @if (!empty($globalMixedRows))
-                <tr bgcolor="#f1f5f9">
-                    <th colspan="6" style="text-align:left; padding-left:8px;">
-                        Carton Mixed (Lintas Color / Sec Size)
-                    </th>
+            {{-- 1) Carton simple, digabung kalau profilnya identik --}}
+            @foreach ($detailPackingSimpleRows as $row)
+                <tr>
+                    <td align="center">{{ $row['material'] }}</td>
+                    <td align="center">{{ $row['secsz'] ?: '-' }}</td>
+                    <td>
+                        @foreach ($row['sizeLines'] as $line)
+                            {{ $line }}<br>
+                        @endforeach
+                    </td>
+                    <td align="center">{{ $row['ctn'] }}</td>
+                    <td align="center">{{ $row['pcsp'] }}</td>
+                    <td>
+                        @foreach ($row['cartonRows'] as $c)
+                            <input type="text" value="{{ $c['label'] }}" style="{{ $c['style'] }}" readonly>
+                        @endforeach
+                    </td>
                 </tr>
-                @foreach ($globalMixedRows as $gm)
-                    <tr>
-                        <th colspan="3" style="text-align:left; padding-left:6px;">
-                            @foreach ($gm['breakdownLines'] as $line)
-                                {{ $line['label'] }} : {{ $line['qty'] }}<hr>
-                            @endforeach
-                        </th>
-                        <td align="center">1</td>
-                        <td align="center">{{ $gm['pcsp'] }}</td>
-                        <td>
-                            <input type="text" value="{{ $gm['cartonInput']['label'] }}" style="{{ $gm['cartonInput']['style'] }}" readonly>
+            @endforeach
+
+            {{-- 2) Carton Mixed antar Color/Sec Size -- carton fisik yang
+                 breakdown-nya IDENTIK (sama semua Color/Sec Size/Size/Qty)
+                 sekarang DIGABUNG juga: CTN = jumlah carton yang cocok,
+                 CARTON NO berisi SEMUA nomor carton yang tergabung. --}}
+            @foreach ($detailPackingMixedRows as $row)
+                <tr>
+                    @if ($row['showColor'])
+                        <td align="center" rowspan="{{ $row['colorRowspan'] }}" style="vertical-align:middle;">
+                            {{ $row['material'] }}
                         </td>
-                    </tr>
-                @endforeach
-            @endif
-
-            {{-- Blok per combo Color/Sec Size (carton yang TIDAK
-                 lintas-warna) --}}
-            @foreach ($detailPackingByCombo as $combo)
-                @php $firstRowOfCombo = true; @endphp
-
-                {{-- Normal size groups (urut < 21) --}}
-                @foreach ($combo['normalGroups'] as $group)
-                    <tr>
-                        @if ($firstRowOfCombo)
-                            <td align="center" rowspan="{{ $combo['rowspan'] }}" style="vertical-align:middle;">
-                                {{ $combo['material'] }}
-                            </td>
-                            <td align="center" rowspan="{{ $combo['rowspan'] }}" style="vertical-align:middle;">
-                                {{ $combo['secsz'] ?: '-' }}
-                            </td>
-                            @php $firstRowOfCombo = false; @endphp
-                        @endif
-                        <th>{{ $group['size'] }}</th>
-                        <td align="center">{{ $group['ctn'] }}</td>
-                        <td align="center">{{ $group['pcsp'] }}</td>
-                        <td>
-                            @foreach ($group['cartonRows'] as $c)
+                    @endif
+                    @if ($row['showSecsz'])
+                        <td align="center" rowspan="{{ $row['secszRowspan'] }}" style="vertical-align:middle;">
+                            {{ $row['secsz'] ?: '-' }}
+                        </td>
+                    @endif
+                    <td>
+                        @foreach ($row['sizeLines'] as $line)
+                            {{ $line }}<br>
+                        @endforeach
+                    </td>
+                    @if ($row['isFirstOfCarton'])
+                        <td align="center" rowspan="{{ $row['rowspanCarton'] }}" style="vertical-align:middle;">
+                            {{ $row['ctn'] }}
+                        </td>
+                    @endif
+                    <td align="center">{{ $row['pcsp'] }}</td>
+                    @if ($row['isFirstOfCarton'])
+                        <td rowspan="{{ $row['rowspanCarton'] }}" style="vertical-align:middle;">
+                            @foreach ($row['cartonInputs'] as $c)
                                 <input type="text" value="{{ $c['label'] }}" style="{{ $c['style'] }}" readonly>
                             @endforeach
                         </td>
-                    </tr>
-                @endforeach
-
-                {{-- Mixed carton (urut = 21): satu carton isi beberapa size --}}
-                @foreach ($combo['mixedRows'] as $mixed)
-                    <tr>
-                        @if ($firstRowOfCombo)
-                            <td align="center" rowspan="{{ $combo['rowspan'] }}" style="vertical-align:middle;">
-                                {{ $combo['material'] }}
-                            </td>
-                            <td align="center" rowspan="{{ $combo['rowspan'] }}" style="vertical-align:middle;">
-                                {{ $combo['secsz'] ?: '-' }}
-                            </td>
-                            @php $firstRowOfCombo = false; @endphp
-                        @endif
-                        <th colspan="2">
-                            @foreach ($mixed['labelLines'] as $idx => $line)
-                                {{ $line }} | {{ $mixed['pcsLines'][$idx] ?? '' }}<hr>
-                            @endforeach
-                        </th>
-                        <td align="center">{{ $mixed['pcsp'] }}</td>
-                        <td>
-                            <input type="text" value="{{ $mixed['cartonInput']['label'] }}" style="{{ $mixed['cartonInput']['style'] }}" readonly>
-                        </td>
-                    </tr>
-                @endforeach
+                    @endif
+                </tr>
             @endforeach
         </table>
     </div>
