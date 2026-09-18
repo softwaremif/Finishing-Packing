@@ -67,7 +67,9 @@
                     <div class="rounded bg-light border p-2 text-muted mt-2" style="font-size:12px;" id="urutInfoCartonText">
                         <i class="fas fa-info-circle me-1"></i>
                         Nomor Carton akan diurutkan mulai dari nomor awal yang dimasukkan. <strong class="text-dark">Barcode
-                        TIDAK ikut berubah</strong> (kecuali centang opsi di atas).
+                        TIDAK ikut berubah</strong> (kecuali centang opsi di atas). Carton yang sudah <strong class="text-dark">Sealed</strong>,
+                        <strong class="text-dark">Shipped</strong>, atau anggota <strong class="text-dark">Carton Besar</strong> tidak ikut diurutkan
+                        (edit Carton Besar lewat menu Edit Carton Besar).
                     </div>
                 </div>
 
@@ -214,15 +216,17 @@
     function toggleUrutPairBarcodeGlobal() {
         const checked = $('#urutPairBarcodeGlobal').is(':checked');
         $('#urutPairBarcodeInputWrapper').toggleClass('d-none', !checked);
-
+ 
         $('#urutInfoCartonText').html(checked ? `
             <i class="fas fa-info-circle me-1"></i>
             Nomor Carton <strong class="text-dark">dan</strong> Barcode akan diurutkan BERSAMAAN dari nilai
             awal masing-masing -- carton urutan ke-N pasti dapat barcode urutan ke-N juga (selalu berpasangan).
+            Carton Sealed/Shipped/anggota Carton Besar tidak ikut.
         ` : `
             <i class="fas fa-info-circle me-1"></i>
             Nomor Carton akan diurutkan mulai dari nomor awal yang dimasukkan. <strong class="text-dark">Barcode
             TIDAK ikut berubah</strong>. Carton "Mixed" tetap dapat nomor yang SAMA di semua warnanya.
+            Carton Sealed/Shipped/anggota Carton Besar tidak ikut.
         `);
     }
 

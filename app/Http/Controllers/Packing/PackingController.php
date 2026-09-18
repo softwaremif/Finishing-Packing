@@ -3160,39 +3160,38 @@ class PackingController extends Controller
             'op'   => 'required',
             'mode' => 'required|in:carton,barcode',
         ]);
-
+    
         $po    = $request->input('po');
         $op    = $request->input('op');
         $poref = $request->input('poref');
         $mif   = (int) $request->input('mif', session('pos'));
         $mode  = $request->input('mode');
-
-        // GANTI -- FIX UTAMA: connection SEKARANG SELALU 'mysql'.
+    
         $connection = 'mysql';
         $db = DB::connection($connection);
-
+    
         DB::connection($connection)->beginTransaction();
-
+    
         try {
             $popks = $db->table('po')
                 ->where('OP', $op)
                 ->where('mif', $mif)
                 ->when(
                     $po !== null && $po !== '',
-                    fn($q) => $q->where('POno', $po),
-                    fn($q) => $q->where(function ($qq) {
+                    fn ($q) => $q->where('POno', $po),
+                    fn ($q) => $q->where(function ($qq) {
                         $qq->whereNull('POno')->orWhere('POno', '');
                     })
                 )
                 ->when(
                     $poref !== null && $poref !== '',
-                    fn($q) => $q->where('poref', $poref),
-                    fn($q) => $q->where(function ($qq) {
+                    fn ($q) => $q->where('poref', $poref),
+                    fn ($q) => $q->where(function ($qq) {
                         $qq->whereNull('poref')->orWhere('poref', '');
                     })
                 )
                 ->pluck('popk');
-
+    
             if ($popks->isEmpty()) {
                 DB::connection($connection)->rollBack();
                 return response()->json([
@@ -3200,40 +3199,68 @@ class PackingController extends Controller
                     'title' => 'Data PO/OP tidak ditemukan.',
                 ], 422);
             }
-
+    
+            // GANTI -- FIX UTAMA: exclude Sealed (segel=1), exclude anggota
+            // Bundle (bundlepk NOT NULL), exclude Shipped/Locked (status >= 6).
             $allPacks = $db->table('pack')
                 ->whereIn('popk', $popks)
-                ->where('status', 4)
+                ->where('status', '<', 6)
+                ->where(function ($q) {
+                    $q->whereNull('segel')->orWhere('segel', '<>', 1);
+                })
+                ->whereNull('bundlepk')
                 ->orderBy('urut')
                 ->orderBy('packpk')
                 ->get();
-
+    
             if ($allPacks->isEmpty()) {
                 DB::connection($connection)->rollBack();
                 return response()->json([
                     'icon'  => 'warning',
-                    'title' => 'Tidak ada data carton untuk diurutkan.',
+                    'title' => 'Tidak ada data carton untuk diurutkan (carton yang sudah Sealed, Shipped, atau anggota Carton Besar tidak ikut -- edit Carton Besar lewat menu Edit Carton Besar).',
                 ], 422);
             }
-
+    
+            // GANTI -- grouping carton+part, BUKAN carton saja.
             $groupedByCarton = [];
             $naturalOrder = [];
             foreach ($allPacks as $row) {
-                $key = $row->carton;
+                $key = $row->carton . '|' . $this->normalizePartKey($row->part);
                 if (!isset($groupedByCarton[$key])) {
                     $groupedByCarton[$key] = [];
                     $naturalOrder[] = $key;
                 }
                 $groupedByCarton[$key][] = $row;
             }
-
+    
+            // BARU -- helper closure expand via mixno: carton Mix Polibag yang
+            // dibagi lintas PO/OP (packpk-nya TIDAK semua masuk $popks di atas,
+            // karena PO lain scope-nya beda) tetap harus ikut di-update SEMUA
+            // baris terkaitnya, supaya nomor carton TIDAK desync antar PO.
+            $expandViaMixno = function ($packpks) use ($db) {
+                $ids = collect($packpks)->unique()->values();
+                do {
+                    $before = $ids->count();
+                    $mixnos = $db->table('pack')->whereIn('packpk', $ids)->whereNotNull('mixno')->distinct()->pluck('mixno');
+                    if ($mixnos->isNotEmpty()) {
+                        $viaMixno = $db->table('pack')->whereIn('mixno', $mixnos)->pluck('packpk');
+                        $ids = $ids->merge($viaMixno)->unique()->values();
+                    }
+                    $after = $ids->count();
+                } while ($after > $before);
+                return $ids;
+            };
+    
+            // Helper -- ambil bagian "carton" saja dari key gabungan "carton|part".
+            $cartonPortion = fn (string $key) => explode('|', $key, 2)[0];
+    
             if ($mode === 'carton') {
                 $request->validate(['awal' => 'required|string|max:50']);
-
+    
                 $awal        = trim($request->input('awal'));
                 $pairBarcode = (bool) $request->input('pair_barcode', false);
                 $barcodeAwal = trim((string) $request->input('barcode_awal', ''));
-
+    
                 if ($pairBarcode && $barcodeAwal === '') {
                     DB::connection($connection)->rollBack();
                     return response()->json([
@@ -3241,81 +3268,96 @@ class PackingController extends Controller
                         'title' => 'Barcode Awal wajib diisi kalau ingin mengurutkan Carton & Barcode sekaligus.',
                     ], 422);
                 }
-
+    
                 $offset = 0;
-                foreach ($naturalOrder as $oldCarton) {
-                    $rowsInGroup = $groupedByCarton[$oldCarton];
+                foreach ($naturalOrder as $key) {
+                    $rowsInGroup = $groupedByCarton[$key];
                     $newCarton = $this->incrementCartonNumber($awal, $offset);
                     $updateData = ['carton' => $newCarton];
                     if ($pairBarcode) {
                         $updateData['nobar'] = $this->incrementCartonNumber($barcodeAwal, $offset);
                     }
-                    foreach ($rowsInGroup as $row) {
-                        $db->table('pack')->where('packpk', $row->packpk)->update($updateData);
-                    }
+    
+                    // GANTI -- expand ke seluruh packpk yang berbagi carton fisik
+                    // ini (Mix Polibag lintas PO), lalu update SEKALI utk semuanya.
+                    $groupPackpks = collect($rowsInGroup)->pluck('packpk');
+                    $expandedPackpks = $expandViaMixno($groupPackpks);
+                    $db->table('pack')->whereIn('packpk', $expandedPackpks)->update($updateData);
+    
                     $offset++;
                 }
-
+    
                 DB::connection($connection)->commit();
-
+    
                 return response()->json([
                     'icon'  => 'success',
                     'title' => 'Nomor Carton berhasil diurutkan' . ($pairBarcode ? ' beserta Barcode-nya (berpasangan).' : '. Barcode tidak diubah.'),
                 ]);
             }
-
+    
             $request->validate([
                 'sub_mode'     => 'required|in:manual,otomatis',
                 'barcode_awal' => 'required|string|max:50',
             ]);
-
+    
             $subMode     = $request->input('sub_mode');
             $barcodeAwal = trim($request->input('barcode_awal'));
-
+    
             $sortedCartonKeys = array_keys($groupedByCarton);
-            usort($sortedCartonKeys, function ($a, $b) {
-                return $this->extractCartonNumber((string) $a) <=> $this->extractCartonNumber((string) $b);
+            usort($sortedCartonKeys, function ($a, $b) use ($cartonPortion) {
+                return $this->extractCartonNumber($cartonPortion($a)) <=> $this->extractCartonNumber($cartonPortion($b));
             });
-
+    
             $startIndex = 0;
-
+    
             if ($subMode === 'manual') {
                 $request->validate(['carton_awal' => 'required|string|max:50']);
                 $cartonAwalInput = trim($request->input('carton_awal'));
-
-                $foundIndex = array_search($cartonAwalInput, $sortedCartonKeys, true);
-
-                if ($foundIndex === false) {
+    
+                // GANTI -- cari berdasarkan bagian carton SAJA (key gabungan
+                // sekarang "carton|part", user cuma input nomor carton).
+                $foundIndex = null;
+                foreach ($sortedCartonKeys as $idx => $key) {
+                    if ($cartonPortion($key) === $cartonAwalInput) {
+                        $foundIndex = $idx;
+                        break;
+                    }
+                }
+    
+                if ($foundIndex === null) {
                     DB::connection($connection)->rollBack();
                     return response()->json([
                         'icon'  => 'warning',
-                        'title' => "Nomor Carton <b>{$cartonAwalInput}</b> tidak ditemukan di sistem. Masukkan nomor carton yang sudah ada.",
+                        'title' => "Nomor Carton <b>{$cartonAwalInput}</b> tidak ditemukan di sistem (atau carton itu sudah Sealed/Shipped/anggota Carton Besar). Masukkan nomor carton yang sudah ada dan masih eligible.",
                     ], 422);
                 }
-
+    
                 $startIndex = $foundIndex;
             }
-
+    
             $offset = 0;
             for ($idx = $startIndex; $idx < count($sortedCartonKeys); $idx++) {
                 $cartonKey   = $sortedCartonKeys[$idx];
                 $rowsInGroup = $groupedByCarton[$cartonKey];
                 $newNobar = $this->incrementCartonNumber($barcodeAwal, $offset);
-                foreach ($rowsInGroup as $row) {
-                    $db->table('pack')->where('packpk', $row->packpk)->update(['nobar' => $newNobar]);
-                }
+    
+                // GANTI -- expand via mixno, SAMA seperti mode carton.
+                $groupPackpks = collect($rowsInGroup)->pluck('packpk');
+                $expandedPackpks = $expandViaMixno($groupPackpks);
+                $db->table('pack')->whereIn('packpk', $expandedPackpks)->update(['nobar' => $newNobar]);
+    
                 $offset++;
             }
-
+    
             DB::connection($connection)->commit();
-
+    
             return response()->json([
                 'icon'  => 'success',
                 'title' => 'Barcode berhasil diurutkan.' . ($subMode === 'manual' ? ' Carton sebelum titik awal tidak ikut berubah.' : ''),
             ]);
         } catch (\Throwable $e) {
             DB::connection($connection)->rollBack();
-
+    
             return response()->json([
                 'icon'  => 'error',
                 'title' => 'Gagal mengurutkan.'
