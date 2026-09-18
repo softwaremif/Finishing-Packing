@@ -63,18 +63,16 @@ class InspectionController extends Controller
                 $popks = $group->pluck('popk')->values();
         
                 $inspectRows = $db->table('pack')
-                    ->whereIn('popk', $popks)
-                    ->where('fca', 1)
-                    ->get(['packpk', 'carton', 'bundlepk', 'pcs']);
+                ->whereIn('popk', $popks)
+                ->where('fca', 1)
+                ->get(['packpk', 'carton', 'bundlepk', 'part', 'pcs']);
         
                 // pcs -- SUM apa adanya, tidak terpengaruh grouping carton/bundle.
                 $rep->pcs_inspect = (float) $inspectRows->sum('pcs');
-        
-                // ctn -- hitung UNIT: Mix Polibag dedupe per nomor carton, Bundle
-                // dihitung SEBAGAI 1 (carton besarnya), bukan per carton kecil
-                // di dalamnya.
+ 
                 $countingUnits = $inspectRows->groupBy(function ($r) {
-                    return $r->bundlepk ? ('bundle_' . $r->bundlepk) : ('single_' . $r->carton);
+                    if ($r->bundlepk) return 'bundle_' . $r->bundlepk;
+                    return 'single_' . $r->carton . '|' . $this->normalizePartKey($r->part); // BARU -- +part
                 });
                 $rep->ctn_inspect = $countingUnits->count();
         
@@ -369,6 +367,13 @@ class InspectionController extends Controller
         return sprintf('%04d/INS/%s/%d', $inspecpk, $month, $date->year);
     }
 
+    private function normalizePartKey($p): string
+    {
+        if ($p === null || $p === '') return '';
+        if (is_numeric($p) && (float) $p === 0.0) return '';
+        return (string) $p;
+    }
+
     // GANTI TOTAL -- FIX UTAMA: lepas SEPENUHNYA dari 'ship'. Karena
     // inspecdt SUDAH menyimpan snapshot POno/OP sendiri, tidak perlu JOIN
     // apa pun lagi -- match langsung ke kolom snapshot.
@@ -514,11 +519,12 @@ class InspectionController extends Controller
                 $defects = $insdefRows->get($sz->inspecszpk, collect());
                 $detailRows[] = [
                     'carton'        => $dt->carton,
+                    'part'          => $dt->part, // BARU
                     'POno'          => $dt->POno,
                     'OP'            => $dt->OP,
                     'bundle_carton' => $dt->bundle_carton,
-                    'pinjam'        => $dt->pinjam,   // BARU
-                    'kembali'       => $dt->kembali,  // BARU
+                    'pinjam'        => $dt->pinjam,
+                    'kembali'       => $dt->kembali,
                     'size'          => $sz->size,
                     'color'         => $sz->color,
                     'secsz'         => $sz->secsz,
@@ -526,6 +532,7 @@ class InspectionController extends Controller
                     'stspass'       => (int) $sz->stspass,
                     'defects'       => $defects->pluck('defectnm')->implode(', '),
                 ];
+
             }
         }
  
@@ -547,7 +554,7 @@ class InspectionController extends Controller
                 ];
             })->values();
 
-        $totalCarton = $inspecdtRows->pluck('carton')->unique()->count();
+        $totalCarton = $inspecdtRows->map(fn ($dt) => $dt->carton . '|' . $this->normalizePartKey($dt->part))->unique()->count();
         $totalDefect = $inspecszRows->where('stspass', 0)->count();
         $totalPass   = $inspecszRows->where('stspass', 1)->count();
 
@@ -731,7 +738,7 @@ class InspectionController extends Controller
     public function globalCartonInspectList(Request $request)
     {
         $db = DB::connection('mysql');
-
+    
         $rawRows = $db->table('pack')
             ->join('po', 'po.popk', '=', 'pack.popk')
             ->where('pack.fca', 1)
@@ -747,12 +754,12 @@ class InspectionController extends Controller
             })
             ->select(
                 'pack.packpk', 'pack.carton', 'pack.nobar', 'pack.material', 'pack.secsz', 'pack.pinjam',
-                'pack.mixno', 'pack.bundlepk',
+                'pack.mixno', 'pack.bundlepk', 'pack.part', // BARU -- tambah 'part'
                 'po.POno', 'po.OP', 'po.poref', 'po.mif', 'po.buyer', 'po.customer'
             )
             ->orderByDesc('pack.pinjam')
             ->get();
-
+    
         $bundlepksInvolved = $rawRows->pluck('bundlepk')->filter()->unique()->values();
         $bundleNameMap = [];
         if ($bundlepksInvolved->isNotEmpty()) {
@@ -760,58 +767,61 @@ class InspectionController extends Controller
                 ->whereIn('bundlepk', $bundlepksInvolved)
                 ->pluck('bundle_carton', 'bundlepk');
         }
-
-        // BARU -- FIX UTAMA: cari dokumen yang MASIH TERBUKA (enddate NULL)
-        // yang mereferensi tiap carton -- inilah dasar utk munculkan tombol
-        // "Kembalikan" (sesuai aturan blocking already_documented yang sudah
-        // ada: 1 carton hanya boleh ada di 1 dokumen terbuka).
-        $openDocByCarton = $db->table('inspecdt')
+    
+        // GANTI -- key sekarang carton+part (inspecdt JUGA punya snapshot
+        // kolom 'part', jadi bisa di-match balik ke sini).
+        $openDocByCartonPart = $db->table('inspecdt')
             ->join('inspec', 'inspec.inspecpk', '=', 'inspecdt.inspecpk')
             ->whereNull('inspec.enddate')
-            ->select('inspecdt.carton', 'inspec.inspecpk', 'inspec.tgl', 'inspec.hasil')
+            ->select('inspecdt.carton', 'inspecdt.part', 'inspec.inspecpk', 'inspec.tgl', 'inspec.hasil')
             ->get()
-            ->keyBy('carton');
-
-        $cartons = $rawRows->groupBy('carton')->map(function ($group) use ($bundleNameMap, $openDocByCarton) {
-            $first = $group->first();
-            $poOpList = $group->map(fn ($r) => ['POno' => $r->POno, 'OP' => $r->OP])
-                ->unique(fn ($p) => $p['POno'] . '|' . $p['OP'])
-                ->values();
-
-            $openDoc = $openDocByCarton->get($first->carton);
-
-            return [
-                'carton'        => $first->carton,
-                'nobar'         => $first->nobar,
-                'material'      => $first->material,
-                'secsz'         => $first->secsz,
-                'pinjam'        => $group->max('pinjam'),
-                'POno'          => $first->POno,
-                'OP'            => $first->OP,
-                'poref'         => $first->poref,
-                'mif'           => $first->mif,
-                'buyer'         => $first->buyer,
-                'po_op_list'    => $poOpList,
-                'is_mix'        => $poOpList->count() > 1,
-                'bundlepk'      => $first->bundlepk,
-                'bundle_carton' => $first->bundlepk ? ($bundleNameMap[$first->bundlepk] ?? null) : null,
-                'packpks'       => $group->pluck('packpk')->unique()->values(), // BARU -- semua packpk carton ini
-                'has_open_doc'  => (bool) $openDoc,                              // BARU
-                'no_inspec'     => $openDoc ? $this->buildNoInspec($openDoc->inspecpk, $openDoc->tgl) : null, // BARU
-                'inspec_hasil'  => $openDoc ? (int) $openDoc->hasil : null,      // BARU
-            ];
-        })->values();
-
+            ->keyBy(fn ($r) => $r->carton . '|' . $this->normalizePartKey($r->part));
+    
+        // GANTI -- grouping utama carton+part, BUKAN carton saja.
+        $cartons = $rawRows->groupBy(fn ($r) => $r->carton . '|' . $this->normalizePartKey($r->part))
+            ->map(function ($group) use ($bundleNameMap, $openDocByCartonPart) {
+                $first = $group->first();
+                $poOpList = $group->map(fn ($r) => ['POno' => $r->POno, 'OP' => $r->OP])
+                    ->unique(fn ($p) => $p['POno'] . '|' . $p['OP'])
+                    ->values();
+    
+                $openDoc = $openDocByCartonPart->get($first->carton . '|' . $this->normalizePartKey($first->part));
+    
+                return [
+                    'carton'        => $first->carton,
+                    'part'          => $first->part, // BARU -- dikirim ke FE utk badge Session
+                    'nobar'         => $first->nobar,
+                    'material'      => $first->material,
+                    'secsz'         => $first->secsz,
+                    'pinjam'        => $group->max('pinjam'),
+                    'POno'          => $first->POno,
+                    'OP'            => $first->OP,
+                    'poref'         => $first->poref,
+                    'mif'           => $first->mif,
+                    'buyer'         => $first->buyer,
+                    'po_op_list'    => $poOpList,
+                    'is_mix'        => $poOpList->count() > 1,
+                    'bundlepk'      => $first->bundlepk,
+                    'bundle_carton' => $first->bundlepk ? ($bundleNameMap[$first->bundlepk] ?? null) : null,
+                    'packpks'       => $group->pluck('packpk')->unique()->values(),
+                    'has_open_doc'  => (bool) $openDoc,
+                    'no_inspec'     => $openDoc ? $this->buildNoInspec($openDoc->inspecpk, $openDoc->tgl) : null,
+                    'inspec_hasil'  => $openDoc ? (int) $openDoc->hasil : null,
+                ];
+            })->values();
+    
+        // GANTI -- countingUnits ikut +part utk baris non-bundle.
         $countingUnits = $cartons->groupBy(function ($c) {
-            return $c['bundlepk'] ? ('bundle_' . $c['bundlepk']) : ('single_' . $c['carton']);
+            if ($c['bundlepk']) return 'bundle_' . $c['bundlepk'];
+            return 'single_' . $c['carton'] . '|' . $this->normalizePartKey($c['part']);
         });
         $total = $countingUnits->count();
-
+    
         $page   = max(1, (int) $request->input('page', 1));
         $rows   = max(1, (int) $request->input('rows', 200));
         $offset = ($page - 1) * $rows;
         $data   = $cartons->slice($offset, $rows)->values();
-
+    
         return response()->json(['total' => $total, 'rows' => $data]);
     }
 
@@ -894,7 +904,16 @@ class InspectionController extends Controller
                 'OP'          => $dt->pluck('OP')->filter()->unique()->implode(', '),
                 'poref'       => $dt->pluck('poref')->filter()->unique()->first(),
                 'mif'         => $dt->pluck('mif')->filter()->unique()->first(),
-                'cartons'     => $dt->pluck('carton')->filter()->unique()->values(),
+                'cartons'       => $dt->groupBy(fn ($d) => $d->carton . '|' . $this->normalizePartKey($d->part))->map(function ($group) {
+                                    $rep = $group->first();
+                                    $partVal = $rep->part;
+                                    $hasPart = $partVal !== null && $partVal !== '' && !(is_numeric($partVal) && (float) $partVal === 0.0);
+                                    return $hasPart
+                                        ? $rep->carton . ' (' . ((string) $partVal === '10' ? 'Complete' : 'Session ' . $partVal) . ')'
+                                        : $rep->carton;
+                                })
+                                ->filter()
+                                ->values(),
                 'po_op_pairs' => $poOpPairs,
             ];
         })->values();
@@ -1006,13 +1025,14 @@ class InspectionController extends Controller
         // dokumen Inspect MANA PUN, KECUALI dokumen yang sedang diedit
         // (kalau ada) -- carton ini akan di-disable total di picker supaya
         // tidak bisa disample dobel ke dokumen terpisah.
-        $documentedCartons = $db->table('inspecdt')
+        $documentedCartonParts = $db->table('inspecdt')
             ->join('inspec', 'inspec.inspecpk', '=', 'inspecdt.inspecpk')
             ->whereNull('inspec.enddate')
             ->when($excludeInspecpk, fn ($q) => $q->where('inspecdt.inspecpk', '!=', $excludeInspecpk))
-            ->distinct()
-            ->pluck('inspecdt.carton');
-
+            ->select('inspecdt.carton', 'inspecdt.part')
+            ->get()
+            ->map(fn ($r) => $r->carton . '|' . $this->normalizePartKey($r->part))
+            ->unique();
         $packRows = $db->table('pack')
             ->join('po', 'po.popk', '=', 'pack.popk')
             ->where('pack.fca', 1) // sudah otomatis mengecualikan carton yang sudah "dikembalikan" (fca di-null-kan)
@@ -1046,13 +1066,15 @@ class InspectionController extends Controller
             }
             $row->sizes = $sizes;
             $row->bundle_carton = $row->bundlepk ? ($bundleNameMap[$row->bundlepk] ?? null) : null;
-            $row->already_documented = $documentedCartons->contains($row->carton); // BARU
+            $row->already_documented = $documentedCartonParts->contains(
+                $row->carton . '|' . $this->normalizePartKey($row->part)
+            );
         }
 
-        $cartonPoOpCount = $packRows->groupBy('carton')
+        $cartonPoOpCount = $packRows->groupBy(fn ($r) => $r->carton . '|' . $this->normalizePartKey($r->part))
             ->map(fn ($g) => $g->map(fn ($r) => $r->POno . '|' . $r->OP)->unique()->count());
         foreach ($packRows as $row) {
-            $row->is_mix = ($cartonPoOpCount[$row->carton] ?? 1) > 1;
+            $row->is_mix = ($cartonPoOpCount[$row->carton . '|' . $this->normalizePartKey($row->part)] ?? 1) > 1;
         }
 
         return response()->json(['rows' => $packRows]);

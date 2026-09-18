@@ -1669,6 +1669,13 @@ class FinishgoodStuffingController extends Controller
         ]);
     }
 
+    private function normalizePartKey($p): string
+    {
+        if ($p === null || $p === '') return '';
+        if (is_numeric($p) && (float) $p === 0.0) return '';
+        return (string) $p;
+    }
+
     public function scanNobarGlobal(Request $request)
     {
         $po    = $request->input('po');
@@ -1717,21 +1724,98 @@ class FinishgoodStuffingController extends Controller
             }
         } else {
             // Scan barcode carton KECIL -- cari di scope PO/OP halaman ini.
-            $matchedRow = $db->table('pack')->whereIn('popk', $popks)->where('nobar', $nobar)->first();
-
-            if (!$matchedRow) {
+            $matchingRows = $db->table('pack')->whereIn('popk', $popks)->where('nobar', $nobar)->get();
+ 
+            if ($matchingRows->isEmpty()) {
                 return response()->json([
                     'icon'  => 'warning',
                     'title' => "Nobar \"{$nobar}\" tidak ditemukan pada PO/OP ini.",
                 ], 422);
+            }
+            
+            $distinctPhysicalCartons = $matchingRows->groupBy(function ($r) {
+                return $r->carton . '|' . $this->normalizePartKey($r->part);
+            });
+            
+            if ($distinctPhysicalCartons->count() > 1) {
+                // BARU -- tarik data EXIM SEKALI, dipakai utk cek status container
+                // tiap kandidat (exportpk+contpk).
+                $eximRowsForDisambiguation = collect();
+                try {
+                    $eximResponse = \Illuminate\Support\Facades\Http::timeout(10)
+                        ->get('http://192.168.0.8/EXIM2/api/getListExport');
+                    if ($eximResponse->successful()) {
+                        $eximRowsForDisambiguation = collect($eximResponse->json('rows') ?? []);
+                    }
+                } catch (\Throwable $e) {
+                    // Kalau EXIM tidak bisa dihubungi, biarkan kosong -- kandidat
+                    // dengan exportpk/contpk yang TIDAK ditemukan di EXIM otomatis
+                    // dianggap TIDAK eligible (aman, tidak menebak).
+                }
+            
+                // BARU -- helper: apakah container kandidat ini MASIH TERBUKA di EXIM
+                // (start_ship sudah diisi, TAPI end_ship & segel BELUM diisi)?
+                $isContainerStillOpen = function ($row) use ($eximRowsForDisambiguation) {
+                    if (empty($row->exportpk) || empty($row->contpk)) {
+                        return false; // belum punya Session Export/Container -- tidak relevan utk Shipment
+                    }
+                    $eximRow = $eximRowsForDisambiguation->first(fn ($r) =>
+                        (int) ($r['exportpk'] ?? 0) === (int) $row->exportpk
+                        && (int) ($r['contpk'] ?? 0) === (int) $row->contpk
+                    );
+                    if (!$eximRow) return false;
+            
+                    return !empty($eximRow['start_ship']) && empty($eximRow['end_ship']) && empty($eximRow['segel']);
+                };
+            
+                $eligibleGroups = $distinctPhysicalCartons->filter(function ($rowsInGroup) use ($isContainerStillOpen) {
+                    return $rowsInGroup->every(function ($r) use ($isContainerStillOpen) {
+                        return (int) $r->segel === 1
+                            && !in_array((int) $r->status, [6, 7], true)
+                            && (int) $r->fca !== 1
+                            && (int) $r->fca !== 2
+                            && $isContainerStillOpen($r); // BARU -- ikutkan status container EXIM
+                    });
+                });
+            
+                if ($eligibleGroups->count() === 1) {
+                    $matchedRow = $eligibleGroups->first()->first();
+                } else {
+                    $partLabels = $distinctPhysicalCartons->keys()->map(function ($key) {
+                        [$carton, $part] = explode('|', $key, 2);
+                        return $part !== '' ? "{$carton} (Session {$part})" : $carton;
+                    })->implode(', ');
+            
+                    return response()->json([
+                        'icon'  => 'warning',
+                        'title' => "Barcode \"{$nobar}\" dipakai lebih dari satu carton fisik, dan tidak ada (atau lebih dari satu) yang statusnya jelas eligible untuk Shipment saat ini ({$partLabels}). "
+                            . "Cek status Segel carton & status Container di masing-masing Session sebelum scan ulang.",
+                    ], 422);
+                }
+            } else {
+                $matchedRow = $matchingRows->first();
             }
 
             // Cek closure mixno DULU (tanpa bundlepk expansion penuh) -- kalau
             // ADA sibling mixno (di PO/OP lain) yang ternyata punya bundlepk,
             // TOLAK -- WAJIB scan barcode Carton Besar, bukan carton kecil ini.
             $mixCheckIds = collect([$matchedRow->packpk])
-                ->merge($db->table('pack')->whereIn('popk', $popks)->where('carton', $matchedRow->carton)->pluck('packpk'))
+                ->merge(
+                    $db->table('pack')
+                        ->whereIn('popk', $popks)
+                        ->where('carton', $matchedRow->carton)
+                        ->where(function ($q) use ($matchedRow) {
+                            if ($matchedRow->part === null || $matchedRow->part === '') {
+                                $q->whereNull('part')->orWhere('part', '');
+                            } else {
+                                $q->where('part', $matchedRow->part);
+                            }
+                        })
+                        ->pluck('packpk')
+                )
                 ->unique()->values();
+            
+
 
             do {
                 $before = $mixCheckIds->count();
@@ -2022,7 +2106,8 @@ class FinishgoodStuffingController extends Controller
             if (!$exportMeta) continue; // exportpk ini tidak ditemukan sama sekali di EXIM
 
             $countingUnits = $rowsForExport->groupBy(function ($r) {
-                return $r->bundlepk ? ('bundle_' . $r->bundlepk) : ('single_' . $r->carton);
+                if ($r->bundlepk) return 'bundle_' . $r->bundlepk;
+                return 'single_' . $r->carton . '|' . $this->normalizePartKey($r->part);
             });
             $total = $countingUnits->count();
             
@@ -2378,7 +2463,7 @@ class FinishgoodStuffingController extends Controller
         if ($allPackpks->isNotEmpty()) {
             $packRows = DB::connection('mysql')->table('pack')
                 ->whereIn('packpk', $allPackpks)
-                ->get(['packpk', 'popk', 'carton', 'status', 'mixno', 'bundlepk']); // BARU -- mixno, bundlepk
+                ->get(['packpk', 'popk', 'carton', 'status', 'mixno', 'bundlepk', 'part']);  // BARU -- mixno, bundlepk
         
             // BARU -- lookup nama carton besar (SAMA pola dengan listDetailGlobal()).
             $bundlepksInvolved = $packRows->pluck('bundlepk')->filter()->unique()->values();
@@ -2407,23 +2492,24 @@ class FinishgoodStuffingController extends Controller
             $f = $rows->first();
         
             $rawCartons = $rows->map(function ($r) use ($cartonByPackpk, $poByPopk) {
-                $packRow = $cartonByPackpk->get($r['packpk'] ?? null);
-                $poRow   = $packRow ? $poByPopk->get($packRow->popk) : null;
-                $shipped = $packRow && in_array((int) $packRow->status, [6, 7], true);
+            $packRow = $cartonByPackpk->get($r['packpk'] ?? null);
+            $poRow   = $packRow ? $poByPopk->get($packRow->popk) : null;
+            $shipped = $packRow && in_array((int) $packRow->status, [6, 7], true);
         
-                return [
-                    'carton'        => $packRow->carton ?? $r['carton'] ?? '-',
-                    'POno'          => $poRow->POno ?? null,
-                    'OP'            => $poRow->OP ?? null,
-                    'shipped'       => $shipped,
-                    'bundlepk'      => $packRow->bundlepk ?? null,
-                    'bundle_carton' => $packRow->bundle_carton ?? null,
-                ];
-            });
+            return [
+                'carton'        => $packRow->carton ?? $r['carton'] ?? '-',
+                'part'          => $packRow->part ?? null, // BARU
+                'POno'          => $poRow->POno ?? null,
+                'OP'            => $poRow->OP ?? null,
+                'shipped'       => $shipped,
+                'bundlepk'      => $packRow->bundlepk ?? null,
+                'bundle_carton' => $packRow->bundle_carton ?? null,
+            ];
+        });
         
-            // BARU -- kelompokkan per NOMOR CARTON FISIK saja, gabungkan SEMUA
-            // PO/OP kontributornya jadi satu daftar.
-            $cartons = $rawCartons->groupBy('carton')->map(function ($group) {
+        // GANTI -- groupBy carton+part, BUKAN carton saja.
+        $cartons = $rawCartons->groupBy(fn ($c) => $c['carton'] . '|' . $this->normalizePartKey($c['part']))
+            ->map(function ($group) {
                 $first = $group->first();
         
                 $poOpList = $group
@@ -2434,21 +2520,24 @@ class FinishgoodStuffingController extends Controller
         
                 return [
                     'carton'        => $first['carton'],
-                    'POno'          => $first['POno'],    // representative, backward-compat
+                    'part'          => $first['part'], // BARU
+                    'POno'          => $first['POno'],
                     'OP'            => $first['OP'],
-                    'po_op_list'    => $poOpList,          // BARU -- SEMUA PO/OP kontributor
-                    'is_mix'        => $poOpList->count() > 1, // BARU
+                    'po_op_list'    => $poOpList,
+                    'is_mix'        => $poOpList->count() > 1,
                     'shipped'       => $group->contains('shipped', true),
                     'bundlepk'      => $first['bundlepk'],
-                    'bundle_carton' => $first['bundle_carton'], // BARU
+                    'bundle_carton' => $first['bundle_carton'],
                 ];
             })
             ->sortBy(fn ($c) => $c['carton'], SORT_NATURAL)
             ->values();
         
-            $countingUnits = $cartons->groupBy(function ($c) {
-                return $c['bundlepk'] ? ('bundle_' . $c['bundlepk']) : ('single_' . $c['carton']);
-            });
+        // GANTI -- countingUnits ikut +part.
+        $countingUnits = $cartons->groupBy(function ($c) {
+            if ($c['bundlepk']) return 'bundle_' . $c['bundlepk'];
+            return 'single_' . $c['carton'] . '|' . $this->normalizePartKey($c['part']);
+        });
             
             return [
                 'contpk'     => $f['contpk'] ?? null,

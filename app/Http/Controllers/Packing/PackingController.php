@@ -1539,34 +1539,46 @@ class PackingController extends Controller
         // sendiri-sendiri lewat nomornya masing-masing).
         $distinctCartons = $shipRows->pluck('carton')->filter()->unique()->values();
         
-        $inspecInfoByCarton = [];
+        $distinctCartons = $shipRows->pluck('carton')->filter()->unique()->values();
+ 
+        $inspecDocsByCartonPart = []; // GANTI nama -- sekarang berisi ARRAY dokumen per key
         if ($distinctCartons->isNotEmpty()) {
             $inspecdtRows = $db->table('inspecdt')
                 ->join('inspec', 'inspec.inspecpk', '=', 'inspecdt.inspecpk')
                 ->whereIn('inspecdt.carton', $distinctCartons)
-                ->select('inspecdt.carton', 'inspec.inspecpk', 'inspec.tgl', 'inspec.hasil', 'inspec.aql', 'inspec.totpcs')
+                ->select('inspecdt.carton', 'inspecdt.part', 'inspec.inspecpk', 'inspec.tgl', 'inspec.hasil', 'inspec.aql', 'inspec.totpcs')
                 ->orderByDesc('inspec.inspecpk')
                 ->get();
         
             foreach ($inspecdtRows as $row) {
-                if (!isset($inspecInfoByCarton[$row->carton])) {
-                    $inspecInfoByCarton[$row->carton] = [
-                        'inspecpk'  => $row->inspecpk,
-                        'no_inspec' => $this->buildNoInspec($row->inspecpk, $row->tgl),
-                        'hasil'     => (int) $row->hasil,
-                        'aql'       => $row->aql,
-                        'totpcs'    => $row->totpcs,
-                    ];
+                $key = $row->carton . '|' . $this->normalizePartKey($row->part);
+                if (!isset($inspecDocsByCartonPart[$key])) {
+                    $inspecDocsByCartonPart[$key] = [];
                 }
+                // BARU -- tambahkan ke array, JANGAN skip walau key sudah ada.
+                $inspecDocsByCartonPart[$key][] = [
+                    'inspecpk'  => $row->inspecpk,
+                    'no_inspec' => $this->buildNoInspec($row->inspecpk, $row->tgl),
+                    'hasil'     => (int) $row->hasil,
+                    'aql'       => $row->aql,
+                    'totpcs'    => $row->totpcs,
+                ];
             }
         }
         
         foreach ($shipInfoByPackpk as $packpk => &$info) {
-            $inspecInfo = $inspecInfoByCarton[$info['carton']] ?? null;
-            $info['has_inspec_doc'] = $inspecInfo !== null;
-            $info['no_inspec']      = $inspecInfo['no_inspec'] ?? null;
-            $info['inspec_hasil']   = $inspecInfo['hasil'] ?? null;
-            $info['inspec_aql']     = $inspecInfo['aql'] ?? null;
+            $key = $info['carton'] . '|' . $this->normalizePartKey($info['part']);
+            $docs = $inspecDocsByCartonPart[$key] ?? [];
+        
+            // BARU -- kirim SEMUA dokumen (array), plus tetap sediakan field lama
+            // (has_inspec_doc/no_inspec/inspec_hasil/inspec_aql) berisi dokumen
+            // TERBARU utk kompatibilitas kode lain yang masih memakainya (mis.
+            // validasi "Kembalikan").
+            $info['inspec_docs']    = $docs;
+            $info['has_inspec_doc'] = !empty($docs);
+            $info['no_inspec']      = $docs[0]['no_inspec'] ?? null;
+            $info['inspec_hasil']   = $docs[0]['hasil'] ?? null;
+            $info['inspec_aql']     = $docs[0]['aql'] ?? null;
         }
         unset($info);
 
@@ -1631,10 +1643,11 @@ class PackingController extends Controller
             $r->ship_shipped   = $shipInfo['shipped'] ?? false;
             $r->ship_inspect   = $shipInfo['inspect'] ?? false;
             $r->ship_returning = $shipInfo['returning'] ?? false;
-            $r->has_inspec_doc = $shipInfo['has_inspec_doc'] ?? false; // BARU
-            $r->no_inspec      = $shipInfo['no_inspec'] ?? null;       // BARU
-            $r->inspec_hasil   = $shipInfo['inspec_hasil'] ?? null;    // BARU
-            $r->inspec_aql     = $shipInfo['inspec_aql'] ?? null;      // BARU
+            $r->has_inspec_doc = $shipInfo['has_inspec_doc'] ?? false;
+            $r->no_inspec      = $shipInfo['no_inspec'] ?? null;
+            $r->inspec_hasil   = $shipInfo['inspec_hasil'] ?? null;
+            $r->inspec_aql     = $shipInfo['inspec_aql'] ?? null;
+            $r->inspec_docs    = $shipInfo['inspec_docs'] ?? []; // BARU
         }
 
         $rowsByCartonForStatus = $allMatchingRows->groupBy('carton');
@@ -1774,19 +1787,20 @@ class PackingController extends Controller
         foreach ($data as $index => $row) {
             $row->no      = $index + 1;
             $row->balance = ($row->pcs ?? 0) - ($row->pcsp ?? 0);
-
+        
             $shipInfo = $shipInfoByPackpk[$row->packpk] ?? null;
-
+        
             $row->ship_shipped   = $shipInfo['shipped'] ?? false;
             $row->ship_inspect   = $shipInfo['inspect'] ?? false;
             $row->ship_returning = $shipInfo['returning'] ?? false;
-            $row->ship_pinjam    = $shipInfo['pinjam'] ?? null;   // BARU
-            $row->ship_kembali   = $shipInfo['kembali'] ?? null;  // BARU
-            $row->has_inspec_doc = $shipInfo['has_inspec_doc'] ?? false; // BARU
-            $row->no_inspec      = $shipInfo['no_inspec'] ?? null;       // BARU
-            $row->inspec_hasil   = $shipInfo['inspec_hasil'] ?? null;    // BARU
-            $row->inspec_aql     = $shipInfo['inspec_aql'] ?? null;      // BARU
-
+            $row->ship_pinjam    = $shipInfo['pinjam'] ?? null;
+            $row->ship_kembali   = $shipInfo['kembali'] ?? null;
+            $row->has_inspec_doc = $shipInfo['has_inspec_doc'] ?? false;
+            $row->no_inspec      = $shipInfo['no_inspec'] ?? null;
+            $row->inspec_hasil   = $shipInfo['inspec_hasil'] ?? null;
+            $row->inspec_aql     = $shipInfo['inspec_aql'] ?? null;
+            $row->inspec_docs    = $shipInfo['inspec_docs'] ?? []; // BARU
+        
             $shipPopk = $shipInfo['popk'] ?? $row->popk;
             $shipPart = $shipInfo['part'] ?? $row->part;
             $row->ship_date = $shipDateByPopkPart[$shipPopk][$shipPart] ?? null;
@@ -1813,6 +1827,13 @@ class PackingController extends Controller
     private function pgResolvePoolKey($poRow): string
     {
         return ($poRow->OP ?? '') . '|' . ($poRow->material ?? '') . '|' . ($poRow->secsz ?? '') . '|' . ($poRow->style ?? '');
+    }
+
+    private function normalizePartKey($p): string
+    {
+        if ($p === null || $p === '') return '';
+        if (is_numeric($p) && (float) $p === 0.0) return '';
+        return (string) $p;
     }
 
     private function getPolibagGroupPopks($db, int $mif, string $op, ?string $material, ?string $secsz, ?string $style)

@@ -842,8 +842,8 @@
         }
 
         /* section('css_custom') -- mode Compact/Tile, banyak carton
-            muat dalam 1 layar (referensi: "carton wall" / bin-map di sistem WMS
-            garment). */
+                    muat dalam 1 layar (referensi: "carton wall" / bin-map di sistem WMS
+                    garment). */
 
         .packing-compact-grid {
             display: flex;
@@ -1127,6 +1127,15 @@
         .spd-carton-box.shipped {
             background: #2563eb;
             border-color: #1e3a8a;
+        }
+
+        #selectRangePopover {
+            max-width: calc(100vw - 24px);
+        }
+
+        .range-field-toggle.active {
+            background: #1e293b !important;
+            color: #fff !important;
         }
     </style>
 @endsection
@@ -1415,6 +1424,52 @@
                             style="font-size:12px;" onclick="toggleSelectAllVisible()">
                             <i class="fas fa-check-double me-1"></i> Pilih Semua
                         </button>
+                        <div class="position-relative d-inline-block">
+                            <button type="button" id="btnSelectRangeToggle" class="btn btn-outline-dark btn-sm"
+                                onclick="toggleSelectRangePopover()">
+                                <i class="fas fa-list-ol me-1"></i> Pilih Rentang
+                            </button>
+
+                            <div id="selectRangePopover" class="d-none"
+                                style="position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:#fff;
+                                    border:1px solid #e2e8f0; border-radius:10px; padding:12px; box-shadow:0 8px 24px rgba(15,23,42,.12);
+                                    width:260px;">
+                                <label class="text-secondary d-block mb-2" style="font-size:11.5px;">
+                                    Pilih rentang berdasarkan
+                                </label>
+                                <div class="d-flex gap-1 mb-2">
+                                    <button type="button" class="range-field-toggle active" data-field="carton"
+                                        onclick="setSelectRangeField('carton')"
+                                        style="flex:1; font-size:11.5px; padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; background:#1e293b; color:#fff;">
+                                        No Carton
+                                    </button>
+                                    <button type="button" class="range-field-toggle" data-field="nobar"
+                                        onclick="setSelectRangeField('nobar')"
+                                        style="flex:1; font-size:11.5px; padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; background:#f8fafc; color:#334155;">
+                                        Barcode
+                                    </button>
+                                </div>
+
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <input type="text" id="selectRangeFrom" placeholder="Dari (mis. CTN-001)"
+                                        class="form-control form-control-sm">
+                                </div>
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <input type="text" id="selectRangeTo" placeholder="Sampai (mis. CTN-050)"
+                                        class="form-control form-control-sm">
+                                </div>
+
+                                <div class="text-secondary mb-2" style="font-size:10.5px;">
+                                    Urutan otomatis mengikuti angka di dalam teks (mis. CTN-2 sebelum CTN-10).
+                                </div>
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                                        onclick="toggleSelectRangePopover(false)">Batal</button>
+                                    <button type="button" class="btn btn-dark btn-sm"
+                                        onclick="applySelectRange()">Terapkan</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="packingCardsGrid" class="row g-3"></div>
@@ -1989,7 +2044,7 @@
             const cartonGroups = {};
             const cartonOrder = [];
             rows.forEach(function(row) {
-                const key = row.carton ?? '(tanpa carton)';
+                const key = pgCartonGroupKey(row); // GANTI
                 if (!cartonGroups[key]) {
                     cartonGroups[key] = [];
                     cartonOrder.push(key);
@@ -2090,6 +2145,245 @@
             if (skippedReadonly > 0) msg += ` ${skippedReadonly} dilewati (Read-only, bukan milik user/pos ini).`;
             if (skippedMinority > 0) msg += ` ${skippedMinority} dilewati (status Segel/Session beda dari mayoritas).`;
             showToast(skippedShipped || skippedMinority ? 'warning' : 'success', msg);
+        }
+
+        function toggleSelectRangePopover(forceState) {
+            const $pop = $('#selectRangePopover');
+            const show = forceState !== undefined ? forceState : $pop.hasClass('d-none');
+
+            if (show) {
+                // Reset posisi dulu sebelum diukur ulang.
+                $pop.css({
+                    left: 0,
+                    right: 'auto'
+                }).removeClass('d-none');
+                repositionSelectRangePopover(); // BARU
+
+                $('#selectRangeFrom').val('').focus();
+                $('#selectRangeTo').val('');
+
+                $(document).off('click.selectRangePopover').on('click.selectRangePopover', function(e) {
+                    if (!$(e.target).closest('#selectRangePopover, #btnSelectRangeToggle').length) {
+                        toggleSelectRangePopover(false);
+                    }
+                });
+
+                // BARU -- reposisi ulang kalau layar di-resize/rotate saat
+                // popover masih terbuka.
+                $(window).off('resize.selectRangePopover').on('resize.selectRangePopover', function() {
+                    repositionSelectRangePopover();
+                });
+            } else {
+                $pop.addClass('d-none');
+                $(document).off('click.selectRangePopover');
+                $(window).off('resize.selectRangePopover'); // BARU
+            }
+        }
+
+        function repositionSelectRangePopover() {
+            const $pop = $('#selectRangePopover');
+            if ($pop.hasClass('d-none')) return;
+
+            $pop.css({
+                left: 0,
+                right: 'auto'
+            });
+            const popRect = $pop[0].getBoundingClientRect();
+            const margin = 8;
+
+            if (popRect.right > window.innerWidth - margin) {
+                $pop.css({
+                    left: 'auto',
+                    right: 0
+                });
+            }
+        }
+
+        // BARU -- normalisasi nilai part, SAMA persis logic yang dipakai
+        // toggleSelectAllVisible() (disalin supaya tidak bergantung ke scope
+        // lokal function lain).
+        function pgNormalizePartForRange(p) {
+            return (p === null || p === undefined || p === '' || Number(p) === 0) ? '' : String(p);
+        }
+
+        // BARU -- pilih carton dari urutan tampil ke-N s/d ke-M. Logic
+        // eligibility & konsistensi (skip Shipped/Read-only, kombinasi
+        // Segel/Session TERBANYAK jadi baseline) SAMA dengan toggleSelectAllVisible(),
+        // cuma dibatasi ke rentang carton yang dipilih user.
+        window.selectRangeField = 'carton'; // default
+
+        function setSelectRangeField(field) {
+            window.selectRangeField = field;
+            $('#selectRangePopover .range-field-toggle').each(function() {
+                const isActive = $(this).data('field') === field;
+                $(this).toggleClass('active', isActive);
+                $(this).css({
+                    background: isActive ? '#1e293b' : '#f8fafc',
+                    color: isActive ? '#fff' : '#334155',
+                });
+            });
+
+            const labelFrom = field === 'nobar' ? 'Dari Barcode' : 'Dari (mis. CTN-001)';
+            const labelTo = field === 'nobar' ? 'Sampai Barcode' : 'Sampai (mis. CTN-050)';
+            $('#selectRangeFrom').attr('placeholder', labelFrom);
+            $('#selectRangeTo').attr('placeholder', labelTo);
+        }
+
+        // BARU -- perbandingan natural-sort (numeric-aware), SAMA pola dengan
+        // naturalSortCartons() yang sudah ada di sistem ini (dipakai visualisasi
+        // Shipment Plan) -- supaya "CTN-2" dianggap SEBELUM "CTN-10", bukan
+        // dibandingkan sebagai teks murni.
+        function naturalCompareRange(a, b) {
+            return String(a ?? '').localeCompare(String(b ?? ''), undefined, {
+                numeric: true,
+                sensitivity: 'base'
+            });
+        }
+
+        function applySelectRange() {
+            const field = window.selectRangeField || 'carton';
+            const fromVal = ($('#selectRangeFrom').val() || '').trim();
+            const toVal = ($('#selectRangeTo').val() || '').trim();
+
+            if (!fromVal || !toVal) {
+                showToast('warning', 'Isi nilai Dari dan Sampai.');
+                return;
+            }
+
+            const rows = window.lastPackingRows || [];
+            if (!rows.length) {
+                showToast('warning', 'Tidak ada carton untuk dipilih.');
+                return;
+            }
+
+            // Kelompokkan per carton (SAMA seperti biasa).
+            const cartonGroups = {};
+            const cartonOrder = [];
+            rows.forEach(function (row) {
+                const key = pgCartonGroupKey(row); // GANTI
+                if (!cartonGroups[key]) { cartonGroups[key] = []; cartonOrder.push(key); }
+                cartonGroups[key].push(row);
+            });
+
+            // Ambil nilai field (No Carton / Barcode) representatif tiap grup --
+            // dari baris pertama grup itu.
+            const groupFieldValue = {};
+            cartonOrder.forEach(function(key) {
+                const rep = cartonGroups[key][0];
+                groupFieldValue[key] = field === 'nobar' ? (rep.nobar ?? '') : (rep.carton ?? '');
+            });
+
+            // Tentukan batas bawah/atas SECARA NATURAL -- tidak peduli user
+            // ketik dari kecil ke besar atau sebaliknya.
+            let lo = fromVal,
+                hi = toVal;
+            if (naturalCompareRange(fromVal, toVal) > 0) {
+                lo = toVal;
+                hi = fromVal;
+            }
+
+            const matchedCartonKeys = cartonOrder.filter(function(key) {
+                const val = groupFieldValue[key];
+                if (!val) return false;
+                return naturalCompareRange(val, lo) >= 0 && naturalCompareRange(val, hi) <= 0;
+            });
+
+            const fieldLabel = field === 'nobar' ? 'Barcode' : 'No Carton';
+
+            if (!matchedCartonKeys.length) {
+                showToast('warning', `Tidak ada carton dengan ${fieldLabel} di rentang "${fromVal}" - "${toVal}".`);
+                return;
+            }
+
+            // Reset seleksi lama dulu -- "Pilih Rentang" menggantikan seleksi
+            // sebelumnya, konsisten dgn semantik "Pilih Semua".
+            closeMenuGlobal();
+
+            let skippedShipped = 0,
+                skippedReadonly = 0,
+                skippedMinority = 0;
+            const eligible = [];
+
+            matchedCartonKeys.forEach(function(cartonKey) {
+                const groupRows = cartonGroups[cartonKey];
+                if (groupRows.some(r => r.ship_shipped === true)) {
+                    skippedShipped++;
+                    return;
+                }
+                if (groupRows.some(r => r.can_edit !== true)) {
+                    skippedReadonly++;
+                    return;
+                }
+
+                const segelState = groupRows.some(r => Number(r.segel) === 1);
+                const partState = pgNormalizePartForRange(
+                    groupRows.map(r => r.part).find(p => p !== null && p !== undefined && p !== '' && Number(
+                        p) !== 0) ?? ''
+                );
+                eligible.push({
+                    cartonKey,
+                    groupRows,
+                    segelState,
+                    partState
+                });
+            });
+
+            if (!eligible.length) {
+                showToast('warning', 'Tidak ada carton yang bisa dipilih di rentang ini (semua Shipped/Read-only).');
+                return;
+            }
+
+            // Kombinasi (segel|part) TERBANYAK di rentang ini jadi baseline.
+            const freq = new Map();
+            eligible.forEach(function(item) {
+                const key = item.segelState + '|' + item.partState;
+                freq.set(key, (freq.get(key) || 0) + 1);
+            });
+            let majorityKey = null,
+                majorityCount = -1;
+            freq.forEach(function(count, key) {
+                if (count > majorityCount) {
+                    majorityCount = count;
+                    majorityKey = key;
+                }
+            });
+
+            const eligiblePackpks = [];
+            eligible.forEach(function(item) {
+                const key = item.segelState + '|' + item.partState;
+                if (key !== majorityKey) {
+                    skippedMinority++;
+                    return;
+                }
+                item.groupRows.forEach(function(row) {
+                    eligiblePackpks.push(row.packpk);
+                    window.selectedRowsCache[row.packpk] = row;
+                });
+            });
+
+            if (!eligiblePackpks.length) {
+                showToast('warning', 'Tidak ada carton yang bisa dipilih di rentang ini.');
+                return;
+            }
+
+            window.selectedPackpksGlobal = eligiblePackpks;
+
+            $('.packing-select-item').each(function() {
+                const packpksArr = String($(this).data('packpks') || '').split(',').map(Number).filter(Boolean);
+                $(this).toggleClass('selected', packpksArr.some(pk => eligiblePackpks.includes(pk)));
+            });
+
+            updateSelectionGlobal();
+
+            const cartonCount = new Set(eligiblePackpks.map(pk => window.selectedRowsCache[pk]?.carton)).size;
+            let msg = `${cartonCount} carton dipilih (${fieldLabel} "${fromVal}" - "${toVal}").`;
+            if (skippedShipped > 0) msg += ` ${skippedShipped} dilewati (sudah Shipped).`;
+            if (skippedReadonly > 0) msg += ` ${skippedReadonly} dilewati (Read-only).`;
+            if (skippedMinority > 0) msg +=
+                ` ${skippedMinority} dilewati (status Segel/Session beda dari mayoritas rentang ini).`;
+            showToast(skippedShipped || skippedMinority ? 'warning' : 'success', msg);
+
+            toggleSelectRangePopover(false);
         }
 
         function initPageSizeGlobalCombobox() {
@@ -2273,6 +2567,14 @@
             loadPackingCards();
         }
 
+        function pgCartonGroupKey(row) {
+            const cartonPart = row.carton ?? '(tanpa carton)';
+            const partVal = (row.part === null || row.part === undefined || row.part === '' || Number(row.part) === 0)
+                ? ''
+                : String(row.part);
+            return `${cartonPart}||${partVal}`;
+        }
+
         function renderPackingCards(rows) {
             const grid = $('#packingCardsGrid'),
                 listWrapper = $('#packingListTableWrapper'),
@@ -2297,14 +2599,10 @@
             }
             empty.addClass('d-none');
 
-            const cartonGroups = {},
-                cartonOrder = [];
-            rows.forEach(function(row) {
-                const key = row.carton ?? '(tanpa carton)';
-                if (!cartonGroups[key]) {
-                    cartonGroups[key] = [];
-                    cartonOrder.push(key);
-                }
+            const cartonGroups = {}, cartonOrder = [];
+            rows.forEach(function (row) {
+                const key = pgCartonGroupKey(row); // GANTI
+                if (!cartonGroups[key]) { cartonGroups[key] = []; cartonOrder.push(key); }
                 cartonGroups[key].push(row);
             });
 
@@ -2485,10 +2783,19 @@
         }
 
         function buildInspecDocBadge(row) {
-            if (!row || !row.no_inspec) return '';
-            return `<div style="font-size:10.5px; color:#0369a1; background:#e0f2fe; border-radius:6px; padding:3px 8px; margin-top:6px; margin-bottom:6px; display:inline-flex; align-items:center; gap:4px;">
-                <i class="fas fa-clipboard-check"></i> ${row.no_inspec}
-            </div>`;
+            const docs = row?.inspec_docs || (row?.no_inspec ? [{ no_inspec: row.no_inspec, hasil: row.inspec_hasil }] : []);
+            if (!docs.length) return '';
+        
+            const badges = docs.map(function (d) {
+                const isLulus = Number(d.hasil) === 1;
+                const bg = isLulus ? '#e0f2fe' : '#fee2e2';
+                const color = isLulus ? '#0369a1' : '#991b1b';
+                return `<span style="font-size:10.5px; color:${color}; background:${bg}; border-radius:6px; padding:3px 8px; display:inline-flex; align-items:center; gap:4px;">
+                    <i class="fas fa-clipboard-check"></i> ${d.no_inspec}
+                </span>`;
+            }).join(' ');
+        
+            return `<div class="d-flex flex-wrap gap-1" style="margin-top:6px; margin-bottom:6px;">${badges}</div>`;
         }
 
         function computePackingGroupData(groupRows) {
@@ -2524,7 +2831,7 @@
 
             const shipStampHtml = buildShipStamp(shipStampKey, shipDate, 'lg');
 
-            const inspecDocRow = groupRows.find(r => r.no_inspec);
+            const inspecDocRow = groupRows.find(r => (r.inspec_docs && r.inspec_docs.length) || r.no_inspec);
             const inspecDocBadgeHtml = buildInspecDocBadge(inspecDocRow);
             let totalPlan = 0,
                 totalActual = 0,
@@ -2655,23 +2962,24 @@
 
         function buildBundleCard(unit) {
             const uid = `bundleDetail_${unit.bundlepk}`;
-        
+
             // BARU -- FIX UTAMA: reuse buildPackingCard() (tampilan SAMA dengan
             // carton biasa di luar bundle) utk anggota native, bukan lagi
             // buildBundleMemberRow() yang compact.
-            const membersHtml = unit.members.map(function (m) {
+            const membersHtml = unit.members.map(function(m) {
                 const groupRows = m.groupRows;
                 const isNativeToThisPage = groupRows.some(r => r.POno === PO && r.OP === OP);
                 return buildPackingCard(groupRows, 'col-12', !isNativeToThisPage);
             }).join('');
-        
+
             const totalCount = unit.members.length;
             const sealedCount = unit.members.filter(m => m.groupRows.every(r => Number(r.segel) === 1)).length;
             const allSealed = sealedCount === totalCount;
-        
-            let totalPlan = 0, totalActual = 0;
-            unit.members.forEach(function (m) {
-                m.groupRows.forEach(function (row) {
+
+            let totalPlan = 0,
+                totalActual = 0;
+            unit.members.forEach(function(m) {
+                m.groupRows.forEach(function(row) {
                     for (let i = 1; i <= 40; i++) {
                         totalPlan += Number(row[`qtyp${i}`] || 0);
                         totalActual += Number(row[`qty${i}`] || 0);
@@ -2680,28 +2988,30 @@
             });
             const pct = totalPlan > 0 ? Math.round((totalActual / totalPlan) * 100) : 0;
             const barColor = allSealed ? '#8bc63f' : (pct >= 100 ? '#8bc63f' : '#f97316');
-        
+
             const anyReject = unit.members.some(m => m.groupRows.some(r => Number(r.reject) === 1));
-            const rejectBadgeHtml = anyReject
-                ? `<span class="badge-soft" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;"><i class="fas fa-times-circle me-1"></i>Reject</span>`
-                : '';
-        
+            const rejectBadgeHtml = anyReject ?
+                `<span class="badge-soft" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;"><i class="fas fa-times-circle me-1"></i>Reject</span>` :
+                '';
+
             const ribbonHtml = allSealed ? '<div class="ribbon-segel">SEGEL</div>' : '';
             const bundleNobar = unit.members[0]?.groupRows[0]?.bundle_nobar || null;
             const isPackingAdmin = !!window.pageCfg.showAddPacking;
-        
-            const editBundleBtnHtml = isPackingAdmin
-                ? `<i class="fas fa-pen icon-btn" title="Edit Carton Besar" onclick="event.stopPropagation(); editBundleCarton(${unit.bundlepk})"></i>`
-                : '';
-        
-            const sealBadgeHtml = `<span class="badge-status ${allSealed ? 'sealed' : 'planned'}">${allSealed ? 'Sealed' : `${sealedCount}/${totalCount} Sealed`}</span>`;
-        
-            const bundleSealBtnHtml = (!isPackingAdmin && window.canManageSegel)
-                ? (allSealed
-                    ? `<button class="btn btn-outline-secondary w-100" onclick="event.stopPropagation(); openSegelBundleModal(0, ${unit.bundlepk})"><i class="fas fa-unlock me-1"></i>Unseal</button>`
-                    : `<button class="btn btn-dark w-100" onclick="event.stopPropagation(); openSegelBundleModal(1, ${unit.bundlepk})">Seal</button>`)
-                : '';
-        
+
+            const editBundleBtnHtml = isPackingAdmin ?
+                `<i class="fas fa-pen icon-btn" title="Edit Carton Besar" onclick="event.stopPropagation(); editBundleCarton(${unit.bundlepk})"></i>` :
+                '';
+
+            const sealBadgeHtml =
+                `<span class="badge-status ${allSealed ? 'sealed' : 'planned'}">${allSealed ? 'Sealed' : `${sealedCount}/${totalCount} Sealed`}</span>`;
+
+            const bundleSealBtnHtml = (!isPackingAdmin && window.canManageSegel) ?
+                (allSealed ?
+                    `<button class="btn btn-outline-secondary w-100" onclick="event.stopPropagation(); openSegelBundleModal(0, ${unit.bundlepk})"><i class="fas fa-unlock me-1"></i>Unseal</button>` :
+                    `<button class="btn btn-dark w-100" onclick="event.stopPropagation(); openSegelBundleModal(1, ${unit.bundlepk})">Seal</button>`
+                ) :
+                '';
+
             return `<div class="col-12 col-md-6 col-xl-4"><div class="packing-bundle-card" style="border:2px solid #92400e; border-radius:12px; padding:12px; background:#fdf3e7; position:relative;">
                 ${ribbonHtml}
                 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
@@ -2731,16 +3041,16 @@
                 ${bundleSealBtnHtml ? `<div class="card-actions mt-2">${bundleSealBtnHtml}</div>` : ''}
             </div></div>`;
         }
-        
+
         // BARU -- toggle expand/collapse detail SELURUH carton kecil di dalam
         // Bundle (menggantikan pola lama yang selalu tampil inline scroll).
         function toggleBundleDetailExpand(uid, btnEl, totalCount) {
             const $detail = $('#' + uid);
             const wasVisible = $detail.is(':visible');
             $detail.slideToggle(150);
-            $(btnEl).html(wasVisible
-                ? `<i class="fas fa-chevron-down me-1"></i> Lihat Detail Carton (${totalCount})`
-                : `<i class="fas fa-chevron-up me-1"></i> Tutup Detail Carton`
+            $(btnEl).html(wasVisible ?
+                `<i class="fas fa-chevron-down me-1"></i> Lihat Detail Carton (${totalCount})` :
+                `<i class="fas fa-chevron-up me-1"></i> Tutup Detail Carton`
             );
         }
 
@@ -2821,31 +3131,33 @@
         function buildPackingCard(groupRows, colClass, forceDisabled) {
             colClass = colClass || 'col-12 col-md-6 col-xl-4';
             forceDisabled = !!forceDisabled; // BARU
-        
+
             const d = computePackingGroupData(groupRows);
-            const effectiveCanEdit = d.canEdit && !forceDisabled; // BARU -- forceDisabled MENGALAHKAN can_edit apa pun nilainya
-        
+            const effectiveCanEdit = d.canEdit && !
+                forceDisabled; // BARU -- forceDisabled MENGALAHKAN can_edit apa pun nilainya
+
             const ribbonHtml = d.allSegel ? '<div class="ribbon-segel">SEGEL</div>' : '';
-        
-            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !effectiveCanEdit)
-                ? ''
-                : `<i class="fas fa-pen icon-btn" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
-        
+
+            const editButtonHtml = (!window.pageCfg.showEditButton || d.isSealed || d.anyInspecting || d.anyReturning || !
+                    effectiveCanEdit) ?
+                '' :
+                `<i class="fas fa-pen icon-btn" title="Edit" onclick="event.stopPropagation(); editCartonGlobal('${d.packpksAttr}')"></i>`;
+
             // BARU -- badge berbeda tergantung ALASAN disabled-nya.
-            const readonlyBadgeHtml = !effectiveCanEdit
-                ? (forceDisabled
-                    ? `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Carton ini milik PO/OP lain -- buka halaman PO/OP tersebut untuk mengedit/memilihnya">
+            const readonlyBadgeHtml = !effectiveCanEdit ?
+                (forceDisabled ?
+                    `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Carton ini milik PO/OP lain -- buka halaman PO/OP tersebut untuk mengedit/memilihnya">
                         <i class="fas fa-lock me-1"></i>PO/OP Lain
-                    </span>`
-                    : `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Carton ini dibuat oleh MIF lain - hanya bisa dilihat">
+                    </span>` :
+                    `<span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;" title="Carton ini dibuat oleh MIF lain - hanya bisa dilihat">
                         <i class="fas fa-lock me-1"></i>Read-only
-                    </span>`)
-                : '';
-        
+                    </span>`) :
+                '';
+
             const actionButtonHtml = effectiveCanEdit ? buildActionButtonHtml(d) : '';
-        
+
             const cardOpacityStyle = !effectiveCanEdit ? 'opacity:.7;' : '';
-        
+
             // BARU -- kalau forceDisabled, HAPUS kemampuan klik-pilih sama sekali
             // (bukan cuma "read-only tapi masih bisa diklik"), supaya carton
             // milik PO/OP lain benar-benar tidak bisa ikut ke-toggle oleh
@@ -2853,7 +3165,7 @@
             const selectableClass = forceDisabled ? '' : 'packing-select-item';
             const onclickAttr = forceDisabled ? '' : `onclick="onPackingItemClick(event, this)"`;
             const cursorStyle = forceDisabled ? 'cursor:not-allowed;' : '';
-        
+
             return `<div class="${colClass}"><div class="${selectableClass} packing-card" style="${cardOpacityStyle}${cursorStyle}" data-packpks="${d.packpksAttr}" data-sealed="${d.isSealed?1:0}" data-haspart="${d.hasPart?1:0}" data-canedit="${effectiveCanEdit?1:0}" ${onclickAttr}>
                 ${ribbonHtml}
                 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
@@ -2933,7 +3245,7 @@
                         baselinePart = null;
 
                     const alreadySelected = (window.selectedRowsCache && Object.values(window.selectedRowsCache)[0]) ||
-                    null;
+                        null;
                     if (alreadySelected) {
                         baselineSegel = Number(alreadySelected.segel) === 1;
                         baselinePart = alreadySelected.exportpk ?? '';
@@ -2975,7 +3287,7 @@
                     if (skippedShipped || skippedInconsistent) {
                         showToast('warning',
                             `${skippedShipped} dilewati (Shipped), ${skippedInconsistent} dilewati (beda status Segel/Session).`
-                            );
+                        );
                     }
                     return;
                 }
@@ -3119,7 +3431,7 @@
                 $('#btnBukaSegelGlobal, #btnBulkSegelCtnGlobal, #btnProsesInspectGlobal, #btnProsesShipmentGlobal, ' +
                         '#btnTerimaCartonGlobal, #btnBulkActualCtnGlobal, #btnBulkDeleteActualCtnGlobal, ' +
                         '#btnBulkCopyGlobal, #btnBulkDeleteGlobal, #btnBuatDokumenInspectGlobal, #btnKembalikanStuffingGlobal'
-                        )
+                    )
                     .addClass('d-none');
                 return;
             }
@@ -3409,7 +3721,7 @@
                 const parts = window.shipmentPlanPartsCache || [];
                 const matchedPart = parts.find(p => String(p.exportpk) === String(active));
                 const label = matchedPart ? sessionLabel(matchedPart) :
-                `Session (exportpk ${active})`; // FIX -- sessionLabel(matchedPart)
+                    `Session (exportpk ${active})`; // FIX -- sessionLabel(matchedPart)
                 $('#activeSessionBadge').html(
                     `<i class="fas fa-circle-play text-primary me-1"></i>Sedang stuffing: <strong>${label}</strong>`
                 );
@@ -3474,13 +3786,13 @@
                     if (data.error) {
                         wrap.html(
                             `<div class="text-danger" style="font-size:12.5px;"><i class="fas fa-triangle-exclamation me-1"></i>${data.error}</div>`
-                            );
+                        );
                         return;
                     }
                     if (!parts.length) {
                         wrap.html(
                             '<div class="text-muted" style="font-size:12.5px;">Belum ada rencana Export dari sistem EXIM untuk carton PO/OP ini.</div>'
-                            );
+                        );
                         return;
                     }
 
@@ -3649,12 +3961,12 @@
                 const containersTableHtml = containers.length ?
                     containers.map(c => {
                         const isSegel = !!c
-                        .segel; // GANTI nama variabel -- lebih jelas: ini status SEGEL, bukan "berakhir kirim"
+                            .segel; // GANTI nama variabel -- lebih jelas: ini status SEGEL, bukan "berakhir kirim"
                         const contStarted = !!c.start_ship;
                         let statusHtml;
                         if (isSegel) statusHtml = `<span class="badge" style="background:#8bc63f;">Selesai</span>`;
                         else if (contStarted) statusHtml =
-                        `<span class="badge" style="background:#f97316;">Berjalan</span>`;
+                            `<span class="badge" style="background:#f97316;">Berjalan</span>`;
                         else statusHtml = `<span class="badge bg-secondary">Belum Mulai</span>`;
                         return `
                             <tr>
@@ -3704,10 +4016,10 @@
                             <div class="fw-semibold" style="font-size:13px;">${Number(e.totctn || 0).toLocaleString()}</div>
                         </div>
                         ${e.remark ? `
-                                <div class="col-12">
-                                    <div class="text-secondary" style="font-size:11px;">Catatan</div>
-                                    <div style="font-size:12.5px; font-style:italic;">${e.remark}</div>
-                                </div>` : ''}
+                                                <div class="col-12">
+                                                    <div class="text-secondary" style="font-size:11px;">Catatan</div>
+                                                    <div style="font-size:12.5px; font-style:italic;">${e.remark}</div>
+                                                </div>` : ''}
                     </div>
             
                     <hr class="my-3">
@@ -3751,7 +4063,7 @@
                 containers.forEach((c, idx) => {
                     $sel.append(
                         `<option value="${idx}">${c.contno ?? ('Container ' + (idx + 1))} (${c.qty_ctn} ctn)</option>`
-                        );
+                    );
                 });
                 onSpdContainerChange();
             }
@@ -4323,10 +4635,9 @@
                 }
                 empty.addClass('d-none');
 
-                const cartonGroups = {},
-                    cartonOrder = [];
+                const cartonGroups = {}, cartonOrder = [];
                 rows.forEach(function(row) {
-                    const key = row.carton ?? '(tanpa carton)';
+                    const key = pgCartonGroupKey(row); // GANTI
                     if (!cartonGroups[key]) {
                         cartonGroups[key] = [];
                         cartonOrder.push(key);
@@ -4357,7 +4668,7 @@
             }
 
             let
-            inspecCart = []; // [{packpk, shippk, carton, size, color, secsz, qty:1}] -- SETIAP entry SELALU qty:1, TIDAK PERNAH digabung
+                inspecCart = []; // [{packpk, shippk, carton, size, color, secsz, qty:1}] -- SETIAP entry SELALU qty:1, TIDAK PERNAH digabung
             let inspecRemainingBySizeKey = {}; // key = `${packpk}|${sizeLabel}` -> sisa yang boleh diambil
             window.editingInspecpk = null;
 

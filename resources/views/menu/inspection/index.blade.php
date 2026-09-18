@@ -191,20 +191,42 @@
             transition: 0.2s;
             user-select: none;
         }
+
         .dg-daterange-btn:hover {
             background: #f9fafb;
             border-color: #cbd5e1;
             color: #0f172a;
         }
 
-        .easyui-dg-wrap .action-btn.action-btn-edit { background: #e0f2fe; color: #0369a1; }
-        .easyui-dg-wrap .action-btn.action-btn-edit:hover { background: #bae6fd; color: #0c4a6e; }
-        
-        .easyui-dg-wrap .action-btn.action-btn-pdf { background: #f8d7da; color: #dc3545; }
-        .easyui-dg-wrap .action-btn.action-btn-pdf:hover { background: #ecb9bd; color: #ca1124; }
-        
-        .easyui-dg-wrap .action-btn.action-btn-end { background: #dcfce7; color: #166534; }
-        .easyui-dg-wrap .action-btn.action-btn-end:hover { background: #bbf7d0; color: #14532d; }
+        .easyui-dg-wrap .action-btn.action-btn-edit {
+            background: #e0f2fe;
+            color: #0369a1;
+        }
+
+        .easyui-dg-wrap .action-btn.action-btn-edit:hover {
+            background: #bae6fd;
+            color: #0c4a6e;
+        }
+
+        .easyui-dg-wrap .action-btn.action-btn-pdf {
+            background: #f8d7da;
+            color: #dc3545;
+        }
+
+        .easyui-dg-wrap .action-btn.action-btn-pdf:hover {
+            background: #ecb9bd;
+            color: #ca1124;
+        }
+
+        .easyui-dg-wrap .action-btn.action-btn-end {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .easyui-dg-wrap .action-btn.action-btn-end:hover {
+            background: #bbf7d0;
+            color: #14532d;
+        }
     </style>
 
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
@@ -283,7 +305,7 @@
                         <div class="d-flex align-items-center">
                             <strong class="text-dark">Carton Sedang Inspect</strong>
                         </div>
-                        
+
                         <div class="input-group" style="width:280px;">
                             <span class="input-group-text search">
                                 <img src="{{ asset('public/css/images/Shape.png') }}" width="18" height="18"
@@ -343,8 +365,10 @@
                                 <th field="action" width="150" formatter="formatDocAction" align="center">Aksi</th>
                                 <th field="OP" width="230" formatter="formatDocOrderInfo">Order Information</th>
                                 <th field="POno" width="180" formatter="formatDocPoOp">PO No</th>
-                                <th field="no_inspec" width="220" formatter="formatDocNoAndHasil">No. Dokumen / Hasil</th>
-                                <th field="tgl" width="120" formatter="formatDocTanggal" align="center">Tanggal Inspect</th>
+                                <th field="no_inspec" width="220" formatter="formatDocNoAndHasil">No. Dokumen / Hasil
+                                </th>
+                                <th field="tgl" width="120" formatter="formatDocTanggal" align="center">Tanggal
+                                    Inspect</th>
                                 <th field="cartons" width="220" formatter="formatDocCartons">Carton Diinspect</th>
                             </tr>
                         </thead>
@@ -390,7 +414,7 @@
         const localNoImg = "{{ asset('public/css/images/no-img.png') }}";
 
         $(function() {
-            $(function () {
+            $(function() {
                 $('#dgInspectDocuments_reportrange').daterangepicker({
                     autoUpdateInput: false,
                     locale: {
@@ -405,33 +429,38 @@
                         '7 Hari Terakhir': [moment().subtract(6, 'days'), moment()],
                         '30 Hari Terakhir': [moment().subtract(29, 'days'), moment()],
                         'Bulan Ini': [moment().startOf('month'), moment().endOf('month')],
-                        'Bulan Lalu': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')],
+                        'Bulan Lalu': [moment().subtract(1, 'month').startOf('month'), moment()
+                            .subtract(1, 'month').endOf('month')
+                        ],
                     }
                 });
-            
-                $('#dgInspectDocuments_reportrange').on('apply.daterangepicker', function (ev, picker) {
+
+                $('#dgInspectDocuments_reportrange').on('apply.daterangepicker', function(ev, picker) {
                     $('#dgInspectDocuments_reportrange_label').text(
-                        picker.startDate.format('D MMM YYYY') + ' - ' + picker.endDate.format('D MMM YYYY')
+                        picker.startDate.format('D MMM YYYY') + ' - ' + picker.endDate.format(
+                            'D MMM YYYY')
                     );
-                    $('#dgInspectDocuments_tgl_from').val(picker.startDate.format('YYYY-MM-DD')).trigger('change');
-                    $('#dgInspectDocuments_tgl_to').val(picker.endDate.format('YYYY-MM-DD')).trigger('change');
+                    $('#dgInspectDocuments_tgl_from').val(picker.startDate.format('YYYY-MM-DD'))
+                        .trigger('change');
+                    $('#dgInspectDocuments_tgl_to').val(picker.endDate.format('YYYY-MM-DD'))
+                        .trigger('change');
                 });
-            
-                $('#dgInspectDocuments_reportrange').on('cancel.daterangepicker', function () {
+
+                $('#dgInspectDocuments_reportrange').on('cancel.daterangepicker', function() {
                     $('#dgInspectDocuments_tgl_from').val('').trigger('change');
                     $('#dgInspectDocuments_tgl_to').val('').trigger('change');
                 });
 
                 loadCartonInspecList();
             });
-            
+
             // label SEKARANG disinkronkan LANGSUNG dari nilai
             // input tersembunyi itu sendiri (source of truth), bukan menebak-nebak
             // dari klik tombol lain. Berfungsi utk SEMUA jalur reset -- Cancel di
             // picker, klik chip "x", ATAU klik "Clear All" -- karena SEMUANYA pada
             // akhirnya melewati resetFilterElement() yang sudah di-fix di atas utk
             // men-trigger 'change'.
-            $('#dgInspectDocuments_tgl_from, #dgInspectDocuments_tgl_to').on('change', function () {
+            $('#dgInspectDocuments_tgl_from, #dgInspectDocuments_tgl_to').on('change', function() {
                 var from = $('#dgInspectDocuments_tgl_from').val();
                 var to = $('#dgInspectDocuments_tgl_to').val();
                 if (!from && !to) {
@@ -519,22 +548,23 @@
         //   edit (fa-edit) -> langsung ke halaman detail GLOBAL (pono/op)
         function formatDocAction(value, row) {
             const isEnded = !!row.enddate;
-        
-            const editButtonHtml = isEnded
-                ? ''
-                : `<a href="javascript:void(0)" class="action-btn action-btn-edit" title="Edit Dokumen" style="margin-left:6px;" onclick="editInspecDocument(${row.inspecpk})">
+
+            const editButtonHtml = isEnded ?
+                '' :
+                `<a href="javascript:void(0)" class="action-btn action-btn-edit" title="Edit Dokumen" style="margin-left:6px;" onclick="editInspecDocument(${row.inspecpk})">
                     <i class="fas fa-edit"></i>
                 </a>`;
-        
+
             let endButtonHtml = '';
             if (isEnded) {
-                endButtonHtml = `<span class="badge" style="font-size:9.5px;margin-left:6px;color:#8bc63f;background:#dcfce7;" title="Dokumen sudah di-End -- carton di dalamnya bebas didokumentasikan ulang">Selesai</span>`;
+                endButtonHtml =
+                    `<span class="badge" style="font-size:9.5px;margin-left:6px;color:#8bc63f;background:#dcfce7;" title="Dokumen sudah di-End -- carton di dalamnya bebas didokumentasikan ulang">Selesai</span>`;
             } else if (row.all_returned) {
                 endButtonHtml = `<a href="javascript:void(0)" class="action-btn action-btn-end" title="Selesaikan Inspect (semua carton sudah kembali)" style="margin-left:6px;" onclick="endInspecDocument(${row.inspecpk})">
                     <i class="fas fa-flag-checkered"></i>
                 </a>`;
             }
-        
+
             return `
                 <a href="javascript:void(0)" class="action-btn action-btn-pdf" title="Cetak PDF" onclick="window.open('{{ url('/inspection/inspect-pdf') }}/${row.inspecpk}', '_blank')">
                     <i class="fas fa-print"></i>
@@ -717,46 +747,54 @@
         function buildCartonInspecCard(c) {
             const poOpList = c.po_op_list || [];
             const poOpLabel = poOpList.map(p => `${p.POno ?? '-'} &middot; ${p.OP ?? '-'}`).join(', ');
-        
-            const mixBadge = c.is_mix
-                ? `<span class="badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;" title="Mix PO: ${poOpLabel}">
+
+            const mixBadge = c.is_mix ?
+                `<span class="badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;" title="Mix PO: ${poOpLabel}">
                     <i class="fas fa-shuffle me-1"></i>Mix PO
-                </span>`
-                : '';
-        
-            const bundleBadge = c.bundlepk
-                ? `<span class="badge-soft" style="background:#fdf3e7;color:#92400e;border-color:#f3dcb8;" title="Bagian dari Carton Besar: ${c.bundle_carton ?? '-'}">
+                </span>` :
+                '';
+
+            const bundleBadge = c.bundlepk ?
+                `<span class="badge-soft" style="background:#fdf3e7;color:#92400e;border-color:#f3dcb8;" title="Bagian dari Carton Besar: ${c.bundle_carton ?? '-'}">
                     <i class="fas fa-box-open me-1"></i>${c.bundle_carton ?? 'Bundle'}
-                </span>`
-                : '';
-        
-            //  badge status dokumen Inspect (kalau ada yang masih terbuka).
-            const docBadgeHtml = c.has_open_doc
-                ? `<div class="mb-2">
+                </span>` :
+                '';
+
+            // BARU -- badge Part/Session, supaya carton dgn nomor SAMA tapi
+            // Part BEDA tetap bisa dibedakan visualnya.
+            const partVal = (c.part === null || c.part === undefined || c.part === '' || Number(c.part) === 0) ? null : c
+                .part;
+            const partBadge = partVal ?
+                `<span class="badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;">
+                    ${String(partVal) === '10' ? 'Complete' : 'Session ' + partVal}
+                </span>` :
+                '';
+
+            const docBadgeHtml = c.has_open_doc ?
+                `<div class="mb-2">
                     <span class="badge-soft" style="background:${c.inspec_hasil === 1 ? '#dcfce7' : '#fee2e2'};color:${c.inspec_hasil === 1 ? '#166534' : '#991b1b'};border-color:transparent;">
                         <i class="fas fa-file-lines me-1"></i>${c.no_inspec ?? '-'} &middot; ${c.inspec_hasil === 1 ? 'LULUS' : 'REJECT'}
                     </span>
-                </div>`
-                : `<div class="mb-2">
+                </div>` :
+                `<div class="mb-2">
                     <span class="badge-soft" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0;">Belum Ada Dokumen Inspect</span>
                 </div>`;
-        
-            //  FIX UTAMA: "Buka Input Inspect" DIGANTI "Kembalikan",
-            // HANYA tampil kalau carton ini ada di dokumen yang belum di-End.
+
             const packpksCsv = (c.packpks || []).join(',');
-            const actionHtml = c.has_open_doc
-                ? `<button type="button" class="btn btn-outline-dark btn-sm w-100"
+            const actionHtml = c.has_open_doc ?
+                `<button type="button" class="btn btn-outline-dark btn-sm w-100"
                     onclick="kembalikanCartonFromInspecTab('${c.carton}', '${packpksCsv}', '${(c.no_inspec ?? '').replace(/'/g, "\\'")}', ${c.inspec_hasil ?? 'null'})">
                     <i class="fas fa-arrow-rotate-left me-1"></i> Kembalikan
-                </button>`
-                : '';
-        
+                </button>` :
+                '';
+
             return `
                 <div class="col-12 col-md-6 col-xl-4">
                     <div class="packing-card">
                         <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                             <span class="ctn-code">${c.carton ?? '-'}</span>
                             <span class="badge-status inspect">Inspect</span>
+                            ${partBadge}
                             ${mixBadge}
                             ${bundleBadge}
                         </div>
@@ -774,25 +812,26 @@
                 </div>
             `;
         }
-        
+
         //  buka modal Kembalikan (REUSE modal & desain yang SAMA dengan
         // halaman input per-PO), scoped ke SATU carton (bukan window.selectedPackpksGlobal
         // karena tab ini tidak punya mekanisme seleksi carton).
         function kembalikanCartonFromInspecTab(cartonNo, packpksCsv, noInspec, inspecHasil) {
             const packpks = packpksCsv.split(',').map(Number).filter(Boolean);
             if (!packpks.length) return;
-        
+
             window.kembalikanCartonPackpksGlobal = packpks;
-        
+
             $('#kembalikanInfoText').html(`Anda akan mengembalikan carton <strong>${cartonNo}</strong> ke FinishGood.`);
-        
+
             const $display = $('#kembalikanHasilDisplay');
             $('#kembalikanWarningBoxOk, #kembalikanWarningBoxReject, #kembalikanWarningBoxMissing').addClass('d-none');
-        
+
             if (inspecHasil === null || inspecHasil === undefined) {
                 // Seharusnya tidak terjadi (tombol cuma muncul kalau has_open_doc
                 // true), tapi tetap dijaga sebagai fallback.
-                $display.attr('class', 'alert alert-secondary py-2 px-3 mb-0 text-center fw-bold').text('Belum ada Dokumen Inspect');
+                $display.attr('class', 'alert alert-secondary py-2 px-3 mb-0 text-center fw-bold').text(
+                    'Belum ada Dokumen Inspect');
                 $('#kembalikanWarningBoxMissing').removeClass('d-none');
                 $('#btnConfirmKembalikanStuffing').prop('disabled', true);
             } else if (Number(inspecHasil) === 0) {
@@ -806,23 +845,23 @@
                 $('#kembalikanWarningBoxOk').removeClass('d-none');
                 $('#btnConfirmKembalikanStuffing').prop('disabled', false);
             }
-        
+
             // GANTI target klik tombol Confirm -- pakai versi submit khusus tab
             // ini (baca window.kembalikanCartonPackpksGlobal), BUKAN
             // submitKembalikanStuffing() bawaan (yang baca window.selectedPackpksGlobal
             // milik halaman input per-PO).
             $('#btnConfirmKembalikanStuffing').off('click').on('click', submitKembalikanCartonInspecTab);
-        
+
             bootstrap.Modal.getOrCreateInstance(document.getElementById('kembalikanStuffingModal')).show();
         }
-        
+
         //  proses SAMA PERSIS dengan submitKembalikanStuffing() yang
         // sudah ada (action: request_return via bulkShipAction), cuma sumber
         // packpk-nya dari window.kembalikanCartonPackpksGlobal.
         function submitKembalikanCartonInspecTab() {
             const packpks = window.kembalikanCartonPackpksGlobal || [];
             if (!packpks.length) return;
-        
+
             $('#btnConfirmKembalikanStuffing').prop('disabled', true);
             $.ajax({
                 url: "{{ route('inspection.bulk-ship-action') }}",
@@ -831,16 +870,20 @@
                     packpk: packpks.join(','),
                     action: 'request_return',
                 },
-                success: function (res) {
+                success: function(res) {
                     showToast(res.icon, res.title);
                     bootstrap.Modal.getInstance(document.getElementById('kembalikanStuffingModal')).hide();
-                    refreshInspectionTabs(); // BARU -- Kembalikan bisa bikin all_returned jadi true, Dokumen Inspect perlu ikut update
+                    refreshInspectionTabs
+                (); // BARU -- Kembalikan bisa bikin all_returned jadi true, Dokumen Inspect perlu ikut update
                 },
-                error: function (xhr) {
-                    const res = xhr.responseJSON || { icon: 'error', title: 'Gagal mengembalikan carton.' };
+                error: function(xhr) {
+                    const res = xhr.responseJSON || {
+                        icon: 'error',
+                        title: 'Gagal mengembalikan carton.'
+                    };
                     showToast(res.icon, res.title);
                 },
-                complete: function () {
+                complete: function() {
                     $('#btnConfirmKembalikanStuffing').prop('disabled', false);
                 }
             });
@@ -928,16 +971,19 @@
         function confirmEndInspecDocument() {
             const inspecpk = window.pendingEndInspecpk;
             if (!inspecpk) return;
-        
+
             $('#btnConfirmEndInspec').prop('disabled', true);
-            $.post(`{{ url('/inspection/inspect-end') }}/${inspecpk}`, {}, function (res) {
+            $.post(`{{ url('/inspection/inspect-end') }}/${inspecpk}`, {}, function(res) {
                 showToast(res.icon, res.title);
                 bootstrap.Modal.getInstance(document.getElementById('endInspecDocumentModal')).hide();
                 refreshInspectionTabs(); // BARU -- End membebaskan carton, Carton Inspec perlu ikut update
-            }).fail(function (xhr) {
-                const res = xhr.responseJSON || { icon: 'error', title: 'Gagal mengakhiri dokumen.' };
+            }).fail(function(xhr) {
+                const res = xhr.responseJSON || {
+                    icon: 'error',
+                    title: 'Gagal mengakhiri dokumen.'
+                };
                 showToast(res.icon, res.title);
-            }).always(function () {
+            }).always(function() {
                 $('#btnConfirmEndInspec').prop('disabled', false);
                 window.pendingEndInspecpk = null;
             });
@@ -1040,7 +1086,7 @@
             $('#inspecKeterangan').val(''); // BARU
             renderInspecCart();
             recomputeHasilDisplay();
-        
+
             bootstrap.Modal.getOrCreateInstance(document.getElementById('inspectDocumentModal')).show();
             loadGlobalInspectAvailableCartons();
         }
@@ -1048,19 +1094,20 @@
         function loadGlobalInspectAvailableCartons() {
             $.get("{{ route('inspection.globalAvailableCartons') }}", {
                 exclude_inspecpk: window.editingInspecpk || ''
-            }, function (data) {
+            }, function(data) {
                 renderInspectCartonList(data.rows || []);
                 reconcileRemainingWithExistingCart();
             });
         }
 
         function reconcileRemainingWithExistingCart() {
-            inspecCart.forEach(function (line) {
+            inspecCart.forEach(function(line) {
                 const sizeKey = `${line.packpk}|${line.size}`;
                 if (!(sizeKey in inspecRemainingBySizeKey)) return;
-        
-                inspecRemainingBySizeKey[sizeKey] = Math.max(0, inspecRemainingBySizeKey[sizeKey] - (line.qty || 1));
-        
+
+                inspecRemainingBySizeKey[sizeKey] = Math.max(0, inspecRemainingBySizeKey[sizeKey] - (line.qty ||
+                1));
+
                 const sizeIdSafe = safeIdPart(line.packpk + '_' + line.size);
                 const $label = $('#inspecRemainingLabel_' + sizeIdSafe);
                 if ($label.length) {
@@ -1075,6 +1122,14 @@
         //  render daftar carton, dikelompokkan per NOMOR CARTON FISIK
         // (SAMA seperti versi per-PO), TAPI SEKARANG tiap carton ditandai
         // PO/OP asalnya (dan Mix PO/Bundle) karena lintas PO/OP sekaligus.
+        function pgCartonPartKeyInspec(row) {
+            const cartonPart = row.carton ?? '(tanpa carton)';
+            const partVal = (row.part === null || row.part === undefined || row.part === '' || Number(row.part) === 0) ?
+                '' :
+                String(row.part);
+            return `${cartonPart}||${partVal}`;
+        }
+
         function renderInspectCartonList(rows) {
             const wrap = $('#inspectCartonList');
             wrap.empty();
@@ -1088,7 +1143,7 @@
             const cartonOrder = [];
             rows.forEach(function(row) {
                 window['inspecPackData_' + row.packpk] = row;
-                const key = row.carton ?? '(tanpa carton)';
+                const key = pgCartonPartKeyInspec(row);
                 if (!cartonGroups[key]) {
                     cartonGroups[key] = [];
                     cartonOrder.push(key);
@@ -1103,97 +1158,108 @@
                 });
             });
 
-            cartonOrder.forEach(function (cartonNo) {
-                const packRowsInCarton = cartonGroups[cartonNo];
+            cartonOrder.forEach(function(groupKey) {
+                const packRowsInCarton = cartonGroups[groupKey];
+                const repRow = packRowsInCarton[0];
+                const cartonLabel = repRow.carton ?? '-';
+
                 const uniqueCombos = new Set(packRowsInCarton.map(r => `${r.material ?? '-'}||${r.secsz ?? ''}`));
                 const isMixed = uniqueCombos.size > 1;
-                const cartonIdSafe = safeIdPart(cartonNo);
-            
-                const poOpList = [...new Set(packRowsInCarton.map(r => `${r.POno ?? '-'} &middot; ${r.OP ?? '-'}`))];
+                const cartonIdSafe = safeIdPart(groupKey);
+
+                const poOpList = [...new Set(packRowsInCarton.map(r =>
+                `${r.POno ?? '-'} &middot; ${r.OP ?? '-'}`))];
                 const poOpLabel = poOpList.join(', ');
-            
+
                 const anyMix = packRowsInCarton.some(r => r.is_mix);
                 const anyBundle = packRowsInCarton.some(r => r.bundlepk);
                 const bundleName = packRowsInCarton.find(r => r.bundle_carton)?.bundle_carton;
-            
-                // kalau carton ini SUDAH ada di dokumen Inspect
-                // lain (bukan dokumen yang sedang diedit), disable TOTAL.
+
                 const isAlreadyDocumented = packRowsInCarton.some(r => r.already_documented);
-            
-                const mixInfoHtml = anyMix
-                    ? `<span class="inspec-badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;" title="Mix PO: ${poOpLabel}">
-                        <i class="fas fa-shuffle" style="font-size:9px;"></i> Mix PO
-                    </span>`
-                    : '';
-                const bundleInfoHtml = anyBundle
-                    ? `<span class="inspec-badge-soft" style="background:#fdf3e7;color:#92400e;border-color:#f3dcb8;" title="Bagian dari Carton Besar: ${bundleName ?? '-'}">
-                        <i class="fas fa-box-open" style="font-size:9px;"></i> ${bundleName ?? 'Bundle'}
-                    </span>`
-                    : '';
-                // BARU
-                const documentedInfoHtml = isAlreadyDocumented
-                    ? `<span class="inspec-badge-soft" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;" title="Carton ini sudah dimasukkan ke dokumen Inspect lain -- tidak bisa disample ulang di sini">
-                        <i class="fas fa-ban" style="font-size:9px;"></i> Sudah Terdokumentasi
-                    </span>`
-                    : '';
-            
+
+                const partVal = (repRow.part === null || repRow.part === undefined || repRow.part === '' || Number(
+                        repRow.part) === 0) ?
+                    null :
+                    repRow.part;
+                const partInfoHtml = partVal ?
+                    `<span class="inspec-badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;">
+                ${String(partVal) === '10' ? 'Complete' : 'Session ' + partVal}
+            </span>` :
+                    '';
+
+                const mixInfoHtml = anyMix ?
+                    `<span class="inspec-badge-soft" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;" title="Mix PO: ${poOpLabel}">
+                <i class="fas fa-shuffle" style="font-size:9px;"></i> Mix PO
+            </span>` :
+                    '';
+                const bundleInfoHtml = anyBundle ?
+                    `<span class="inspec-badge-soft" style="background:#fdf3e7;color:#92400e;border-color:#f3dcb8;" title="Bagian dari Carton Besar: ${bundleName ?? '-'}">
+                <i class="fas fa-box-open" style="font-size:9px;"></i> ${bundleName ?? 'Bundle'}
+            </span>` :
+                    '';
+                const documentedInfoHtml = isAlreadyDocumented ?
+                    `<span class="inspec-badge-soft" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;" title="Carton ini sudah dimasukkan ke dokumen Inspect lain -- tidak bisa disample ulang di sini">
+                <i class="fas fa-ban" style="font-size:9px;"></i> Sudah Terdokumentasi
+            </span>` :
+                    '';
+
                 let sizePillsHtml = '';
-                packRowsInCarton.forEach(function (row) {
+                packRowsInCarton.forEach(function(row) {
                     const materialLabel = row.material ?? '-';
                     const secszTag = row.secsz ? ` (${row.secsz})` : '';
-                    row.sizes.forEach(function (s) {
+                    row.sizes.forEach(function(s) {
                         const sizeKey = `${row.packpk}|${s.label}`;
                         const remaining = inspecRemainingBySizeKey[sizeKey];
-                        //  paksa "kosong" (tombol disabled) kalau carton ini
-                        // sudah terdokumentasi, TERLEPAS dari sisa qty-nya.
                         const isEmpty = remaining <= 0 || isAlreadyDocumented;
                         const sizeIdSafe = safeIdPart(row.packpk + '_' + s.label);
-            
+
                         sizePillsHtml += `
-                            <div class="inspec-size-pill ${isEmpty ? 'is-empty' : ''}" id="inspecSizeRow_${sizeIdSafe}">
-                                <div class="isp-label">${s.label}</div>
-                                <div class="isp-combo">${materialLabel}${secszTag}</div>
-                                <div class="isp-remaining" id="inspecRemainingLabel_${sizeIdSafe}">sisa ${remaining}</div>
-                                <div>
-                                    <button type="button" class="isp-add-btn" ${isEmpty ? 'disabled' : ''}
-                                        onclick="addInspecSampleUnit(${row.packpk}, '${String(s.label).replace(/'/g, "\\'")}')">
-                                        <i class="fas fa-plus" style="font-size:11px;"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    });
-                });
-            
-                const compositionLabel = isMixed ? 'Mixed' : (packRowsInCarton[0].sizes.length > 1 ? 'Assorted' : 'Solid');
-                const compositionCls = isMixed ? 'mixed' : (packRowsInCarton[0].sizes.length > 1 ? 'assorted' : 'solid');
-                const repRow = packRowsInCarton[0];
-            
-                wrap.append(`
-                    <div class="inspec-carton-row ${isAlreadyDocumented ? 'is-documented' : ''}">
-                        <div class="inspec-carton-header" onclick="toggleInspecCartonSize('${String(cartonNo).replace(/'/g, "\\'")}')">
-                            <div class="inspec-carton-icon"><i class="fas fa-box-open"></i></div>
-                            <div class="flex-grow-1">
-                                <div class="inspec-carton-title">
-                                    Carton ${cartonNo}
-                                    <span class="inspec-badge-soft ${compositionCls}">${compositionLabel}</span>
-                                    ${mixInfoHtml}
-                                    ${bundleInfoHtml}
-                                    ${documentedInfoHtml}
-                                </div>
-                                <div class="inspec-carton-sub">
-                                    <i class="fas fa-barcode me-1"></i>${repRow.nobar ?? 'Belum ada barcode'}
-                                    &middot; ${poOpLabel}
-                                </div>
-                            </div>
-                            <i class="fas fa-chevron-down text-muted" id="inspecExpandIcon_${cartonIdSafe}"></i>
-                        </div>
-                        <div class="inspec-carton-perf"></div>
-                        <div class="inspec-size-detail" id="inspecSizeDetail_${cartonIdSafe}">
-                            <div class="inspec-size-grid">${sizePillsHtml}</div>
+                    <div class="inspec-size-pill ${isEmpty ? 'is-empty' : ''}" id="inspecSizeRow_${sizeIdSafe}">
+                        <div class="isp-label">${s.label}</div>
+                        <div class="isp-combo">${materialLabel}${secszTag}</div>
+                        <div class="isp-remaining" id="inspecRemainingLabel_${sizeIdSafe}">sisa ${remaining}</div>
+                        <div>
+                            <button type="button" class="isp-add-btn" ${isEmpty ? 'disabled' : ''}
+                                onclick="addInspecSampleUnit(${row.packpk}, '${String(s.label).replace(/'/g, "\\'")}')">
+                                <i class="fas fa-plus" style="font-size:11px;"></i>
+                            </button>
                         </div>
                     </div>
-                `);
+                `;
+                    });
+                });
+
+                const compositionLabel = isMixed ? 'Mixed' : (packRowsInCarton[0].sizes.length > 1 ? 'Assorted' :
+                    'Solid');
+                const compositionCls = isMixed ? 'mixed' : (packRowsInCarton[0].sizes.length > 1 ? 'assorted' :
+                    'solid');
+
+                wrap.append(`
+            <div class="inspec-carton-row ${isAlreadyDocumented ? 'is-documented' : ''}">
+                <div class="inspec-carton-header" onclick="toggleInspecCartonSize('${groupKey.replace(/'/g, "\\'")}')">
+                    <div class="inspec-carton-icon"><i class="fas fa-box-open"></i></div>
+                    <div class="flex-grow-1">
+                        <div class="inspec-carton-title">
+                            Carton ${cartonLabel}
+                            <span class="inspec-badge-soft ${compositionCls}">${compositionLabel}</span>
+                            ${partInfoHtml}
+                            ${mixInfoHtml}
+                            ${bundleInfoHtml}
+                            ${documentedInfoHtml}
+                        </div>
+                        <div class="inspec-carton-sub">
+                            <i class="fas fa-barcode me-1"></i>${repRow.nobar ?? 'Belum ada barcode'}
+                            &middot; ${poOpLabel}
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-down text-muted" id="inspecExpandIcon_${cartonIdSafe}"></i>
+                </div>
+                <div class="inspec-carton-perf"></div>
+                <div class="inspec-size-detail" id="inspecSizeDetail_${cartonIdSafe}">
+                    <div class="inspec-size-grid">${sizePillsHtml}</div>
+                </div>
+            </div>
+        `);
             });
         }
 
@@ -1447,7 +1513,7 @@
                 $('#inspecKeterangan').val(data.keterangan ?? ''); // BARU
                 renderInspecCart();
                 recomputeHasilDisplay();
-        
+
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('inspectDocumentModal')).show();
                 loadGlobalInspectAvailableCartons();
 
@@ -1473,17 +1539,26 @@
         }
 
         function submitInspecDocument() {
-            if (!inspecCart.length) { showToast('warning', 'Pilih minimal 1 sample.'); return; }
+            if (!inspecCart.length) {
+                showToast('warning', 'Pilih minimal 1 sample.');
+                return;
+            }
             const aql = $('#inspecAql').val();
-            if (aql === '' || Number(aql) < 0) { showToast('warning', 'Isi nilai AQL terlebih dulu.'); return; }
+            if (aql === '' || Number(aql) < 0) {
+                showToast('warning', 'Isi nilai AQL terlebih dulu.');
+                return;
+            }
             const belumPilihDefect = inspecCart.some(l => l.stspass === 0 && (!l.defects || !l.defects.length));
-            if (belumPilihDefect) { showToast('warning', 'Ada baris berstatus Defect yang belum dipilih tipe defect-nya.'); return; }
-        
+            if (belumPilihDefect) {
+                showToast('warning', 'Ada baris berstatus Defect yang belum dipilih tipe defect-nya.');
+                return;
+            }
+
             const isEdit = !!window.editingInspecpk;
-            const url = isEdit
-                ? `{{ url('/inspection/inspect-update') }}/${window.editingInspecpk}`
-                : "{{ route('inspection.inspect-store') }}";
-        
+            const url = isEdit ?
+                `{{ url('/inspection/inspect-update') }}/${window.editingInspecpk}` :
+                "{{ route('inspection.inspect-store') }}";
+
             $('#btnSubmitInspecDoc').prop('disabled', true);
             $.ajax({
                 url: url,
@@ -1492,21 +1567,29 @@
                     aql: aql,
                     keterangan: $('#inspecKeterangan').val(), // BARU
                     lines: inspecCart.map(l => ({
-                        packpk: l.packpk, size: l.size, color: l.color, secsz: l.secsz, qty: l.qty,
-                        stspass: l.stspass, defects: l.defects.map(d => d.defectpk),
+                        packpk: l.packpk,
+                        size: l.size,
+                        color: l.color,
+                        secsz: l.secsz,
+                        qty: l.qty,
+                        stspass: l.stspass,
+                        defects: l.defects.map(d => d.defectpk),
                     })),
                 },
-                success: function (res) {
+                success: function(res) {
                     showToast(res.icon, res.title);
                     bootstrap.Modal.getInstance(document.getElementById('inspectDocumentModal')).hide();
                     window.editingInspecpk = null;
                     refreshInspectionTabs(); // BARU
                 },
-                error: function (xhr) {
-                    const res = xhr.responseJSON || { icon: 'error', title: 'Gagal menyimpan dokumen inspect.' };
+                error: function(xhr) {
+                    const res = xhr.responseJSON || {
+                        icon: 'error',
+                        title: 'Gagal menyimpan dokumen inspect.'
+                    };
                     showToast(res.icon, res.title);
                 },
-                complete: function () {
+                complete: function() {
                     $('#btnSubmitInspecDoc').prop('disabled', false);
                 }
             });
