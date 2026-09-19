@@ -12,24 +12,16 @@ class SisaProduksiController extends Controller
 {
     public function index()
     {
-        return view('menu.shared.transfer-index', [
+        return view('menu.sisa-produksi.index', [
             'pageConfig' => [
-                'title'              => 'Daftar Data OP',
-                'polibagColumnLabel' => 'Polibag',
-                'finishingField'     => 'finishing', // SAMA seperti Stok Sisa -- properti bernama 'finishing'
-                'showQtyColumn'      => true,
-                'showPackingColumn'  => true,
-                'showKeluarColumn'   => true,
-                'showMifBadgeAlways' => true,  // BARU -- modul ini SELALU gabung 2 mif untuk semua user
-                'showExportExcel'    => true,  // BARU
-                'exportExcelRoute'   => route('sisa-produksi.export-excel'),
-                'showPdfAction'      => true,  // BARU -- modal: PDF-only kalau balance<=0
-                'pdfUrlBase'         => url('/sisa-produksi'), // BARU
+                'title'            => 'Daftar Sisa Produksi (Digrade)',
+                'showExportExcel'  => true,
+                'exportExcelRoute' => route('sisa-produksi.export-excel'),
+                'pdfUrlBase'       => url('/sisa-produksi'),
                 'routes' => [
                     'list'          => route('sisa-produksi.list'),
                     'detailByPoOp'  => route('sisa-produksi.detail-by-po-op'),
-                    'modalView'     => 'menu.shared.transfer-detail-modal',
-                    'navStateKey'   => 'sisaProduksiIndexState', // BEDA dari Stok Sisa's 'sisaProduksiListState' -- supaya tidak bentrok kalau kebuka bersamaan di tab lain
+                    'navStateKey'   => 'sisaProduksiIndexState',
                     'inputUrlBase'  => url('/sisa-produksi/input'),
                 ],
             ],
@@ -38,44 +30,18 @@ class SisaProduksiController extends Controller
 
     private function isSuperUser(): bool
     {
-        return auth()->check() && (auth()->user()->role ?? null) === 'super';
+        return session('guserpk') == 34;
     }
  
-    private function resolveConnection($mif): string
-    {
-        return ((int) $mif) === 1 ? 'mysql_andon' : 'mysql';
-    }
- 
-    // ============================================================
-    // GET LIST -- BEDA dari modul lain: SELALU gabung KEDUA mif untuk
-    // SEMUA user (bukan cuma super user), karena akun cuma 1 untuk
-    // seluruh mif. Kalau PONo+OP yang SAMA muncul di KEDUA database,
-    // TIDAK digabung jadi 1 baris -- tetap 2 baris terpisah, ditandai
-    // has_mif_duplicate supaya frontend bisa kasih badge "mif 1"/"mif 2".
-    // ============================================================
     public function getList(Request $request)
     {
         $page   = (int) ($request->page ?? 1);
         $rows   = (int) ($request->rows ?? 50);
         $offset = ($page - 1) * $rows;
- 
         $sortDir = $request->input('sort', 'desc') === 'asc' ? 'asc' : 'desc';
- 
-        $keysAndon = $this->fetchGroupKeys('mysql_andon', 1, $request);
-        $keysMysql = $this->fetchGroupKeys('mysql', 2, $request);
-        $allKeys   = $keysAndon->concat($keysMysql);
- 
-        // Deteksi PONo+OP yang muncul di KEDUA mif.
-        $countByPoOp = $allKeys
-            ->groupBy(fn ($k) => $k->POno . '|' . $k->OP)
-            ->map(fn ($g) => $g->pluck('mif')->unique()->count());
- 
-        $allKeys = $allKeys->map(function ($k) use ($countByPoOp) {
-            $comboKey = $k->POno . '|' . $k->OP;
-            $k->has_mif_duplicate = ($countByPoOp[$comboKey] ?? 1) > 1;
-            return $k;
-        });
- 
+    
+        $allKeys = $this->fetchGroupKeys('mysql', $request);
+    
         $allKeys = $allKeys
             ->when(
                 $sortDir === 'asc',
@@ -83,105 +49,79 @@ class SisaProduksiController extends Controller
                 fn ($c) => $c->sortByDesc('OP')
             )
             ->values();
- 
+    
         $total    = $allKeys->count();
         $pageKeys = $allKeys->slice($offset, $rows)->values();
- 
+    
         $data = $this->fetchAggregatedForKeys($pageKeys, $request);
- 
+    
         foreach ($data as $i => $row) {
             $row->no = $offset + $i + 1;
         }
- 
-        return response()->json([
-            'total' => $total,
-            'rows'  => $data,
-        ]);
+    
+        return response()->json(['total' => $total, 'rows' => $data]);
     }
  
-    /**
-     * Detail per PO+OP+mif -- dibuka dari 1 baris SPESIFIK di index
-     * (yang sudah pasti tahu mif-nya sendiri, karena tidak digabung).
-     */
     public function detailByPoOp(Request $request)
     {
         $validated = $request->validate([
-            'po'  => 'nullable',
-            'op'  => 'required',
-            'mif' => 'required',
+            'po' => 'nullable',
+            'op' => 'required',
         ]);
- 
-        $po  = $validated['po'] ?? null;
-        $op  = $validated['op'];
-        $mif = (int) $validated['mif'];
- 
-        $connection = $this->resolveConnection($mif);
- 
-        $key = (object) ['POno' => $po, 'OP' => $op, 'mif' => $mif, 'has_mif_duplicate' => false];
-        $rows = $this->fetchDetailRowsForKeys($connection, $mif, collect([$key]), $request)->values();
- 
+    
+        $po = $validated['po'] ?? null;
+        $op = $validated['op'];
+    
+        $key = (object) ['POno' => $po, 'OP' => $op];
+        $rows = $this->fetchDetailRowsForKeys('mysql', collect([$key]), $request)->values();
+    
         foreach ($rows as $i => $row) {
             $row->no = $i + 1;
         }
- 
-        return response()->json([
-            'total' => $rows->count(),
-            'rows'  => $rows,
-        ]);
+    
+        return response()->json(['total' => $rows->count(), 'rows' => $rows]);
     }
  
     private function aggregateByPoOp($collection)
     {
-        // FIX UTAMA: groupBy sekarang menyertakan `mif` -- PONo+OP yang
-        // sama tapi mif BEDA harus tetap jadi baris TERPISAH, bukan
-        // digabung/di-sum jadi 1.
         return $collection
-            ->groupBy(fn ($row) => $row->POno . '|' . $row->OP . '|' . $row->mif)
+            ->groupBy(fn ($row) => $row->POno . '|' . $row->OP)
             ->map(function ($group) {
                 $representative = clone $group->sortByDesc('popk')->first();
- 
-                $representative->qty       = (float) $group->sum('qty');
-                $representative->loading   = (float) $group->sum('loading');
-                $representative->rq        = (float) $group->sum('rq');
-                $representative->transfer  = (float) $group->sum('transfer');
-                $representative->finishing = (float) $group->sum('finishing');
-                $representative->packing   = (float) $group->sum('packing');
-                $representative->keluar    = (float) $group->sum('keluar');
-                $representative->balance   = $representative->transfer - $representative->packing;
- 
+    
+                $representative->qty      = (float) $group->sum('qty');
+                $representative->loading  = (float) $group->sum('loading');
+                $representative->rq       = (float) $group->sum('rq');
+                $representative->transfer = (float) $group->sum('transfer');  // total Sisa Digrade (semua status)
+                $representative->diterima = (float) $group->sum('diterima');  // BARU -- total yang SUDAH masuk gudang
+                $representative->keluar   = (float) $group->sum('keluar');
+                $representative->balance  = $representative->diterima - $representative->keluar; // GANTI
+    
                 $representative->status = (int) $group->max('status');
-                $representative->has_mif_duplicate = (bool) $group->first()->has_mif_duplicate;
- 
+    
                 return $representative;
             })
             ->values();
     }
  
-    /**
-     * Query RINGAN -- cuma ambil kombinasi PONo+OP unik yang match
-     * filter, DENGAN qualifying condition "ADA baris bj dengan grade
-     * A-C" (SAMA seperti native: WHERE bj.grade BETWEEN 'A' AND 'C'),
-     * BUKAN lagi "ada packing" seperti Stok Sisa.
-     */
-    private function fetchGroupKeys(string $connection, int $mif, Request $request)
+ 
+    private function fetchGroupKeys(string $connection, Request $request)
     {
         $search = $request->search;
         $buyer  = $request->buyer;
         $year   = $request->year;
- 
-        $qualifyingBj = DB::connection($connection)->table('bj')
+    
+        $qualifyingBjgrade = DB::connection($connection)->table('bjgrade')
             ->select('popk')
-            ->whereBetween('grade', ['A', 'C'])
             ->groupBy('popk');
- 
+    
         $query = DB::connection($connection)->table('po')
-            ->joinSub($qualifyingBj, 'qbj', function ($join) {
-                $join->on('po.popk', '=', 'qbj.popk');
+            ->joinSub($qualifyingBjgrade, 'qbg', function ($join) {
+                $join->on('po.popk', '=', 'qbg.popk');
             })
-            ->where('po.mif', $mif)
             ->select('po.POno', 'po.OP')
             ->distinct();
- 
+    
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('po.POno', 'like', "%{$search}%")
@@ -194,119 +134,60 @@ class SisaProduksiController extends Controller
                     ->orWhere('po.style', 'like', "%{$search}%");
             });
         }
- 
+    
         if ($buyer) {
             $query->where('po.buyer', 'like', "%{$buyer}%");
         }
- 
+    
         if ($year) {
             $query->whereRaw('YEAR(po.shipdate1) >= ?', [(int) $year]);
         }
- 
-        return $query->get()->map(function ($r) use ($mif) {
-            $r->mif = $mif;
-            return $r;
-        });
+    
+        return $query->get();
     }
  
-    /**
-     * Untuk key (PONo+OP+mif) yang MASUK 1 halaman, kelompokkan per
-     * mif/koneksi, jalankan query detail lengkap, bawa has_mif_duplicate
-     * dari key ke baris detail, lalu agregasi (per PONo+OP+mif).
-     */
     private function fetchAggregatedForKeys($pageKeys, Request $request)
     {
-        $keysByMif = $pageKeys->groupBy('mif');
- 
-        $allDetailRows = collect();
- 
-        foreach ($keysByMif as $mif => $keysForMif) {
-            $connection = $this->resolveConnection($mif);
-            $rows = $this->fetchDetailRowsForKeys($connection, (int) $mif, $keysForMif, $request);
-            $allDetailRows = $allDetailRows->concat($rows);
-        }
- 
-        // Bawa flag has_mif_duplicate dari key ke setiap baris detail
-        // (match by PONo+OP+mif).
-        $dupLookup = $pageKeys->keyBy(fn ($k) => $k->POno . '|' . $k->OP . '|' . $k->mif);
-        foreach ($allDetailRows as $row) {
-            $lookupKey = $row->POno . '|' . $row->OP . '|' . $row->mif;
-            $row->has_mif_duplicate = (bool) ($dupLookup[$lookupKey]->has_mif_duplicate ?? false);
-        }
- 
-        return $this->aggregateByPoOp($allDetailRows);
+        $rows = $this->fetchDetailRowsForKeys('mysql', $pageKeys, $request);
+        return $this->aggregateByPoOp($rows);
     }
  
-    /**
-     * Query detail LENGKAP -- SAMA pola dengan Stok Sisa, TAPI qualifying
-     * condition-nya "ADA bj dengan grade A-C" (bukan SUM(pack.pcs)>0).
-     */
-    private function fetchDetailRowsForKeys(string $connection, int $mif, $keys, Request $request)
+    private function fetchDetailRowsForKeys(string $connection, $keys, Request $request)
     {
-        $bj = DB::connection($connection)->table('bj')
+        $db = DB::connection($connection);
+    
+        $bjgradeAgg = $db->table('bjgrade')
             ->selectRaw("
                 popk,
-                SUM(pcs)  AS transfer_pcs,
-                SUM(pcsk) AS keluar_pcs,
+                SUM(pcs) AS transfer_pcs,
+                SUM(CASE WHEN status IN (2, 3, 4) THEN pcs ELSE 0 END) AS diterima_pcs,
                 MAX(tglin)  AS tglin,
                 MAX(tglout) AS tglout,
                 MAX(status) AS status
             ")
             ->groupBy('popk');
- 
-        $pack = DB::connection($connection)->table('pack')
-            ->selectRaw('popk, SUM(pcs) AS packing_pcs')
-            ->groupBy('popk');
- 
-        // FIX UTAMA: qualifying condition -- ADA baris bj dengan grade
-        // A-C (SAMA seperti native), BUKAN lagi SUM(pack.pcs)>0.
-        $qualifyingBj = DB::connection($connection)->table('bj')
-            ->select('popk')
-            ->whereBetween('grade', ['A', 'C'])
-            ->groupBy('popk');
- 
-        $query = DB::connection($connection)->table('po')
-            ->joinSub($qualifyingBj, 'qbj', function ($join) {
-                $join->on('po.popk', '=', 'qbj.popk');
+    
+        $qualifyingBjgrade = $db->table('bjgrade')->select('popk')->groupBy('popk');
+    
+        $query = $db->table('po')
+            ->joinSub($qualifyingBjgrade, 'qbg', function ($join) {
+                $join->on('po.popk', '=', 'qbg.popk');
             })
-            ->leftJoinSub($bj, 'bj', function ($join) {
-                $join->on('po.popk', '=', 'bj.popk');
+            ->leftJoinSub($bjgradeAgg, 'bjgrade', function ($join) {
+                $join->on('po.popk', '=', 'bjgrade.popk');
             })
-            ->leftJoinSub($pack, 'pack', function ($join) {
-                $join->on('po.popk', '=', 'pack.popk');
-            })
-            ->where('po.mif', $mif)
             ->selectRaw("
-                po.popk,
-                po.moppk,
-                po.POno,
-                po.poref,
-                po.OP,
-                po.customer,
-                po.season,
-                po.style,
-                po.material,
-                po.buyer,
-                po.qty,
-                po.secsz,
-                po.silhouette,
-                po.shipdate1,
-                po.mif,
- 
-                bj.tglin,
-                bj.tglout,
-                bj.status,
-                COALESCE(bj.transfer_pcs, 0) AS transfer,
-                COALESCE(bj.keluar_pcs, 0)   AS keluar,
-                COALESCE(pack.packing_pcs,0) AS packing,
- 
-                (COALESCE(bj.transfer_pcs,0) - COALESCE(pack.packing_pcs,0)) AS balance
+                po.popk, po.moppk, po.POno, po.poref, po.OP, po.customer, po.season,
+                po.style, po.material, po.buyer, po.qty, po.secsz, po.silhouette, po.shipdate1, po.mif,
+        
+                bjgrade.tglin, bjgrade.tglout, bjgrade.status,
+                COALESCE(bjgrade.transfer_pcs, 0) AS transfer,
+                COALESCE(bjgrade.diterima_pcs, 0) AS diterima
             ")
             ->where(function ($outer) use ($keys) {
                 foreach ($keys as $k) {
                     $outer->orWhere(function ($inner) use ($k) {
                         $inner->where('po.OP', $k->OP);
- 
                         if ($k->POno !== null && $k->POno !== '') {
                             $inner->where('po.POno', $k->POno);
                         } else {
@@ -317,111 +198,58 @@ class SisaProduksiController extends Controller
                     });
                 }
             });
- 
+    
         $rows = $query
             ->orderByDesc('po.shipdate1')
             ->orderByDesc('po.OP')
             ->orderByDesc('po.POno')
             ->orderByDesc('po.material')
             ->get();
- 
+    
         $popks = $rows->pluck('popk')->filter()->unique()->values();
- 
-        // ---- Polibag/Transfer = Manual (bj) + Barcode (output jnspk=4) ----
-        $barcodeTransferMap = collect();
+    
+        // BARU -- 'keluar' = SUM(outsisadt.qty) via bjgrade.bjpk, per popk.
+        $keluarMap = collect();
         if ($popks->isNotEmpty()) {
-            $barcodeTransferMap = DB::connection('mysql_polibag')
-                ->table('output')
-                ->whereIn('popk', $popks)
-                ->where('jnspk', 4)
-                ->groupBy('popk')
-                ->selectRaw('popk, SUM(jmlpcs) as total_barcode')
-                ->pluck('total_barcode', 'popk');
+            $keluarMap = $db->table('outsisadt')
+                ->join('bjgrade', 'bjgrade.bjpk', '=', 'outsisadt.bjpk')
+                ->whereIn('bjgrade.popk', $popks)
+                ->groupBy('bjgrade.popk')
+                ->selectRaw('bjgrade.popk, SUM(outsisadt.qty) as keluar_pcs')
+                ->pluck('keluar_pcs', 'popk');
         }
- 
         foreach ($rows as $row) {
-            $barcodeQty = (int) ($barcodeTransferMap[$row->popk] ?? 0);
-            $row->transfer = (float) $row->transfer + $barcodeQty;
-            $row->balance  = $row->transfer - $row->packing;
+            $row->keluar  = (float) ($keluarMap[$row->popk] ?? 0);
+            $row->balance = $row->diterima - $row->keluar; // GANTI -- dulu: $row->transfer - $row->keluar
         }
- 
-        // ---- Transfer to Finishing = Manual (tfpb) + Barcode (jnspk=10) ----
-        $this->addFinishingToRows($rows);
- 
-        // ---- Loading & RQ (mysql_sop) ----
+    
+        // ---- Loading & RQ (mysql_sop) -- TIDAK diubah. ----
         $moppks = $rows->pluck('moppk')->filter()->unique()->values();
- 
         $loadingMap = collect();
         $rMap = collect();
         $qMap = collect();
- 
+    
         if ($moppks->isNotEmpty()) {
             $loadingMap = DB::connection('mysql_sop')->table('sop')
                 ->select('moppk')->selectRaw('SUM(tot) as qty')
-                ->whereIn('moppk', $moppks)
-                ->groupBy('moppk')
-                ->pluck('qty', 'moppk');
- 
+                ->whereIn('moppk', $moppks)->groupBy('moppk')->pluck('qty', 'moppk');
+    
             $rMap = DB::connection('mysql_sop')->table('r')
                 ->select('moppk')->selectRaw('SUM(tot) as qty')
-                ->whereIn('moppk', $moppks)
-                ->groupBy('moppk')
-                ->pluck('qty', 'moppk');
- 
+                ->whereIn('moppk', $moppks)->groupBy('moppk')->pluck('qty', 'moppk');
+    
             $qMap = DB::connection('mysql_sop')->table('q')
                 ->select('moppk')->selectRaw('SUM(tot) as qty')
-                ->whereIn('moppk', $moppks)
-                ->groupBy('moppk')
-                ->pluck('qty', 'moppk');
+                ->whereIn('moppk', $moppks)->groupBy('moppk')->pluck('qty', 'moppk');
         }
- 
+    
         foreach ($rows as $row) {
             $row->loading = (float) ($loadingMap[$row->moppk] ?? 0);
             $row->rq      = (float) ($rMap[$row->moppk] ?? 0) + (float) ($qMap[$row->moppk] ?? 0);
         }
- 
+    
         return $rows;
     }
- 
-    private function addFinishingToRows($rows): void
-    {
-        if ($rows->isEmpty()) {
-            return;
-        }
- 
-        $popks = $rows->pluck('popk')->filter()->unique()->values();
- 
-        if ($popks->isEmpty()) {
-            foreach ($rows as $r) {
-                $r->finishing = 0;
-            }
-            return;
-        }
- 
-        $manualMap = DB::connection('mysql_finance_mif')
-            ->table('tfpb')
-            ->leftJoin('mop', 'mop.moppk', '=', 'tfpb.moppk')
-            ->whereIn('mop.popk', $popks)
-            ->groupBy('mop.popk')
-            ->selectRaw('mop.popk, SUM(tfpb.tot) as total_manual')
-            ->pluck('total_manual', 'popk');
- 
-        $barcodeMap = DB::connection('mysql_polibag')
-            ->table('output')
-            ->whereIn('popk', $popks)
-            ->where('jnspk', 10)
-            ->groupBy('popk')
-            ->selectRaw('popk, SUM(jmlpcs) as total_barcode')
-            ->pluck('total_barcode', 'popk');
- 
-        foreach ($rows as $r) {
-            $manual  = (float) ($manualMap[$r->popk] ?? 0);
-            $barcode = (float) ($barcodeMap[$r->popk] ?? 0);
-            $r->finishing = $manual + $barcode;
-        }
-    }
-
-
 
     public function inputTransfer($popk, Request $request)
     {

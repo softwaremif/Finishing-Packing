@@ -176,8 +176,7 @@ class LoController extends Controller
  
         $rows = $db->table('bjgrade')
             ->join('po', 'po.popk', '=', 'bjgrade.popk')
-            ->where('bjgrade.status', 0)
-            ->whereBetween('bjgrade.grade', ['A', 'C'])
+            ->whereIn('bjgrade.status', [2, 4]) // GANTI -- sebelumnya: ->where('bjgrade.status', 2)
             ->when($mifFilter, fn ($q) => $q->where('po.mif', $mifFilter))
             ->when($search, function ($q) use ($search) {
                 $q->where(function ($qq) use ($search) {
@@ -900,7 +899,7 @@ class LoController extends Controller
     
         $rows = $db->table('bjgrade')
             ->join('po', 'po.popk', '=', 'bjgrade.popk')
-            ->where('bjgrade.status', 2)
+            ->whereIn('bjgrade.status', [2, 4]) // GANTI -- FIX UTAMA, sebelumnya: ->where('bjgrade.status', 2)
             ->when($mifFilter, fn ($q) => $q->where('po.mif', $mifFilter))
             ->when($search, function ($q) use ($search) {
                 $q->where(function ($qq) use ($search) {
@@ -921,8 +920,6 @@ class LoController extends Controller
     
         $bjpks = $rows->pluck('bjpk')->values();
     
-        // Sisa dihitung dari SEMUA outsisadt (approved ATAU belum) -- SAMA
-        // seperti sebelumnya, kecuali baris milik $excludeOutpk (mode edit).
         $releasedMap = collect();
         if ($bjpks->isNotEmpty()) {
             $releasedMap = $db->table('outsisadt')
@@ -997,7 +994,7 @@ class LoController extends Controller
         $bjgradeRows = $db->table('bjgrade')
             ->join('po', 'po.popk', '=', 'bjgrade.popk')
             ->whereIn('bjgrade.bjpk', $bjpks)
-            ->where('bjgrade.status', 2)
+            ->whereIn('bjgrade.status', [2, 4]) // GANTI -- sebelumnya: ->where('bjgrade.status', 2)
             ->selectRaw("bjgrade.bjpk, {$qtyColumns}, {$sizeColumns}")
             ->get()
             ->keyBy('bjpk');
@@ -1241,6 +1238,7 @@ class LoController extends Controller
         $bjgradeRows = $db->table('bjgrade')
             ->join('po', 'po.popk', '=', 'bjgrade.popk')
             ->whereIn('bjgrade.bjpk', $bjpks)
+            ->whereIn('bjgrade.status', [2, 4]) // BARU
             ->selectRaw("bjgrade.bjpk, {$qtyColumns}, {$sizeColumns}")
             ->get()->keyBy('bjpk');
     
