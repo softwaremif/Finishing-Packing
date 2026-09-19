@@ -81,6 +81,7 @@ Route::middleware(['check'])->group(function () {
     // ppp
     Route::get('tf-finishing/detail-by-po-op', [TransferFinishingController::class, 'detailByPoOp'])->name('tf_finishing.detail-by-po-op');
     Route::get('polibag/detail-by-po-op', [TransferController::class, 'detailByPoOp'])->name('transfer.detail-by-po-op');
+    Route::get('stok-sisa/detail-by-po-op', [StokSisaController::class, 'detailByPoOp'])->name('stok-sisa.detail-by-po-op');
     Route::get('/packing/list', [PackingController::class, 'getList'])->name('packing.list');
     Route::get('/stuffing/popup', [FinishedGoodsController::class, 'popupList'])->name('finGoods.popup');
     Route::get('/packing/detail-by-po-op', [PackingController::class, 'detailByPoOp'])->name('packing.detail-by-po-op');
@@ -166,10 +167,14 @@ Route::middleware(['check'])->group(function () {
 
 
         // MENU STOK SISA(GRADE)
+ 
         Route::get('/stok-sisa', [StokSisaController::class, 'index'])->name('stok-sisa.index');
         Route::get('/stok-sisa/list', [StokSisaController::class, 'getList'])->name('stok-sisa.list');
-        Route::get('stok-sisa/detail-by-po-op', [StokSisaController::class, 'detailByPoOp'])->name('stok-sisa.detail-by-po-op');
-        Route::get('/stok-sisa/input/{popk}', [TransferController::class, 'inputTransfer'])->name('stok-sisa.input');  
+        Route::get('/stok-sisa/input/{popk}', [StokSisaController::class, 'inputTransfer'])->name('stok-sisa.input');
+        Route::post('/stok-sisa/save', [StokSisaController::class, 'saveTransfer'])->name('stok-sisa.save');
+        Route::delete('/stok-sisa/delete/{bjpk}', [StokSisaController::class, 'delete'])->name('stok-sisa.delete');
+        Route::get('stok-sisa/{popk}/detail-list', [StokSisaController::class, 'detailList'])->name('stok-sisa.detail.list');
+        Route::get('stok-sisa/{popk}/breakdown-summary', [StokSisaController::class, 'breakdownSummary'])->name('stok-sisa.breakdown-summary');
         
         // MENU GUDANG LO
         Route::get('/kirim-sisa',                    [LoController::class, 'index'])->name('lo.index');

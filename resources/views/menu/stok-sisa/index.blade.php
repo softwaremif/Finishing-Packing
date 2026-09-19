@@ -1,53 +1,36 @@
+{{-- menu/shared/transfer-index.blade.php --}}
+{{-- Dipakai oleh KEDUA halaman: Transfer/Polibag DAN Stok Sisa (Grade).
+     Kontroler masing-masing kirim $pageConfig untuk menentukan route,
+     judul, dan kolom tambahan mana yang tampil. --}}
 @extends('layout.main')
+
+@php
+    $cfg = array_merge([
+        'title'               => 'Daftar Data OP',
+        'polibagColumnLabel'  => 'Polibag',
+        'finishingField'      => 'transfer_finishing',
+        'showQtyColumn'       => false,
+        'showPackingColumn'   => false,
+        'showKeluarColumn'    => false,
+        'showMifBadgeAlways'  => false, // BARU -- Sisa Produksi: true (badge selalu tampil, bukan cuma super user)
+        'showExportExcel'     => false, // BARU -- Sisa Produksi: true
+        'exportExcelRoute'    => null,  // BARU
+        'inputUrlBase'        => '/stok-sisa/input',
+        'routes' => [],
+    ], $pageConfig ?? []);
+@endphp
 
 @section('css_custom')
     <style>
-        thead tr.group-total th {
-            background: #f8fafc !important;
-            border-bottom: 1px solid #e5e7eb !important;
-            font-size: 12px;
-        }
-
-        .group-label {
-            font-size: 11px;
-            color: #6b7280;
-            font-weight: 500;
-        }
-
-        .group-value {
-            font-size: 13px;
-            font-weight: 700;
-        }
-
-        .group-info {
-            height: 55px;
-            vertical-align: middle;
-        }
-
-        .group-center {
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            height: 100%;
-            padding-bottom: 6px;
-        }
-
-        .datagrid-body td[field="qty"],
-        .datagrid-body td[field="loading"],
-        .datagrid-body td[field="rq"],
         .datagrid-body td[field="transfer"],
+        .datagrid-body td[field="balance"],
+        .datagrid-body td[field="qty"],
         .datagrid-body td[field="finishing"],
         .datagrid-body td[field="packing"],
-        .datagrid-body td[field="balance"],
         .datagrid-body td[field="keluar"] {
             text-align: right !important;
             font-weight: 500;
         }
-
-        .datagrid-body td[field="balance"] {
-            font-weight: 500; 
-        }
-
         .action-btn {
             display: inline-flex;
             align-items: center;
@@ -66,144 +49,316 @@
             cursor: pointer;
             font-family: inherit;
         }
-
         .action-btn:hover {
             background: #bae6fd;
             color: #0c4a6e;
             transform: scale(1.05);
         }
-
-        .action-btn.action-btn-pdf {
-            background: #fee2e2;
-            color: #b91c1c;
+        #dgOrder .datagrid-header .datagrid-cell {
+            font-weight: 600;
+            color: #374151;
+            font-size: 12px;
         }
-
-        .action-btn.action-btn-pdf:hover {
-            background: #fecaca;
-            color: #7f1d1d;
+        #dgOrder .datagrid-body .datagrid-cell {
+            font-size: 13px;
+            padding-top: 8px;
+            padding-bottom: 8px;
         }
-
-        #sisaDetailModal .modal-dialog {
-            max-width: min(1400px, 95vw);
+        #dgOrder .datagrid-row:hover td {
+            background-color: #f8fafc !important;
         }
-
-        .datagrid-row-status2 {
-            background-color: #CCCCCC !important;
+        .cell-stack {
+            text-align: left;
+            line-height: 1.35;
+        }
+        .cell-stack .cs-main {
+            font-weight: 600;
+            font-size: 13px;
+            color: #0f172a;
+        }
+        .cell-stack .cs-sub {
+            font-size: 11px;
+            color: #64748b;
+        }
+        .cell-stack .cs-meta {
+            font-size: 10.5px;
+            color: #94a3b8;
+        }
+        .mif-badge {
+            font-size: 9px;
+            margin-left: 4px;
+            vertical-align: 1px;
         }
     </style>
 @endsection
 
 @section('content')
     <div class="page-wrap">
-        <x-table-default
-            id="dgOrder"
-            title="Daftar Data OP"
-            search
-            search-name="search"
-            search-placeholder="Search..."
-            buyer
-            buyer-name="buyer"
-            buyer-url="{{ route('api.buyer-list') }}"
-            buyer-value-field="buyer"
-            buyer-text-field="buyer_name"
-            buyer-mode="local"
-            year
-            year-name="year"
-        >
-            <table id="dgOrder" class="easyui-datagrid" style="width:100%;height:600px"
-                url="{{ route('stok-sisa.list') }}" method="get" pagination="true" pageSize="50"
+        <x-table-default id="dgOrder" title="{{ $cfg['title'] }}" search search-name="search"
+            search-placeholder="Search..." buyer buyer-name="buyer" buyer-url="{{ route('api.buyer-list') }}"
+            buyer-value-field="buyer" buyer-text-field="buyer_name" buyer-mode="local" year year-name="year"
+            exfactory exfactory-name="ex_factory" sort-dropdown sort-asc-label="Awal Ex-Factory"
+            sort-desc-label="Akhir Ex-Factory">
+
+            @if ($cfg['showExportExcel'])
+                <x-slot name="filters">
+                    <a href="javascript:void(0)" id="btnExportExcel"
+                        class="btn btn-outline-success btn-sm d-inline-flex align-items-center px-2.5"
+                        style="border-radius:6px;">
+                        <i class="fas fa-file-excel me-1"></i> Excel
+                    </a>
+                </x-slot>
+            @endif
+
+            <table id="dgOrder" style="width:100%;height:600px"
+                url="{{ $cfg['routes']['list'] }}" method="get" pagination="true" pageSize="50"
                 pageList="[25,50,100,200,500]" rownumbers="false" singleSelect="true" fitColumns="false"
                 border="false">
                 <thead>
                     <tr>
-                        <th field="action" width="60" formatter="formatAction" align="center" rowspan="2">Aksi</th>
-                        <th field="no" width="50" align="center" rowspan="2">No</th>
-                        <th field="POno" width="150" rowspan="2">PO No</th>
-                        <th field="OP" width="150" rowspan="2">OP</th>
-                        <th field="season" width="120" rowspan="2">Season</th>
-                        <th field="buyer" width="150" rowspan="2">Buyer</th>
-                        <th field="style" width="150" rowspan="2">Style</th>
-                        <th colspan="6">Pcs</th>
-                    </tr>
-                    <tr>
-                        <th field="qty" width="110" align="right" formatter="formatNumber">Qty</th>
-                        <th field="finishing" width="120" align="right" formatter="formatNumber">Transfer To<br>Finishing</th>
-                        <th field="transfer" width="110" align="right" formatter="formatNumber">Polibag</th>
-                        <th field="packing" width="110" align="right" formatter="formatNumber">Packing</th>
-                        <th field="balance" width="110" align="right" formatter="formatBalanceCell">Balance</th>
-                        <th field="keluar" width="110" align="right" formatter="formatNumber">Keluar</th>
+                        <th field="action" width="55" formatter="formatAction" align="center">Aksi</th>
+                        <th field="OP" width="230" formatter="formatOrderInfo">Order Information</th>
+                        <th field="POno" width="230" formatter="formatPOno">PO No</th>
+                        <th field="GAC" width="100" align="center" formatter="formatExFactory">Ex-Factory</th>
+                        @if ($cfg['showQtyColumn'])
+                            <th field="qty" width="90" align="right" formatter="formatNumber">Qty</th>
+                        @endif
+                        <th field="{{ $cfg['finishingField'] }}" width="150" align="right" formatter="formatNumber">Transfer To<br>Finishing</th>
+                        <th field="transfer" width="170" align="right" formatter="formatPolibagDetail">{{ $cfg['polibagColumnLabel'] }}</th>
+                        @if ($cfg['showPackingColumn'])
+                            <th field="packing" width="120" align="right" formatter="formatNumber">Packing</th>
+                        @endif
+                        <th field="balance" width="150" align="right" formatter="formatBalance">Balance</th>
+                        {{-- BARU -- kolom gabungan Sisa + Status Grade dalam 1 kolom. --}}
+                        @if ($cfg['showSisaGradeColumn'] ?? false)
+                            <th field="sisa_belum_digrade" width="150" align="right" formatter="formatSisaGrade">Sisa Belum Digrade</th>
+                        @endif
+                        @if ($cfg['showKeluarColumn'])
+                            <th field="keluar" width="120" align="right" formatter="formatNumber">Keluar</th>
+                        @endif
+                        <th field=" " width="10" align="right"> </th>
                     </tr>
                 </thead>
             </table>
         </x-table-default>
     </div>
-    @include('menu.stok-sisa.modal-material-list')
+    @include($cfg['routes']['modalView'])
 @endsection
 
 @section('js_custom')
     <script>
-        // ============================================================
-        // SIMPAN / AMBIL STATE (filter index + PO/OP modal yang terbuka)
-        // ============================================================
-        function getSavedListState() {
-            let raw = sessionStorage.getItem('sisaProduksiListState');
-            if (!raw) return null;
-            sessionStorage.removeItem('sisaProduksiListState');
-            try { return JSON.parse(raw); } catch (e) { return null; }
+        window.pageCfg = @json($cfg);
+        const R = window.pageCfg.routes;
+        const isSuperUser = @json(session('guserpk') == 34);
+        const localNoImg = "{{ asset('public/css/images/no-img.png') }}";
+
+        function formatAction(value, row, index) {
+            const poArg = JSON.stringify(row.POno ?? '');
+            return `
+                <a href="javascript:void(0)"
+                    onclick='openDetailModal(event, ${poArg}, ${JSON.stringify(row.OP)}, ${row.mif})'
+                    class="action-btn"
+                    title="Lihat Detail">
+                    <i class="fas fa-eye"></i>
+                </a>
+            `;
         }
 
-        function saveListState() {
+        function formatExFactory(value) {
+            if (value === null || value === undefined || value === '') return '';
+            const datePart = String(value).split(' ')[0].split('T')[0];
+            const parts = datePart.split('-');
+            if (parts.length !== 3) return '';
+            const year = parseInt(parts[0], 10);
+            const monthIdx = parseInt(parts[1], 10) - 1;
+            const dayNum = parseInt(parts[2], 10);
+            if (!Number.isFinite(year) || year <= 0 || !Number.isFinite(monthIdx) || monthIdx < 0 || monthIdx > 11 ||
+                !Number.isFinite(dayNum) || dayNum <= 0 || dayNum > 31) {
+                return '';
+            }
+            const bulanSingkat = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+            return `${dayNum} ${bulanSingkat[monthIdx]} ${year}`;
+        }
+
+        function formatPOno(value, row) {
+            return `
+                <div class="cell-stack">
+                    <div class="cs-main">${value ?? '-'}</div>
+                    <div class="cs-sub">${row.customer ?? '-'}</div>
+                </div>
+            `;
+        }
+
+        function formatOrderInfo(value, row) {
+            const showMifBadge = isSuperUser || window.pageCfg.showMifBadgeAlways; // BARU
+            const mifBadge = showMifBadge
+                ? `<span class="badge bg-secondary-subtle text-secondary-emphasis mif-badge">mif ${row.mif}</span>`
+                : '';
+            const dupBadge = row.has_mif_duplicate // BARU -- tanda PONo+OP juga ada di mif lain
+                ? `<span class="badge bg-warning-subtle text-warning-emphasis mif-badge" title="PONo+OP ini juga ada di mif lain">dup mif</span>`
+                : '';
+            const imgUrl = row.order_image || localNoImg;
+            const imgHtml = `
+                <img src="${imgUrl}" width="60" height="60"
+                    style="object-fit:cover;border-radius:6px;flex-shrink:0;"
+                    onerror="this.onerror=null;this.src='${localNoImg}';">
+            `;
+            return `
+                <div class="d-flex align-items-start gap-2">
+                    ${imgHtml}
+                    <div class="cell-stack">
+                        <div class="cs-main">${row.OP ?? '-'}${mifBadge}${dupBadge}</div>
+                        <div class="cs-sub">${row.buyer ?? '-'} &middot; ${row.season ?? '-'}</div>
+                        <div class="cs-sub">${row.style ?? '-'}</div>
+                        <div class="cs-meta">Qty: <strong style="color:#334155;">${Number(row.qty || 0).toLocaleString()}</strong></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function formatNumber(value) {
+            return Number(value || 0).toLocaleString('id-ID');
+        }
+
+        function formatBalance(value) {
+            value = Number(value);
+            if (value > 0) return `<span style="color:#16a34a;font-weight:600;">${value.toLocaleString()}</span>`;
+            if (value < 0) return `<span style="color:#dc2626;font-weight:600;">${value.toLocaleString()}</span>`;
+            return `<span style="font-weight:600;">0</span>`;
+        }
+
+        // ============================================================
+        // STATE (filter index + modal yang terbuka)
+        // ============================================================
+        let currentModalPo = null, currentModalOp = null, currentModalMif = null;
+
+        function saveNavState() {
             let pager = $('#dgOrder').datagrid('getPager');
             let pageNumber = pager.pagination('options').pageNumber;
             let state = {
                 search: $('#dgOrder_filterbar [data-dg-filter="search"]').val(),
                 buyer: $('#dgOrder_filterbar [data-dg-filter="buyer"]').combobox('getValue'),
                 year: $('#dgOrder_filterbar [data-dg-filter="year"]').combobox('getValue'),
+                exFactory: $('#dgOrder_filterbar [data-dg-filter="ex_factory"]').combobox('getValue'),
                 page: pageNumber,
-                modalPo: sisaModalPo,
-                modalOp: sisaModalOp,
-                modalMif: sisaModalMif // BARU
+                modalPo: currentModalPo,
+                modalOp: currentModalOp,
+                modalMif: currentModalMif,
             };
-            sessionStorage.setItem('sisaProduksiListState', JSON.stringify(state));
+            sessionStorage.setItem(R.navStateKey, JSON.stringify(state));
         }
 
-        let restoredDgOrderPage = null;
+        function getSavedNavState() {
+            let raw = sessionStorage.getItem(R.navStateKey);
+            if (!raw) return null;
+            sessionStorage.removeItem(R.navStateKey);
+            try { return JSON.parse(raw); } catch (e) { return null; }
+        }
 
-        $(function () {
-            let saved = getSavedListState();
+        function openDetailModal(e, po, op, mif) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            currentModalPo = po ?? ''; currentModalOp = op; currentModalMif = mif;
 
-            if (saved) {
-                $('#dgOrder_filterbar [data-dg-filter="search"]').val(saved.search || '');
-                $('#dgOrder_filterbar [data-dg-filter="buyer"]').combobox('setValue', saved.buyer || '');
-                $('#dgOrder_filterbar [data-dg-filter="year"]').combobox('setValue', saved.year ?? new Date().getFullYear());
+            const poLabel = (po === null || po === undefined || po === '') ? '' : po;
+            $('#detailModalPO').text(poLabel);
+            $('#detailModalOP').text(op);
+            $('#detailModalBuyer').text('');
+
+            const modalEl = document.getElementById('detailModal');
+            new bootstrap.Modal(modalEl).show();
+            $(modalEl).one('shown.bs.modal', function () { $('#dgDetailModal').datagrid('resize'); });
+
+            if (!$('#dgDetailModal').data('datagrid')) {
+                $('#dgDetailModal').datagrid({
+                    method: 'get',
+                    rownumbers: false,
+                    singleSelect: true,
+                    fitColumns: false,
+                    border: false,
+                    loadMsg: 'Memuat data...',
+                    onLoadSuccess: onDetailModalLoad
+                });
             }
 
-            $('#dgOrder').datagrid({ onLoadSuccess: onLoadTable });
+            $('#dgDetailModal').datagrid('options').url = R.detailByPoOp;
 
-            if (saved?.modalOp) {
-                restoredDgOrderPage = saved.page || 1;
-                openSisaDetailModal(null, saved.modalPo, saved.modalOp, saved.modalMif);
-            } else if (window.EasyuiDG) {
-                window.EasyuiDG.reload('dgOrder', saved?.page || 1);
-            }
+            $('#dgDetailModal').datagrid('load', { po: po ?? '', op: op, mif: mif });
+        }
+
+        function onDetailModalLoad(data) {
+            const rows = (data && data.rows) || [];
+            $('#detailModalBuyer').text(rows.length ? (rows[0].buyer ?? '-') : '-');
+            $('#detailModalDesc').text(rows.length ? (rows[0].silhouette ?? '-') : '-');
+        }
+
+        document.getElementById('detailModal').addEventListener('hidden.bs.modal', function () {
+            if (window.EasyuiDG) window.EasyuiDG.reload('dgOrder');
         });
+
+        function formatDashModal(value) {
+            return (value === null || value === undefined || value === '') ? '-' : value;
+        }
+        function formatBalanceModal(value) {
+            value = Number(value);
+            if (value > 0) return `<span style="color:#16a34a;font-weight:600;">${value.toLocaleString()}</span>`;
+            if (value < 0) return `<span style="color:#dc2626;font-weight:600;">${value.toLocaleString()}</span>`;
+            return `<span style="font-weight:600;">0</span>`;
+        }
+        function formatNoModal(value, row, index) { return index + 1; }
+
+        function formatActionModal(value, row, index) {
+            if (!window.pageCfg.showPdfAction) {
+                return `
+                    <button type="button" class="action-btn" title="Input" onclick="openTransfer(event, ${row.popk}, ${row.mif})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                `;
+            }
+        
+            const pdfBtn = `
+                <a href="${window.pageCfg.pdfUrlBase}/${row.popk}/pdf" target="_blank"
+                    class="action-btn action-btn-pdf" title="Cetak PDF">
+                    <img src="{{ asset('/public/css/images/pdf.jpg') }}" width="18" height="18">
+                </a>
+            `;
+        
+            // balance <= 0 -- stok sudah habis/tidak ada sisa, HANYA boleh cetak,
+            // TIDAK BOLEH Input Transfer lagi.
+            if (!(row.balance > 0)) {
+                return pdfBtn;
+            }
+        
+            const editBtn = `
+                <a href="javascript:void(0)" onclick="openTransfer(event, ${row.popk}, ${row.mif})"
+                    class="action-btn" title="Input Transfer">
+                    <i class="fas fa-edit"></i>
+                </a>
+            `;
+        
+            return `<div class="d-flex justify-content-center gap-1">${editBtn}${pdfBtn}</div>`;
+        }
+
+        // SAMA URL untuk kedua mode -- halaman input SUDAH SATU, dibedakan
+        // guserpk di dalamnya (lihat menu.transfer.input).
+        function openTransfer(e, popk, mif) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            saveNavState();
+            let url = R.inputUrlBase + "/" + popk + "?mif=" + mif;
+            window.location.href = url;
+        }
 
         window.addEventListener('pageshow', function (event) {
             if (!event.persisted) return;
-
-            if (window.EasyuiDG) {
-                window.EasyuiDG.reload('dgOrder');
-            }
-            if ($('#sisaDetailModal').hasClass('show')) {
-                reloadSisaDetailModal();
+            if (window.EasyuiDG) window.EasyuiDG.reload('dgOrder');
+            const modalEl = document.getElementById('detailModal');
+            if (modalEl && modalEl.classList.contains('show')) {
+                $('#dgDetailModal').datagrid('load', { po: currentModalPo ?? '', op: currentModalOp, mif: currentModalMif });
             }
         });
 
-        document.getElementById('sisaDetailModal').addEventListener('hidden.bs.modal', function () {
-            sessionStorage.removeItem('sisaProduksiListState');
-
+        let restoredDgOrderPage = null;
+        document.getElementById('detailModal').addEventListener('hidden.bs.modal', function () {
             if (!window.EasyuiDG) return;
-
             if (restoredDgOrderPage) {
                 window.EasyuiDG.reload('dgOrder', restoredDgOrderPage);
                 restoredDgOrderPage = null;
@@ -212,168 +367,66 @@
             }
         });
 
-        // ============================================================
-        // WARNA BARIS ABU-ABU UNTUK status==2 (dipakai di MODAL)
-        // ============================================================
-        function rowStylerOrder(index, row) {
-            if (Number(row.status) === 2) {
-                return 'background-color:#CCCCCC;';
+        $(function () {
+            let saved = getSavedNavState();
+            if (saved) {
+                $('#dgOrder_filterbar [data-dg-filter="search"]').val(saved.search || '');
+                $('#dgOrder_filterbar [data-dg-filter="buyer"]').combobox('setValue', saved.buyer || '');
+                $('#dgOrder_filterbar [data-dg-filter="year"]').combobox('setValue', saved.year ?? new Date().getFullYear());
+                if (saved.exFactory) {
+                    $('#dgOrder_filterbar [data-dg-filter="ex_factory"]').combobox('setValue', saved.exFactory);
+                }
+                restoredDgOrderPage = saved.page || 1;
+                if (saved.modalOp) {
+                    openDetailModal(null, saved.modalPo, saved.modalOp, saved.modalMif);
+                }
             }
-            return '';
-        }
+        });
 
-        // ============================================================
-        // FORMATTER UMUM
-        // ============================================================
-        function formatDate(value) {
-            if (!value) return '<span class="dg-empty-cell">-</span>';
-            let datePart = String(value).split(' ')[0];
-            let parts = datePart.split('-');
-            if (parts.length !== 3) return value;
-            let [year, month, day] = parts;
-            return `${day}/${month}/${year}`;
-        }
-
-        function formatNumber(value) {
-            return Number(value || 0).toLocaleString('id-ID');
-        }
-
-        function formatBalanceCell(value) {
-            let v = Number(value || 0);
-            let color = v < 0 ? '#dc2626' : (v > 0 ? '#16a34a' : '#94a3b8');
-            let text = v > 0 ? ('+' + formatNumber(v)) : formatNumber(v);
-            return `<span style="color:${color};font-weight:600;">${text}</span>`;
-        }
-
-        // ============================================================
-        // KOLOM AKSI INDEX — cuma ikon mata, buka modal rincian PO+OP.
-        // ============================================================
-        function formatAction(value, row, index) {
-            return `
-                <a href="javascript:void(0)"
-                    onclick='openSisaDetailModal(event, ${JSON.stringify(row.POno)}, ${JSON.stringify(row.OP)}, ${row.mif})'
-                    class="action-btn"
-                    title="Lihat Detail">
-                    <i class="fas fa-eye"></i>
-                </a>
-            `;
-        }
-
-        // ============================================================
-        // onLoadSuccess INDEX — summary + empty state
-        // ============================================================
-        function fillSummary(summary) {
-            const s = summary || {};
-            const fmt = (v) => Number(v || 0).toLocaleString('id-ID');
-        }
-
-        function onLoadTable(data) {
-            const rows = data.rows || [];
-            rows.forEach((row, index) => { row.no = index + 1; });
-
-            fillSummary(data.summary);
-
-            let panel = $('#dgOrder').datagrid('getPanel');
-            let body = panel.find('.datagrid-view2 .datagrid-body');
-            panel.find('.easyui-empty-state').remove();
-            if (!rows.length) {
-                body.append(`
-                    <div class="easyui-empty-state">
-                        <div style="text-align:center">
-                            <img src="{{ asset('public/css/images/no-data-6.svg') }}" width="180">
-                            <div style="margin-top:8px;font-weight:600;">No Data Found</div>
-                            <div style="font-size:12px;color:#9ca3af;">Try changing filter</div>
-                        </div>
-                    </div>
-                `);
-            }
-        }
-
-        // ============================================================
-        // MODAL: buka rincian PO+OP
-        // ============================================================
-        let sisaModalPo  = null;
-        let sisaModalOp  = null;
-        let sisaModalMif = null; // BARU
-        
-        function openSisaDetailModal(e, po, op, mif) {
-            if (e) { e.preventDefault(); e.stopPropagation(); }
-        
-            sisaModalPo  = po;
-            sisaModalOp  = op;
-            sisaModalMif = mif; // BARU
-        
-            const poLabel = (po === null || po === undefined || po === '') ? '(PO Kosong)' : po;
-            $('#sisaModalPO').text(poLabel);
-            $('#sisaModalOP').text(op);
-            $('#sisaModalBuyer').text('');
-        
-            const modalEl = document.getElementById('sisaDetailModal');
-            new bootstrap.Modal(modalEl).show();
-        
-            $(modalEl).one('shown.bs.modal', function () {
-                $('#dgSisaDetail').datagrid('resize');
-            });
-        
-            if (!$('#dgSisaDetail').data('datagrid')) {
-                $('#dgSisaDetail').datagrid();
+        function formatSisaGrade(value, row) {
+            const sisa = Number(row.sisa_belum_digrade || 0);
+            const gradeCount = Number(row.grade_count || 0);
+            const latestGrade = row.latest_grade;
+    
+            const sisaColor = sisa > 0 ? '#dc2626' : '#94a3b8';
+            const sisaHtml = `<div style="font-weight:700; color:${sisaColor};">${sisa.toLocaleString()}</div>`;
+    
+            let statusHtml;
+            if (gradeCount === 0) {
+                statusHtml = `<div class="cs-sub" style="color:#b45309;">Belum Digrade</div>`;
+            } else if (sisa > 0) {
+                statusHtml = `<div class="cs-sub">${gradeCount} entri &middot; terakhir Grade ${latestGrade ?? '-'}</div>`;
             } else {
-                $('#dgSisaDetail').datagrid('loadData', { total: 0, rows: [] });
+                statusHtml = `<div class="cs-sub" style="color:#16a34a;">Sudah Digrade Semua</div>`;
             }
-        
-            // BARU: kirim mif juga.
-            $('#dgSisaDetail').datagrid('load', { po: po ?? '', op: op, mif: mif });
-        }
-        
-        function reloadSisaDetailModal() {
-            if (!sisaModalOp) return;
-            $('#dgSisaDetail').datagrid('load', { po: sisaModalPo ?? '', op: sisaModalOp, mif: sisaModalMif });
+    
+            return `<div class="cell-stack" style="text-align:right;">${sisaHtml}${statusHtml}</div>`;
         }
 
-        // ============================================================
-        // KOLOM AKSI DI DALAM MODAL — Input Transfer
-        // ============================================================
-        function formatDetailAction(value, row, index) {
+        function formatPolibagDetail(value, row) {
+            const totalPolibag = Number(row.transfer || 0);
+            const masukCarton = Number(row.packing || 0);
+            const masukCartonShipped = Number(row.shipped_qty || 0);
+    
             return `
-                <div class="d-flex justify-content-center gap-1">
-                    <a href="javascript:void(0)" onclick="openTransfer(event, ${row.popk}, ${row.mif})"
-                        class="action-btn" title="Input Transfer">
-                        <i class="fas fa-edit"></i>
-                    </a>
+                <div class="cell-stack" style="text-align:right;">
+                    <div style="font-weight:700; color:#0f172a;">${totalPolibag.toLocaleString()}</div>
+                    <div class="cs-sub">Masuk Carton: ${masukCarton.toLocaleString()}</div>
+                    <div class="cs-sub">Carton Shipped: ${masukCartonShipped.toLocaleString()}</div>
                 </div>
             `;
         }
-
-        function openTransfer(e, popk, mif) {
-            if (e) { e.preventDefault(); e.stopPropagation(); }
-
-            saveListState();
-
-            let url = "{{ url('/polibag/input') }}/" + popk + "?mif=" + mif;
-            window.location.href = url;
-        }
-
-        // ============================================================
-        // onLoadSuccess MODAL — summary khusus PO+OP ini
-        // ============================================================
-        function onSisaDetailLoad(data) {
-            const rows = data.rows || [];
-            const fmt = (v) => Number(v || 0).toLocaleString('id-ID');
-            $('#sisaModalBuyer').text(rows.length ? (rows[0].buyer ?? '-') : '-');
-
-            let panel = $('#dgSisaDetail').datagrid('getPanel');
-            let body = panel.find('.datagrid-view2 .datagrid-body');
-            panel.find('.easyui-empty-state').remove();
-            if (!rows.length) {
-                body.append(`
-                    <div class="easyui-empty-state">
-                        <div style="text-align:center">
-                            <img src="{{ asset('public/css/images/no-data-6.svg') }}" width="180">
-                            <div style="margin-top:8px;font-weight:600;">No Data Found</div>
-                        </div>
-                    </div>
-                `);
-            }
-        }
     </script>
+    @if ($cfg['showExportExcel'])
+        <script>
+        document.getElementById('btnExportExcel')?.addEventListener('click', function () {
+            const params = new URLSearchParams({
+                search: $('#dgOrder_filterbar [data-dg-filter="search"]').val() || '',
+                buyer: $('#dgOrder_filterbar [data-dg-filter="buyer"]').combobox('getValue') || '',
+                year: $('#dgOrder_filterbar [data-dg-filter="year"]').combobox('getValue') || '',
+            });
+            window.open("{{ $cfg['exportExcelRoute'] }}?" + params.toString(), '_blank');
+        });
+        </script>
+    @endif
 @endsection
