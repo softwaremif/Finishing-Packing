@@ -38,6 +38,16 @@
         .cell-stack .cs-sub { font-size: 11px; color: #64748b; }
         .cell-stack .cs-meta { font-size: 10.5px; color: #94a3b8; }
         .mif-badge { font-size: 9px; margin-left: 4px; vertical-align: 1px; }
+
+        .easyui-dg-wrap .action-btn.action-btn-pdf {
+            background: #f8d7da;
+            color: #dc3545;
+        }
+
+        .easyui-dg-wrap .action-btn.action-btn-pdf:hover {
+            background: #ecb9bd;
+            color: #ca1124;
+        }
     </style>
 @endsection
 
@@ -120,7 +130,7 @@
                     <i class="fas fa-eye"></i>
                 </a>
                 <a href="${window.pageCfg.pdfUrlBase}/${row.popk}/pdf" target="_blank" class="action-btn action-btn-pdf" title="Cetak PDF">
-                    <i class="fas fa-file-pdf" style="color:#dc2626;"></i>
+                    <i class="fas fa-print"></i>
                 </a>
             </div>
         `;

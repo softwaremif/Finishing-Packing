@@ -24,7 +24,7 @@
             <th>{{ number_format($totals['loading']) }}</th>
             <th>{{ number_format($totals['rq']) }}</th>
             <th>{{ number_format($totals['pcs']) }}</th>
-            <th>{{ number_format($totals['packing']) }}</th>
+            <th>{{ number_format($totals['diterima']) }}</th>
             <th>{{ number_format($totals['balance']) }}</th>
             <th colspan="5"></th>
         </tr>
@@ -42,12 +42,12 @@
             <th>Qty</th>
             <th>Loading<br>(Pcs)</th>
             <th>R+Q<br>(Pcs)</th>
-            <th>Transfer<br>(Pcs)</th>
-            <th>Packing<br>(Pcs)</th>
+            <th>Sisa Digrade<br>(Pcs)</th>
+            <th>Diterima<br>(Pcs)</th>
             <th>Balance<br>(Pcs)</th>
             <th>Grade<br>(A)</th>
             <th>Grade<br>(C)</th>
-            <th>Out<br>(Pcs)</th>
+            <th>Keluar<br>(Pcs)</th>
             <th>Silhouette</th>
             <th>Keterangan</th>
         </tr>
@@ -67,11 +67,11 @@
                 <td>{{ $row['loading'] }}</td>
                 <td>{{ $row['rq'] }}</td>
                 <td>{{ $row['pcs'] }}</td>
-                <td>{{ $row['packing'] }}</td>
+                <td>{{ $row['diterima'] }}</td>
                 <td>{{ $row['balance'] }}</td>
                 <td>{{ $row['grade_a'] }}</td>
                 <td>{{ $row['grade_c'] }}</td>
-                <td>{{ $row['pcsk'] }}</td>
+                <td>{{ $row['keluar'] }}</td>
                 <td>{{ $row['silhouette'] }}</td>
                 <td style="text-align:left;">{{ $row['keterangan'] }}</td>
             </tr>

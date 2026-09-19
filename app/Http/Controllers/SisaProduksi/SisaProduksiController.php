@@ -851,18 +851,20 @@ class SisaProduksiController extends Controller
         $buyer  = $request->buyer;
         $year   = $request->year;
     
-        // Gate: PO yang punya minimal 1 record bj status>=2
-        $qualifyingPopks = DB::table('bj')
-            ->select('popk')
-            ->whereNotNull('grade')
-            ->where('grade', '<>', '')
-            ->distinct();
+        $db = DB::connection('mysql');
     
-        $bjAgg = DB::table('bj')
+        // GANTI -- Gate: PO yang punya minimal 1 baris bjgrade (bjgrade
+        // SUDAH PASTI ter-grade, tidak perlu filter grade lagi).
+        $qualifyingBjgrade = $db->table('bjgrade')->select('popk')->distinct();
+    
+        // GANTI -- agregasi dari 'bjgrade' (bukan 'bj'), TAMBAHKAN
+        // diterima_pcs (status IN 2,3,4 = sudah masuk gudang), HAPUS pcsk
+        // (tidak dipakai di bjgrade).
+        $bjgradeAgg = $db->table('bjgrade')
             ->selectRaw("
                 popk,
-                SUM(pcs)  AS pcs,
-                SUM(pcsk) AS pcsk,
+                SUM(pcs) AS pcs,
+                SUM(CASE WHEN status IN (2, 3, 4) THEN pcs ELSE 0 END) AS diterima,
                 SUM(CASE WHEN grade = 'A' THEN pcs ELSE 0 END) AS grade_a,
                 SUM(CASE WHEN grade = 'C' THEN pcs ELSE 0 END) AS grade_c,
                 MAX(tglin)  AS tglin,
@@ -870,57 +872,22 @@ class SisaProduksiController extends Controller
             ")
             ->groupBy('popk');
     
-        $pack = DB::table('pack')
-            ->selectRaw('popk, SUM(pcs) AS packing_pcs')
-            ->groupBy('popk');
-
-        $qualifyingGrade = DB::table('bj')
-            ->select('popk')
-            ->whereNotNull('grade')
-            ->where('grade', '<>', '')
-            ->distinct();
-        
-        $qualifyingPacking = DB::table('pack')
-            ->select('popk')
-            ->groupBy('popk')
-            ->havingRaw('SUM(pcs) > 0');
-        
-        $query = DB::table('po')
-            ->joinSub($qualifyingGrade, 'qp', function ($join) {
-                $join->on('po.popk', '=', 'qp.popk');
+        $query = $db->table('po')
+            ->joinSub($qualifyingBjgrade, 'qbg', function ($join) {
+                $join->on('po.popk', '=', 'qbg.popk');
             })
-            ->joinSub($qualifyingPacking, 'qpk', function ($join) {
-                $join->on('po.popk', '=', 'qpk.popk');
+            ->leftJoinSub($bjgradeAgg, 'bjgrade', function ($join) {
+                $join->on('po.popk', '=', 'bjgrade.popk');
             })
-            ->leftJoinSub($bjAgg, 'bj', function ($join) {
-                $join->on('po.popk', '=', 'bj.popk');
-            })
-            ->leftJoinSub($pack, 'pack', function ($join) {
-                $join->on('po.popk', '=', 'pack.popk');
-            })
-            // ->where('po.mif', 2)
             ->selectRaw("
-                po.popk,
-                po.moppk,
-                po.POno,
-                po.OP,
-                po.customer,
-                po.buyer,
-                po.style,
-                po.material,
-                po.qty,
-                po.silhouette,
-                po.shipdate1,
+                po.popk, po.moppk, po.POno, po.OP, po.customer, po.buyer, po.style,
+                po.material, po.qty, po.silhouette, po.shipdate1,
     
-                bj.tglin,
-                bj.tglout,
-                COALESCE(bj.pcs, 0)      AS pcs,
-                COALESCE(bj.pcsk, 0)     AS pcsk,
-                COALESCE(bj.grade_a, 0)  AS grade_a,
-                COALESCE(bj.grade_c, 0)  AS grade_c,
-                COALESCE(pack.packing_pcs, 0) AS packing,
-    
-                (COALESCE(bj.pcs,0) - COALESCE(pack.packing_pcs,0)) AS balance
+                bjgrade.tglin, bjgrade.tglout,
+                COALESCE(bjgrade.pcs, 0)      AS pcs,
+                COALESCE(bjgrade.diterima, 0) AS diterima,
+                COALESCE(bjgrade.grade_a, 0)  AS grade_a,
+                COALESCE(bjgrade.grade_c, 0)  AS grade_c
             ");
     
         if ($search) {
@@ -940,13 +907,13 @@ class SisaProduksiController extends Controller
         }
     
         if ($year) {
-            $query->whereRaw('YEAR(po.shipdate1) >= ?', [(int) $year]);
+            $query->whereRaw('YEAR(bjgrade.tglin) >= ?', [(int) $year]);
         }
     
-        $rows = $query->orderByDesc('bj.tglin')->get();
+        $rows = $query->orderByDesc('bjgrade.tglin')->get();
     
-        // Loading & R+Q per moppk (koneksi DB terpisah, spt getList())
         $moppks = $rows->pluck('moppk')->filter()->values();
+        $popks  = $rows->pluck('popk')->values();
     
         $loadingMap = collect();
         $rMap = collect();
@@ -966,22 +933,40 @@ class SisaProduksiController extends Controller
                 ->whereIn('moppk', $moppks)->groupBy('moppk')->pluck('qty', 'moppk');
         }
     
-        // Keterangan history per popk (status>=2, order tglout asc) -> digabung jadi teks
-        $popks = $rows->pluck('popk')->values();
-        $keteranganByPopk = collect();
-    
+        // GANTI -- 'Keluar' SEKARANG dari SUM(outsisadt.qty) per popk (bukan
+        // lagi bj.pcsk yang tidak dipakai di bjgrade).
+        $keluarMap = collect();
         if ($popks->isNotEmpty()) {
-            $keteranganByPopk = DB::table('bj')
-                ->select('popk', 'tglout', 'keterangan')
-                ->whereIn('popk', $popks)
-                ->where('status', '>=', 2)
-                ->orderBy('tglout')
-                ->get()
+            $keluarMap = $db->table('outsisadt')
+                ->join('bjgrade', 'bjgrade.bjpk', '=', 'outsisadt.bjpk')
+                ->whereIn('bjgrade.popk', $popks)
+                ->groupBy('bjgrade.popk')
+                ->selectRaw('bjgrade.popk, SUM(outsisadt.qty) as keluar_pcs')
+                ->pluck('keluar_pcs', 'popk');
+        }
+    
+        // GANTI -- 'Keterangan' history SEKARANG ditarik dari dokumen
+        // 'outsisa' (via outsisadt -> bjgrade), BUKAN lagi bj.keterangan
+        // (bjgrade TIDAK PERNAH diisi keterangan di alur baru -- keterangan
+        // disimpan di HEADER outsisa, bukan per-item).
+        $keteranganByPopk = collect();
+        if ($popks->isNotEmpty()) {
+            $keteranganRows = $db->table('outsisadt')
+                ->join('outsisa', 'outsisa.outpk', '=', 'outsisadt.outpk')
+                ->join('bjgrade', 'bjgrade.bjpk', '=', 'outsisadt.bjpk')
+                ->whereIn('bjgrade.popk', $popks)
+                ->select('bjgrade.popk', 'outsisa.outpk', 'outsisa.tglout', 'outsisa.keterangan')
+                ->distinct()
+                ->orderBy('outsisa.tglout')
+                ->get();
+    
+            $keteranganByPopk = $keteranganRows
+                ->unique(fn ($r) => $r->popk . '|' . $r->outpk)
                 ->groupBy('popk');
         }
     
         $totals = [
-            'qty' => 0, 'loading' => 0, 'rq' => 0, 'pcs' => 0, 'packing' => 0, 'balance' => 0,
+            'qty' => 0, 'loading' => 0, 'rq' => 0, 'pcs' => 0, 'diterima' => 0, 'balance' => 0,
         ];
     
         $exportRows = [];
@@ -989,6 +974,8 @@ class SisaProduksiController extends Controller
         foreach ($rows as $row) {
             $loading = (float) ($loadingMap[$row->moppk] ?? 0);
             $rq      = (float) ($rMap[$row->moppk] ?? 0) + (float) ($qMap[$row->moppk] ?? 0);
+            $keluar  = (float) ($keluarMap[$row->popk] ?? 0);
+            $balance = (float) $row->diterima - $keluar;
     
             $keteranganText = '';
             if (isset($keteranganByPopk[$row->popk])) {
@@ -1001,12 +988,12 @@ class SisaProduksiController extends Controller
                 $keteranganText = implode('; ', $parts);
             }
     
-            $totals['qty']     += (float) $row->qty;
-            $totals['loading'] += $loading;
-            $totals['rq']      += $rq;
-            $totals['pcs']     += (float) $row->pcs;
-            $totals['packing'] += (float) $row->packing;
-            $totals['balance'] += (float) $row->balance;
+            $totals['qty']      += (float) $row->qty;
+            $totals['loading']  += $loading;
+            $totals['rq']       += $rq;
+            $totals['pcs']      += (float) $row->pcs;
+            $totals['diterima'] += (float) $row->diterima;
+            $totals['balance']  += $balance;
     
             $exportRows[] = [
                 'tglin'      => $row->tglin,
@@ -1022,11 +1009,11 @@ class SisaProduksiController extends Controller
                 'loading'    => $loading,
                 'rq'         => $rq,
                 'pcs'        => $row->pcs,
-                'packing'    => $row->packing,
-                'balance'    => $row->balance,
+                'diterima'   => $row->diterima,
+                'balance'    => $balance,
                 'grade_a'    => $row->grade_a,
                 'grade_c'    => $row->grade_c,
-                'pcsk'       => $row->pcsk,
+                'keluar'     => $keluar,
                 'silhouette' => $row->silhouette,
                 'keterangan' => $keteranganText,
             ];
