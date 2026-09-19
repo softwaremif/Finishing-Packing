@@ -699,15 +699,6 @@ class LoController extends Controller
         return view('menu.shared.lo-email-approve-done', ['success' => $success, 'message' => $message]);
     }
 
-    /**
-     * getListGudang() -- FIX UTAMA:
-     * 1. 'lo' di 2 database -- loop KEDUA mif TANPA syarat guserpk super
-     *    sama sekali (gudang SELALU lihat semua, beda dari getList()).
-     * 2. "Sudah diterima" dicek dari bj.tglin (JOIN lodt+bj DALAM
-     *    koneksi yang SAMA, karena sekarang lo/lodt/bj satu database),
-     *    BUKAN kolom tglterima.
-     */
-
     private function canEditOutsisa($out): bool
     {
         return $out->stsapv1 === null && $out->stsapv2 === null && $out->stsapv3 === null;
@@ -822,22 +813,9 @@ class LoController extends Controller
      * Cari 1 baris 'outsisa' by outpk -- SAMA pola findLo(), karena outpk
      * juga TIDAK unik lintas mif.
      */
-    private function findOutsisa($outpk, $mifHint = null): ?array
+    private function findOutsisa($outpk): ?object
     {
-        $tryOrder = $mifHint !== null ? [(int) $mifHint] : [];
-        foreach ([2, 1] as $m) {
-            if (!in_array($m, $tryOrder, true)) $tryOrder[] = $m;
-        }
-    
-        foreach ($tryOrder as $mif) {
-            $connection = $this->resolveConnection($mif);
-            $out = DB::connection($connection)->table('outsisa')->where('outpk', $outpk)->first();
-            if ($out) {
-                $out->mif = $mif;
-                return [$out, $connection, $mif];
-            }
-        }
-        return null;
+        return DB::connection('mysql')->table('outsisa')->where('outpk', $outpk)->first();
     }
     
     private function resolveOutsisaStatusLabel($out): string
@@ -875,142 +853,113 @@ class LoController extends Controller
         $outpkSearch = $request->input('outpk');
         $status      = $request->input('status');
     
-        $mifsToQuery = $this->isSuperUser() ? [1, 2] : [$this->currentMif()];
-        $allRows = collect();
+        $db = DB::connection('mysql');
     
-        foreach ($mifsToQuery as $mif) {
-            $db = DB::connection($this->resolveConnection($mif));
+        $query = $db->table('outsisa')
+            ->when(!$this->isSuperUser(), fn ($q) => $q->where('mif', $this->currentMif()))
+            ->when($outpkSearch, fn ($q) => $q->where('outpk', 'like', "%{$outpkSearch}%"))
+            ->when($status, function ($q) use ($status) {
+                switch ($status) {
+                    case 'pending1': $q->whereNull('stsapv1'); break;
+                    case 'pending2': $q->whereNull('stsapv2'); break;
+                    case 'pending3': $q->whereNull('stsapv3'); break;
+                    case 'approved':
+                        $q->where('stsapv1', 1)->where('stsapv2', 1)->where('stsapv3', 1);
+                        break;
+                    case 'rejected':
+                        $q->where(function ($qq) {
+                            $qq->where('stsapv1', 0)->orWhere('stsapv2', 0)->orWhere('stsapv3', 0);
+                        });
+                        break;
+                }
+            });
     
-            $rows_ = $db->table('outsisa')
-                ->where('mif', $mif)
-                ->when($outpkSearch, fn($q) => $q->where('outpk', 'like', "%{$outpkSearch}%"))
-                ->when($status, function ($q) use ($status) {
-                    switch ($status) {
-                        case 'pending1': $q->whereNull('stsapv1'); break;
-                        case 'pending2': $q->whereNull('stsapv2'); break;
-                        case 'pending3': $q->whereNull('stsapv3'); break;
-                        case 'approved':
-                            $q->where('stsapv1', 1)->where('stsapv2', 1)->where('stsapv3', 1);
-                            break;
-                        case 'rejected':
-                            $q->where(function ($qq) {
-                                $qq->where('stsapv1', 0)->orWhere('stsapv2', 0)->orWhere('stsapv3', 0);
-                            });
-                            break;
-                    }
-                })
-                ->get();
-    
-            foreach ($rows_ as $out) {
-                $out->mif = $mif;
-            }
-    
-            $allRows = $allRows->concat($rows_);
-        }
-    
-        $allRows = $allRows->sortByDesc('outpk')->values();
+        $allRows = $query->get()->sortByDesc('outpk')->values();
         $total = $allRows->count();
         $data  = $allRows->slice($offset, $rows)->values();
     
         foreach ($data as $out) {
-            $db = DB::connection($this->resolveConnection($out->mif));
             $out->jumlah_item  = $db->table('outsisadt')->where('outpk', $out->outpk)->count();
             $out->status_label = $this->resolveOutsisaStatusLabel($out);
             $out->no_out       = $this->buildNoOutsisa($out->outpk, $out->mif, $out->tglout);
-            $out->can_edit     = $this->canEditOutsisa($out); // BARU
+            $out->can_edit     = $this->canEditOutsisa($out);
         }
     
         return response()->json(['total' => $total, 'rows' => $data]);
     }
     
-    /**
-     * AJAX modal "Add Barang Keluar" -- cari bjpk yang SUDAH DITERIMA
-     * gudang (bj.tglin IS NOT NULL DAN bj.status = 2), breakdown per size
-     * dengan SISA yang belum dikeluarkan (qty asli - SUM(outsisadt.qty)
-     * yang sudah pernah dicatat utk size itu).
-     */
     public function outAvailableItems(Request $request)
     {
-        $isSuper = $this->isSuperUser();
-        $search  = $request->search;
-        $excludeOutpk = $request->input('exclude_outpk'); // BARU
-        $mifsToQuery = $isSuper ? [1, 2] : [$this->currentMif()];
+        $search = $request->search;
+        $excludeOutpk = $request->input('exclude_outpk');
+        $mifFilter = $this->isSuperUser() ? null : $this->currentMif();
     
-        $qtyColumns  = collect(range(1, 40))->map(fn($i) => "bj.qty{$i}")->implode(', ');
-        $sizeColumns = collect(range(1, 40))->map(fn($i) => "po.size{$i}")->implode(', ');
+        $db = DB::connection('mysql');
+        $qtyColumns  = $this->qtyColumnsExpr('bjgrade');
+        $sizeColumns = $this->sizeColumnsExpr('po');
     
-        $allRows = collect();
+        $rows = $db->table('bjgrade')
+            ->join('po', 'po.popk', '=', 'bjgrade.popk')
+            ->where('bjgrade.status', 2)
+            ->when($mifFilter, fn ($q) => $q->where('po.mif', $mifFilter))
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($qq) use ($search) {
+                    $qq->where('bjgrade.POno', 'like', "%{$search}%")
+                        ->orWhere('bjgrade.OP', 'like', "%{$search}%")
+                        ->orWhere('po.buyer', 'like', "%{$search}%")
+                        ->orWhere('bjgrade.material', 'like', "%{$search}%");
+                });
+            })
+            ->selectRaw("
+                bjgrade.bjpk, bjgrade.popk, bjgrade.grade, bjgrade.pcs, bjgrade.tanggal,
+                bjgrade.POno, bjgrade.OP, bjgrade.customer, bjgrade.material, bjgrade.secsz,
+                po.mif, po.poref, po.buyer,
+                {$qtyColumns}, {$sizeColumns}
+            ")
+            ->orderByDesc('bjgrade.tanggal')
+            ->get();
     
-        foreach ($mifsToQuery as $mif) {
-            $db = DB::connection($this->resolveConnection($mif));
+        $bjpks = $rows->pluck('bjpk')->values();
     
-            $rows = $db->table('bj')
-                ->join('po', 'po.popk', '=', 'bj.popk')
-                ->where('po.mif', $mif)
-                ->whereNotNull('bj.tglin')
-                ->where('bj.status', 2)
-                ->when($search, function ($q) use ($search) {
-                    $q->where(function ($qq) use ($search) {
-                        $qq->where('po.POno', 'like', "%{$search}%")
-                            ->orWhere('po.OP', 'like', "%{$search}%")
-                            ->orWhere('po.buyer', 'like', "%{$search}%")
-                            ->orWhere('bj.material', 'like', "%{$search}%");
-                    });
-                })
-                ->selectRaw("
-                    bj.bjpk, bj.popk, bj.grade, bj.pcs, bj.pcsk, bj.tanggal,
-                    po.POno, po.OP, po.poref, po.customer, po.buyer, po.material, po.secsz,
-                    {$qtyColumns}, {$sizeColumns}
-                ")
-                ->orderByDesc('bj.tanggal')
-                ->get();
-    
-            $bjpks = $rows->pluck('bjpk')->values();
-    
-            // BARU -- FIX UTAMA: kalau exclude_outpk dikirim (mode edit),
-            // JANGAN hitung baris outsisadt milik outpk itu sebagai
-            // "sudah terpakai" -- supaya kapasitas penuh kembali terlihat
-            // utk dialokasikan ulang.
-            $releasedMap = collect();
-            if ($bjpks->isNotEmpty()) {
-                $releasedMap = $db->table('outsisadt')
-                    ->whereIn('bjpk', $bjpks)
-                    ->when($excludeOutpk, fn($q) => $q->where('outpk', '!=', $excludeOutpk)) // BARU
-                    ->select('bjpk', 'size')
-                    ->selectRaw('SUM(qty) as released')
-                    ->groupBy('bjpk', 'size')
-                    ->get()
-                    ->groupBy('bjpk');
-            }
-    
-            foreach ($rows as $row) {
-                $row->mif = $mif;
-                $sizes = [];
-                for ($i = 1; $i <= 40; $i++) {
-                    $label = $row->{"size{$i}"} ?? null;
-                    $qty   = (int) ($row->{"qty{$i}"} ?? 0);
-                    unset($row->{"size{$i}"}, $row->{"qty{$i}"});
-                    if (empty($label) || $qty <= 0) continue;
-    
-                    $releasedForThisSize = 0;
-                    if (isset($releasedMap[$row->bjpk])) {
-                        $match = $releasedMap[$row->bjpk]->firstWhere('size', $label);
-                        $releasedForThisSize = $match ? (float) $match->released : 0;
-                    }
-    
-                    $remaining = $qty - $releasedForThisSize;
-                    if ($remaining > 0) {
-                        $sizes[] = ['label' => $label, 'original' => $qty, 'remaining' => $remaining];
-                    }
-                }
-                $row->sizes = $sizes;
-            }
-    
-            $rows = $rows->filter(fn($r) => count($r->sizes) > 0)->values();
-            $allRows = $allRows->concat($rows);
+        // Sisa dihitung dari SEMUA outsisadt (approved ATAU belum) -- SAMA
+        // seperti sebelumnya, kecuali baris milik $excludeOutpk (mode edit).
+        $releasedMap = collect();
+        if ($bjpks->isNotEmpty()) {
+            $releasedMap = $db->table('outsisadt')
+                ->whereIn('bjpk', $bjpks)
+                ->when($excludeOutpk, fn ($q) => $q->where('outpk', '!=', $excludeOutpk))
+                ->select('bjpk', 'size')
+                ->selectRaw('SUM(qty) as released')
+                ->groupBy('bjpk', 'size')
+                ->get()
+                ->groupBy('bjpk');
         }
     
-        $grouped = $allRows->groupBy(fn($r) => $r->mif . '|' . $r->POno . '|' . $r->OP)
+        foreach ($rows as $row) {
+            $sizes = [];
+            for ($i = 1; $i <= 40; $i++) {
+                $label = $row->{"size{$i}"} ?? null;
+                $qty   = (int) ($row->{"qty{$i}"} ?? 0);
+                unset($row->{"size{$i}"}, $row->{"qty{$i}"});
+                if (empty($label) || $qty <= 0) continue;
+    
+                $releasedForThisSize = 0;
+                if (isset($releasedMap[$row->bjpk])) {
+                    $match = $releasedMap[$row->bjpk]->firstWhere('size', $label);
+                    $releasedForThisSize = $match ? (float) $match->released : 0;
+                }
+    
+                $remaining = $qty - $releasedForThisSize;
+                if ($remaining > 0) {
+                    $sizes[] = ['label' => $label, 'original' => $qty, 'remaining' => $remaining];
+                }
+            }
+            $row->sizes = $sizes;
+        }
+    
+        $rows = $rows->filter(fn ($r) => count($r->sizes) > 0)->values();
+    
+        $grouped = $rows->groupBy(fn ($r) => $r->mif . '|' . $r->POno . '|' . $r->OP)
             ->map(function ($items) {
                 $first = $items->first();
                 return [
@@ -1025,17 +974,12 @@ class LoController extends Controller
         return response()->json(['groups' => $grouped]);
     }
     
-    /**
-     * STORE -- validasi ULANG di server (sisa per bjpk+size TIDAK BOLEH
-     * dilewati), insert outsisa+outsisadt, lalu PROPAGASI keterangan/
-     * tglout/pcsk ke tabel bj untuk setiap bjpk yang terlibat.
-     */
     public function storeOutsisa(Request $request)
     {
         $validated = $request->validate([
-            'penerima'   => 'nullable|string|max:100',
-            'keterangan' => 'nullable|string|max:250',
-            'lines'      => 'required|array|min:1',
+            'penerima'      => 'nullable|string|max:100',
+            'keterangan'    => 'nullable|string|max:250',
+            'lines'         => 'required|array|min:1',
             'lines.*.bjpk'  => 'required|integer',
             'lines.*.size'  => 'required|string',
             'lines.*.color' => 'nullable|string',
@@ -1043,21 +987,18 @@ class LoController extends Controller
             'lines.*.qty'   => 'required|numeric|min:0.01',
         ]);
     
-        $mif        = $this->currentMif();
-        $connection = $this->resolveConnection($mif);
-        $db = DB::connection($connection);
+        $mif = $this->currentMif();
+        $db  = DB::connection('mysql');
     
         $bjpks = collect($validated['lines'])->pluck('bjpk')->unique()->values();
     
-        // Ambil qty1..40 asli utk validasi ulang batas sisa per bjpk+size.
-        $qtyColumns  = collect(range(1, 40))->map(fn($i) => "bj.qty{$i}")->implode(', ');
-        $sizeColumns = collect(range(1, 40))->map(fn($i) => "po.size{$i}")->implode(', ');
-        $bjRows = $db->table('bj')
-            ->join('po', 'po.popk', '=', 'bj.popk')
-            ->whereIn('bj.bjpk', $bjpks)
-            ->whereNotNull('bj.tglin')
-            ->where('bj.status', 2)
-            ->selectRaw("bj.bjpk, {$qtyColumns}, {$sizeColumns}")
+        $qtyColumns  = $this->qtyColumnsExpr('bjgrade');
+        $sizeColumns = $this->sizeColumnsExpr('po');
+        $bjgradeRows = $db->table('bjgrade')
+            ->join('po', 'po.popk', '=', 'bjgrade.popk')
+            ->whereIn('bjgrade.bjpk', $bjpks)
+            ->where('bjgrade.status', 2)
+            ->selectRaw("bjgrade.bjpk, {$qtyColumns}, {$sizeColumns}")
             ->get()
             ->keyBy('bjpk');
     
@@ -1073,10 +1014,9 @@ class LoController extends Controller
         $skipped = 0;
     
         foreach ($validated['lines'] as $line) {
-            $bjRow = $bjRows->get($line['bjpk']);
+            $bjRow = $bjgradeRows->get($line['bjpk']);
             if (!$bjRow) { $skipped++; continue; }
     
-            // Cari qty asli utk size ini.
             $originalQty = null;
             for ($i = 1; $i <= 40; $i++) {
                 if (($bjRow->{"size{$i}"} ?? null) === $line['size']) {
@@ -1093,12 +1033,7 @@ class LoController extends Controller
             }
     
             $remaining = $originalQty - $alreadyReleased;
-    
-            // FIX UTAMA: TOLAK kalau qty yang diminta MELEBIHI sisa.
-            if ((float) $line['qty'] > $remaining) {
-                $skipped++;
-                continue;
-            }
+            if ((float) $line['qty'] > $remaining) { $skipped++; continue; }
     
             $validLines[] = $line;
         }
@@ -1111,7 +1046,7 @@ class LoController extends Controller
         }
     
         try {
-            $newOutpk = DB::connection($connection)->transaction(function () use ($db, $validated, $validLines, $mif) {
+            $newOutpk = DB::connection('mysql')->transaction(function () use ($db, $validated, $validLines, $mif) {
                 $newOutpk = (int) ($db->table('outsisa')->lockForUpdate()->max('outpk')) + 1;
                 $db->table('outsisa')->insert([
                     'outpk'      => $newOutpk,
@@ -1140,21 +1075,6 @@ class LoController extends Controller
                 }
                 $db->table('outsisadt')->insert($insertRows);
     
-                // FIX UTAMA: propagasi keterangan/tglout ke 'bj', DAN
-                // tambahkan qty yang keluar ke pcsk (akumulatif, SAMA pola
-                // updateActual() di Sisa Produksi).
-                $qtyByBjpk = collect($validLines)->groupBy('bjpk')
-                    ->map(fn($lines) => collect($lines)->sum('qty'));
-    
-                foreach ($qtyByBjpk as $bjpk => $qtyOut) {
-                    $currentPcsk = (float) ($db->table('bj')->where('bjpk', $bjpk)->value('pcsk') ?? 0);
-                    $db->table('bj')->where('bjpk', $bjpk)->update([
-                        'tglout'     => now(),
-                        'keterangan' => $validated['keterangan'] ?? null,
-                        'pcsk'       => $currentPcsk + $qtyOut,
-                    ]);
-                }
-    
                 return $newOutpk;
             });
     
@@ -1176,16 +1096,41 @@ class LoController extends Controller
             return response()->json(['icon' => 'error', 'title' => 'Level approval tidak valid.'], 422);
         }
     
-        $found = $this->findOutsisa($outpk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$out, $connection] = $found;
-        $db = DB::connection($connection);
+        $out = $this->findOutsisa($outpk);
+        abort_unless($out, 404);
+        $db = DB::connection('mysql');
     
         if ($out->{"stsapv{$level}"} !== null) {
             return response()->json(['icon' => 'warning', 'title' => "Level {$level} sudah pernah diproses sebelumnya."], 422);
         }
     
         $db->table('outsisa')->where('outpk', $outpk)->update(["stsapv{$level}" => 1]);
+    
+        $refreshed = $db->table('outsisa')->where('outpk', $outpk)->first();
+        $allApproved = (int) $refreshed->stsapv1 === 1 && (int) $refreshed->stsapv2 === 1 && (int) $refreshed->stsapv3 === 1;
+    
+        if ($allApproved) {
+            $bjpks = $db->table('outsisadt')->where('outpk', $outpk)->pluck('bjpk')->unique();
+    
+            foreach ($bjpks as $bjpk) {
+                $bg = $db->table('bjgrade')->where('bjpk', $bjpk)->first();
+                if (!$bg) continue;
+    
+                $totalKeluar = (float) $db->table('outsisadt')->where('bjpk', $bjpk)->sum('qty');
+    
+                if ($totalKeluar >= (float) $bg->pcs) {
+                    $db->table('bjgrade')->where('bjpk', $bjpk)->update([
+                        'status' => 3,
+                        'tglout' => now()->format('Y-m-d'),
+                    ]);
+                } else {
+                    $db->table('bjgrade')->where('bjpk', $bjpk)->update(['status' => 4]);
+                }
+            }
+    
+            return response()->json(['icon' => 'success', 'title' => "Level {$level} berhasil di-approve. Semua approval selesai -- status barang sisa telah diperbarui."]);
+        }
+    
         return response()->json(['icon' => 'success', 'title' => "Level {$level} berhasil di-approve."]);
     }
     
@@ -1196,10 +1141,9 @@ class LoController extends Controller
             return response()->json(['icon' => 'error', 'title' => 'Level approval tidak valid.'], 422);
         }
     
-        $found = $this->findOutsisa($outpk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$out, $connection] = $found;
-        $db = DB::connection($connection);
+        $out = $this->findOutsisa($outpk);
+        abort_unless($out, 404);
+        $db = DB::connection('mysql');
     
         if ($out->{"stsapv{$level}"} !== null) {
             return response()->json(['icon' => 'warning', 'title' => "Level {$level} sudah pernah diproses sebelumnya."], 422);
@@ -1211,23 +1155,16 @@ class LoController extends Controller
     
     public function cancelOutsisa(Request $request, $outpk)
     {
-        $found = $this->findOutsisa($outpk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$out, $connection] = $found;
+        $out = $this->findOutsisa($outpk);
+        abort_unless($out, 404);
     
         if (!$this->canEditOutsisa($out)) {
             return response()->json(['icon' => 'warning', 'title' => 'Data ini sudah ada approval yang masuk, tidak bisa dibatalkan lagi.'], 422);
         }
     
-        $db = DB::connection($connection);
+        $db = DB::connection('mysql');
         try {
-            DB::connection($connection)->transaction(function () use ($db, $outpk) {
-                $lines = $db->table('outsisadt')->where('outpk', $outpk)->get();
-                $qtyByBjpk = $lines->groupBy('bjpk')->map(fn($l) => $l->sum('qty'));
-                foreach ($qtyByBjpk as $bjpk => $qtyOut) {
-                    $currentPcsk = (float) ($db->table('bj')->where('bjpk', $bjpk)->value('pcsk') ?? 0);
-                    $db->table('bj')->where('bjpk', $bjpk)->update(['pcsk' => max(0, $currentPcsk - $qtyOut)]);
-                }
+            DB::connection('mysql')->transaction(function () use ($db, $outpk) {
                 $db->table('outsisadt')->where('outpk', $outpk)->delete();
                 $db->table('outsisa')->where('outpk', $outpk)->delete();
             });
@@ -1239,56 +1176,43 @@ class LoController extends Controller
     
     public function removeOutsisaItem(Request $request, $outpk, $outdtpk)
     {
-        $found = $this->findOutsisa($outpk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$out, $connection] = $found;
+        $out = $this->findOutsisa($outpk);
+        abort_unless($out, 404);
     
         if (!$this->canEditOutsisa($out)) {
             return response()->json(['icon' => 'warning', 'title' => 'Data ini sudah ada approval yang masuk, tidak bisa diedit lagi.'], 422);
         }
     
-        $db = DB::connection($connection);
-        $line = $db->table('outsisadt')->where('outdtpk', $outdtpk)->where('outpk', $outpk)->first();
-        if ($line) {
-            $currentPcsk = (float) ($db->table('bj')->where('bjpk', $line->bjpk)->value('pcsk') ?? 0);
-            $db->table('bj')->where('bjpk', $line->bjpk)->update(['pcsk' => max(0, $currentPcsk - $line->qty)]);
-            $db->table('outsisadt')->where('outdtpk', $outdtpk)->delete();
-        }
+        $db = DB::connection('mysql');
+        $db->table('outsisadt')->where('outdtpk', $outdtpk)->where('outpk', $outpk)->delete();
         return response()->json(['icon' => 'success', 'title' => 'Baris dihapus, sisa ter-unlock kembali.']);
     }
 
     public function detailOutsisa(Request $request, $outpk)
     {
-        $found = $this->findOutsisa($outpk, $request->query('mif'));
-        abort_unless($found, 404);
-        [$out, $connection] = $found;
-        $db = DB::connection($connection);
+        $out = $this->findOutsisa($outpk);
+        abort_unless($out, 404);
+        $db = DB::connection('mysql');
     
         $lines = $db->table('outsisadt')
-            ->join('bj', 'bj.bjpk', '=', 'outsisadt.bjpk')
-            ->join('po', 'po.popk', '=', 'bj.popk')
+            ->join('bjgrade', 'bjgrade.bjpk', '=', 'outsisadt.bjpk')
             ->where('outsisadt.outpk', $outpk)
             ->select(
                 'outsisadt.outdtpk', 'outsisadt.bjpk', 'outsisadt.size', 'outsisadt.color',
-                'outsisadt.secsz', 'outsisadt.qty', 'bj.grade',
-                'po.POno', 'po.OP', 'po.poref', 'po.customer', 'po.buyer'
+                'outsisadt.secsz', 'outsisadt.qty', 'bjgrade.grade',
+                'bjgrade.POno', 'bjgrade.OP', 'bjgrade.customer'
             )
-            ->orderBy('po.OP')
+            ->orderBy('bjgrade.OP')
             ->get();
     
         $out->status_label = $this->resolveOutsisaStatusLabel($out);
         $out->no_out = $this->buildNoOutsisa($out->outpk, $out->mif, $out->tglout);
-        $out->can_edit = $this->canEditOutsisa($out); // BARU
+        $out->can_edit = $this->canEditOutsisa($out);
     
         return response()->json(['out' => $out, 'lines' => $lines]);
     }
     
     
-    // ============================================================
-    // 7) BARU -- updateOutsisa() -- edit data keluar yang sudah ada.
-    // HANYA boleh kalau canEditOutsisa(). Rollback pcsk lama, insert
-    // ulang baris baru, propagasi ulang ke bj (SAMA pola storeOutsisa()).
-    // ============================================================
     public function updateOutsisa(Request $request, $outpk)
     {
         $validated = $request->validate([
@@ -1302,27 +1226,24 @@ class LoController extends Controller
             'lines.*.qty'   => 'required|numeric|min:0.01',
         ]);
     
-        $found = $this->findOutsisa($outpk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$out, $connection] = $found;
+        $out = $this->findOutsisa($outpk);
+        abort_unless($out, 404);
     
         if (!$this->canEditOutsisa($out)) {
             return response()->json(['icon' => 'warning', 'title' => 'Data ini sudah ada approval yang masuk, tidak bisa diedit lagi.'], 422);
         }
     
-        $db = DB::connection($connection);
+        $db = DB::connection('mysql');
         $bjpks = collect($validated['lines'])->pluck('bjpk')->unique()->values();
     
-        $qtyColumns  = collect(range(1, 40))->map(fn($i) => "bj.qty{$i}")->implode(', ');
-        $sizeColumns = collect(range(1, 40))->map(fn($i) => "po.size{$i}")->implode(', ');
-        $bjRows = $db->table('bj')
-            ->join('po', 'po.popk', '=', 'bj.popk')
-            ->whereIn('bj.bjpk', $bjpks)
-            ->selectRaw("bj.bjpk, {$qtyColumns}, {$sizeColumns}")
+        $qtyColumns  = $this->qtyColumnsExpr('bjgrade');
+        $sizeColumns = $this->sizeColumnsExpr('po');
+        $bjgradeRows = $db->table('bjgrade')
+            ->join('po', 'po.popk', '=', 'bjgrade.popk')
+            ->whereIn('bjgrade.bjpk', $bjpks)
+            ->selectRaw("bjgrade.bjpk, {$qtyColumns}, {$sizeColumns}")
             ->get()->keyBy('bjpk');
     
-        // Sisa dihitung TANPA menghitung baris outsisadt milik outpk INI
-        // sendiri (supaya bisa "geser" qty tanpa dianggap melebihi sisa).
         $releasedMap = $db->table('outsisadt')
             ->whereIn('bjpk', $bjpks)
             ->where('outpk', '!=', $outpk)
@@ -1335,7 +1256,7 @@ class LoController extends Controller
         $skipped = 0;
     
         foreach ($validated['lines'] as $line) {
-            $bjRow = $bjRows->get($line['bjpk']);
+            $bjRow = $bjgradeRows->get($line['bjpk']);
             if (!$bjRow) { $skipped++; continue; }
     
             $originalQty = null;
@@ -1364,14 +1285,7 @@ class LoController extends Controller
         }
     
         try {
-            DB::connection($connection)->transaction(function () use ($db, $outpk, $validated, $validLines) {
-                // Rollback pcsk dari baris LAMA sebelum dihapus.
-                $oldLines = $db->table('outsisadt')->where('outpk', $outpk)->get();
-                $oldQtyByBjpk = $oldLines->groupBy('bjpk')->map(fn($l) => $l->sum('qty'));
-                foreach ($oldQtyByBjpk as $bjpk => $qtyOut) {
-                    $currentPcsk = (float) ($db->table('bj')->where('bjpk', $bjpk)->value('pcsk') ?? 0);
-                    $db->table('bj')->where('bjpk', $bjpk)->update(['pcsk' => max(0, $currentPcsk - $qtyOut)]);
-                }
+            DB::connection('mysql')->transaction(function () use ($db, $outpk, $validated, $validLines) {
                 $db->table('outsisadt')->where('outpk', $outpk)->delete();
     
                 $db->table('outsisa')->where('outpk', $outpk)->update([
@@ -1390,16 +1304,6 @@ class LoController extends Controller
                     ];
                 }
                 $db->table('outsisadt')->insert($insertRows);
-    
-                $qtyByBjpk = collect($validLines)->groupBy('bjpk')->map(fn($l) => collect($l)->sum('qty'));
-                foreach ($qtyByBjpk as $bjpk => $qtyOut) {
-                    $currentPcsk = (float) ($db->table('bj')->where('bjpk', $bjpk)->value('pcsk') ?? 0);
-                    $db->table('bj')->where('bjpk', $bjpk)->update([
-                        'tglout'     => now(),
-                        'keterangan' => $validated['keterangan'] ?? null,
-                        'pcsk'       => $currentPcsk + $qtyOut,
-                    ]);
-                }
             });
     
             return response()->json(['icon' => 'success', 'title' => "Data keluar #{$outpk} berhasil diperbarui."]);
@@ -1409,20 +1313,13 @@ class LoController extends Controller
     }
     
     
-    // ============================================================
-    // 8) BARU -- sendOutsisaEmail() -- SAMA pola sendLoEmail(), TAPI pakai
-    // jnsemail=2, label Purchasing/HRD/HRD2.
-    // ============================================================
     public function sendOutsisaEmail(Request $request, $outpk)
     {
-        $found = $this->findOutsisa($outpk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$out, $connection] = $found;
-        $db = DB::connection($connection);
+        $out = $this->findOutsisa($outpk);
+        abort_unless($out, 404);
+        $db = DB::connection('mysql');
     
-        $emailConnection = $this->resolveConnection($this->currentMif());
-        $emailRow = DB::connection($emailConnection)->table('email')->where('jnsemail', 2)->first();
-    
+        $emailRow = $db->table('email')->where('jnsemail', 2)->first();
         if (!$emailRow) {
             return response()->json(['icon' => 'error', 'title' => 'Data email approver (jnsemail=2) tidak ditemukan.'], 404);
         }
@@ -1430,24 +1327,16 @@ class LoController extends Controller
         $noOut = $this->buildNoOutsisa($out->outpk, $out->mif, $out->tglout);
     
         $linesRaw = $db->table('outsisadt')
-            ->join('bj', 'bj.bjpk', '=', 'outsisadt.bjpk')
-            ->join('po', 'po.popk', '=', 'bj.popk')
+            ->join('bjgrade', 'bjgrade.bjpk', '=', 'outsisadt.bjpk')
             ->where('outsisadt.outpk', $outpk)
-            ->select('outsisadt.bjpk', 'bj.grade', 'po.POno', 'po.OP', 'outsisadt.color', 'outsisadt.secsz', 'outsisadt.size', 'outsisadt.qty')
+            ->select('outsisadt.bjpk', 'bjgrade.grade', 'bjgrade.POno', 'bjgrade.OP', 'outsisadt.color', 'outsisadt.secsz', 'outsisadt.size', 'outsisadt.qty')
             ->get();
     
-        // BARU -- FIX UTAMA: group per bjpk jadi struktur 'items' SAMA
-        // dengan LO (grade/POno/OP/color/secsz/pcs/sizes), supaya bisa
-        // pakai VIEW YANG SAMA PERSIS.
         $items = $linesRaw->groupBy('bjpk')->map(function ($group) {
             $first = $group->first();
             return [
-                'grade' => $first->grade,
-                'POno'  => $first->POno,
-                'OP'    => $first->OP,
-                'color' => $first->color,
-                'secsz' => $first->secsz,
-                'pcs'   => $group->sum('qty'),
+                'grade' => $first->grade, 'POno' => $first->POno, 'OP' => $first->OP,
+                'color' => $first->color, 'secsz' => $first->secsz, 'pcs' => $group->sum('qty'),
                 'sizes' => $group->map(fn ($l) => ['label' => $l->size, 'qty' => (float) $l->qty])->values()->all(),
             ];
         })->values();
@@ -1467,11 +1356,10 @@ class LoController extends Controller
     
             $approveUrl = URL::temporarySignedRoute(
                 'outsisa.email-approve.page', now()->addDays(14),
-                ['outpk' => $out->outpk, 'level' => $level, 'mif' => $out->mif]
+                ['outpk' => $out->outpk, 'level' => $level]
             );
     
             try {
-                // BARU -- FIX UTAMA: pakai VIEW YANG SAMA dengan LO.
                 Mail::send('menu.shared.lo-email-approval', [
                     'docNo'        => $noOut,
                     'docTitle'     => 'Keluar Sisa dari Gudang',
@@ -1504,31 +1392,23 @@ class LoController extends Controller
         return response()->json(['icon' => 'success', 'title' => "Email approval berhasil dikirim ke {$sentCount} approver."]);
     }
     
-    // ============================================================
-    // 9) BARU -- halaman landing + aksi approve/reject TANPA LOGIN,
-    // SAMA pola emailApprovePage()/emailDoApprove()/emailDoReject() di
-    // modul LO.
-    // ============================================================
     public function outsisaEmailApprovePage(Request $request, $outpk, $level)
     {
         abort_unless($request->hasValidSignature(), 403, 'Link tidak valid atau sudah kedaluwarsa.');
     
-        $mif = $request->query('mif');
-        $found = $this->findOutsisa($outpk, $mif);
-        abort_unless($found, 404);
-        [$out, $connection] = $found;
+        $out = $this->findOutsisa($outpk);
+        abort_unless($out, 404);
     
         $level = (int) $level;
         $alreadyDone = $out->{"stsapv{$level}"} !== null;
         $noOut = $this->buildNoOutsisa($out->outpk, $out->mif, $out->tglout);
         $levelLabel = [1 => 'Purchasing', 2 => 'HRD', 3 => 'HRD2'][$level] ?? "Level {$level}";
     
-        $db = DB::connection($connection);
+        $db = DB::connection('mysql');
         $linesRaw = $db->table('outsisadt')
-            ->join('bj', 'bj.bjpk', '=', 'outsisadt.bjpk')
-            ->join('po', 'po.popk', '=', 'bj.popk')
+            ->join('bjgrade', 'bjgrade.bjpk', '=', 'outsisadt.bjpk')
             ->where('outsisadt.outpk', $outpk)
-            ->select('outsisadt.bjpk', 'bj.grade', 'po.POno', 'po.OP', 'outsisadt.color', 'outsisadt.secsz', 'outsisadt.size', 'outsisadt.qty')
+            ->select('outsisadt.bjpk', 'bjgrade.grade', 'bjgrade.POno', 'bjgrade.OP', 'outsisadt.color', 'outsisadt.secsz', 'outsisadt.size', 'outsisadt.qty')
             ->get();
     
         $items = $linesRaw->groupBy('bjpk')->map(function ($group) {
@@ -1547,7 +1427,6 @@ class LoController extends Controller
             'outsisa.email-approve.do-reject', now()->addDays(14), ['outpk' => $outpk, 'level' => $level]
         );
     
-        // BARU -- FIX UTAMA: view SAMA dengan LO.
         return view('menu.shared.lo-email-confirm', [
             'docNo'        => $noOut,
             'penerima'     => $out->penerima,
@@ -1569,19 +1448,36 @@ class LoController extends Controller
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => 'Level approval tidak valid.']);
         }
     
-        $found = $this->findOutsisa($outpk);
-        if (!$found) {
+        $out = $this->findOutsisa($outpk);
+        if (!$out) {
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => 'Data keluar tidak ditemukan.']);
         }
-        [$out, $connection] = $found;
-        $db = DB::connection($connection);
+        $db = DB::connection('mysql');
     
         if ($out->{"stsapv{$level}"} !== null) {
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => "Level {$level} sudah pernah diproses sebelumnya."]);
         }
     
         $db->table('outsisa')->where('outpk', $outpk)->update(["stsapv{$level}" => 1]);
-        return view('menu.shared.lo-email-approve-done', ['success' => true, 'message' => "Berhasil approve LO."]);
+    
+        $refreshed = $db->table('outsisa')->where('outpk', $outpk)->first();
+        $allApproved = (int) $refreshed->stsapv1 === 1 && (int) $refreshed->stsapv2 === 1 && (int) $refreshed->stsapv3 === 1;
+    
+        if ($allApproved) {
+            $bjpks = $db->table('outsisadt')->where('outpk', $outpk)->pluck('bjpk')->unique();
+            foreach ($bjpks as $bjpk) {
+                $bg = $db->table('bjgrade')->where('bjpk', $bjpk)->first();
+                if (!$bg) continue;
+                $totalKeluar = (float) $db->table('outsisadt')->where('bjpk', $bjpk)->sum('qty');
+                if ($totalKeluar >= (float) $bg->pcs) {
+                    $db->table('bjgrade')->where('bjpk', $bjpk)->update(['status' => 3, 'tglout' => now()->format('Y-m-d')]);
+                } else {
+                    $db->table('bjgrade')->where('bjpk', $bjpk)->update(['status' => 4]);
+                }
+            }
+        }
+    
+        return view('menu.shared.lo-email-approve-done', ['success' => true, 'message' => "Berhasil approve data keluar."]);
     }
     
     public function outsisaEmailDoReject(Request $request, $outpk, $level)
@@ -1593,20 +1489,17 @@ class LoController extends Controller
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => 'Level approval tidak valid.']);
         }
     
-        $found = $this->findOutsisa($outpk);
-        if (!$found) {
+        $out = $this->findOutsisa($outpk);
+        if (!$out) {
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => 'Data keluar tidak ditemukan.']);
         }
-        [$out, $connection] = $found;
-        $db = DB::connection($connection);
     
         if ($out->{"stsapv{$level}"} !== null) {
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => "Level {$level} sudah pernah diproses sebelumnya."]);
         }
     
-        $db->table('outsisa')->where('outpk', $outpk)->update(["stsapv{$level}" => 0]);
-        return view('menu.shared.lo-email-approve-done', ['success' => true, 'message' => "Data keluar ditolak."]);
-    }
-
+        DB::connection('mysql')->table('outsisa')->where('outpk', $outpk)->update(["stsapv{$level}" => 0]);
     
+        return view('menu.shared.lo-email-approve-done', ['success' => true, 'message' => "Data keluar ditolak."]);
+    }  
 }
