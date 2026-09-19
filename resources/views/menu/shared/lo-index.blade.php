@@ -405,7 +405,7 @@
                                 <div class="lo-item-grade-badge ${gradeClass(item.grade)}">${item.grade || '-'}</div>
                                 <div class="lo-item-info">
                                     <div class="li-main">${item.material ?? '-'} ${item.secsz ? '(' + item.secsz + ')' : ''}</div>
-                                    <div class="li-sub">${item.POno}</div>
+                                    <div class="li-sub">${item.POno} &middot; ${item.customer ?? '-'}</div>
                                 </div>
                                 <div class="lo-item-pcs">${item.pcs} pcs</div>
                                 <span class="lo-item-expand-btn" title="Lihat detail size"
@@ -466,8 +466,8 @@
                 list.append(`
                     <div class="lo-cart-row">
                         <div>
-                            <strong>${item.material ?? '-'}</strong> (${item.grade})<br>
-                            <span class="text-muted">${item.POno} &middot; ${item.pcs} pcs</span>
+                            <strong>${item.material ?? '-'}</strong>${item.secsz ? ' (' + item.secsz + ')' : ''} (${item.grade})<br>
+                            <span class="text-muted">${item.POno} &middot; ${item.customer ?? '-'} &middot; ${item.pcs} pcs</span>
                             ${sizesSummary ? `<div class="lo-cart-sizes">${sizesSummary}</div>` : ''}
                         </div>
                         <i class="fas fa-times lc-remove" onclick="removeFromLoCart(${bjpk})"></i>

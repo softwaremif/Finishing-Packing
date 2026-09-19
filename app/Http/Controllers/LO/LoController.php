@@ -8,90 +8,74 @@ use Illuminate\Support\Facades\URL;
 
 class LoController extends Controller
 {
-    private function resolveConnection($mif): string
-    {
-        return ((int) $mif) === 1 ? 'mysql_andon' : 'mysql';
-    }
-
     private function currentMif(): int
     {
         return session('pos') == 1 ? 1 : 2;
     }
-
+ 
     private function isSuperUser(): bool
     {
         return session('guserpk') == 34;
     }
 
-    /**
-     * Cari 1 baris 'lo' by lopk -- coba koneksi sesuai $mifHint dulu
-     * (kalau dikirim), baru fallback coba KEDUA koneksi kalau tidak
-     * ketemu / tidak dikirim. Return null kalau tidak ketemu di manapun.
-     */
-    private function findLo($lopk, $mifHint = null): ?array
+    private function findLo($lopk): ?object
     {
-        $tryOrder = $mifHint !== null ? [(int) $mifHint] : [];
-        foreach ([2, 1] as $m) {
-            if (!in_array($m, $tryOrder, true)) $tryOrder[] = $m;
-        }
-
-        foreach ($tryOrder as $mif) {
-            $connection = $this->resolveConnection($mif);
-            $lo = DB::connection($connection)->table('lo')->where('lopk', $lopk)->first();
-            if ($lo) {
-                $lo->mif = $mif;
-                return [$lo, $connection, $mif];
-            }
-        }
-        return null;
+        return DB::connection('mysql')->table('lo')->where('lopk', $lopk)->first();
+    }
+ 
+    private function qtyColumnsExpr(string $prefix = 'bjgrade'): string
+    {
+        return collect(range(1, 40))->map(fn ($i) => "{$prefix}.qty{$i}")->implode(', ');
+    }
+ 
+    private function sizeColumnsExpr(string $prefix = 'po'): string
+    {
+        return collect(range(1, 40))->map(fn ($i) => "{$prefix}.size{$i}")->implode(', ');
     }
 
-    // ============================================================
-    // INDEX
-    // ============================================================
     public function index(Request $request)
     {
         return view('menu.shared.lo-index', [
             'pageConfig' => [
-                'mode'            => 'kirim',
-                'title'           => 'Daftar LO - Kirim Sisa ke Gudang',
-                'showAddButton'   => true,
-                'showStatusFilter'=> true,
+                'mode'             => 'kirim',
+                'title'            => 'Daftar LO - Kirim Sisa ke Gudang',
+                'showAddButton'    => true,
+                'showStatusFilter' => true,
                 'routes' => [
-                    'list'          => route('lo.list'),
-                    'detailByLopk'  => route('lo.detail', ['lopk' => '__LOPK__']),
-                    'availableItems'=> route('lo.available-items'),
-                    'store'         => route('lo.store'),
-                    'cancelBase'    => url('/kirim-sisa'),
-                    'modalCreate'   => 'menu.lo.modal-create',
+                    'list'           => route('lo.list'),
+                    'detailByLopk'   => route('lo.detail', ['lopk' => '__LOPK__']),
+                    'availableItems' => route('lo.available-items'),
+                    'store'          => route('lo.store'),
+                    'cancelBase'     => url('/kirim-sisa'),
+                    'modalCreate'    => 'menu.lo.modal-create',
                 ],
             ],
         ]);
     }
-
+ 
     public function indexGudang(Request $request)
     {
         return view('menu.shared.lo-index', [
             'pageConfig' => [
-                'mode'            => 'terima',
-                'title'           => 'Daftar LO - Terima Sisa ke Gudang',
-                'showAddButton'   => false,
-                'showStatusFilter'=> false,
+                'mode'             => 'terima',
+                'title'            => 'Daftar LO - Terima Sisa ke Gudang',
+                'showAddButton'    => false,
+                'showStatusFilter' => false,
                 'routes' => [
-                    'list'          => route('lo.gudang.list'),
-                    'detailByLopk'  => route('lo.gudang.detail', ['lopk' => '__LOPK__']),
-                    'availableItems'=> null,
-                    'store'         => null,
-                    'cancelBase'    => null,
-                    'modalCreate'   => null,
+                    'list'           => route('lo.gudang.list'),
+                    'detailByLopk'   => route('lo.gudang.detail', ['lopk' => '__LOPK__']),
+                    'availableItems' => null,
+                    'store'          => null,
+                    'cancelBase'     => null,
+                    'modalCreate'    => null,
                 ],
             ],
         ]);
     }
-
+ 
     private function buildNoLo($lopk, $mif, $lodate): string
     {
-        $romanMonths = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+        $romanMonths = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
         $date = \Carbon\Carbon::parse($lodate);
         $month = $romanMonths[$date->month - 1];
         return sprintf('%04d/MSK-PRD/MIF%d/%s/%d', $lopk, $mif, $month, $date->year);
@@ -105,21 +89,11 @@ class LoController extends Controller
         return sprintf('%04d/KLR-PRD/MIF%d/%s/%d', $outpk, $mif, $month, $date->year);
     }
     
-    // ============================================================
-    // helper canEditLo() -- edit/batalkan HANYA kalau BELUM ADA
-    // approval yang masuk sama sekali (ketiganya masih NULL).
-    // ============================================================
     private function canEditLo($lo): bool
     {
         return $lo->stsapv1 === null && $lo->stsapv2 === null && $lo->stsapv3 === null;
     }
 
-    /**
-     * getList() -- MODE KIRIM. FIX UTAMA: 'lo' sekarang di 2 database --
-     * loop per koneksi (super user = keduanya, user biasa = mif sendiri
-     * saja -- SAMA pola dengan availableItems()), gabung, sort, paginate
-     * di memori.
-     */
     public function getList(Request $request)
     {
         $page   = (int) ($request->page ?? 1);
@@ -127,52 +101,39 @@ class LoController extends Controller
         $offset = ($page - 1) * $rows;
         $lopkSearch = $request->input('lopk');
         $status     = $request->input('status');
-    
-        $mifsToQuery = $this->isSuperUser() ? [1, 2] : [$this->currentMif()];
-        $allRows = collect();
-    
-        foreach ($mifsToQuery as $mif) {
-            $db = DB::connection($this->resolveConnection($mif));
-    
-            $rows_ = $db->table('lo')
-                ->where('mif', $mif)
-                ->when($lopkSearch, fn($q) => $q->where('lopk', 'like', "%{$lopkSearch}%"))
-                ->when($status, function ($q) use ($status) {
-                    switch ($status) {
-                        case 'pending1': $q->whereNull('stsapv1'); break;
-                        case 'pending2': $q->whereNull('stsapv2'); break;
-                        case 'pending3': $q->whereNull('stsapv3'); break;
-                        case 'approved':
-                            $q->where('stsapv1', 1)->where('stsapv2', 1)->where('stsapv3', 1);
-                            break;
-                        case 'rejected':
-                            $q->where(function ($qq) {
-                                $qq->where('stsapv1', 0)->orWhere('stsapv2', 0)->orWhere('stsapv3', 0);
-                            });
-                            break;
-                    }
-                })
-                ->get();
-    
-            foreach ($rows_ as $lo) {
-                $lo->mif = $mif;
-            }
-    
-            $allRows = $allRows->concat($rows_);
-        }
-    
-        $allRows = $allRows->sortByDesc('lopk')->values();
+ 
+        $db = DB::connection('mysql');
+ 
+        $query = $db->table('lo')
+            ->when(!$this->isSuperUser(), fn ($q) => $q->where('mif', $this->currentMif()))
+            ->when($lopkSearch, fn ($q) => $q->where('lopk', 'like', "%{$lopkSearch}%"))
+            ->when($status, function ($q) use ($status) {
+                switch ($status) {
+                    case 'pending1': $q->whereNull('stsapv1'); break;
+                    case 'pending2': $q->whereNull('stsapv2'); break;
+                    case 'pending3': $q->whereNull('stsapv3'); break;
+                    case 'approved':
+                        $q->where('stsapv1', 1)->where('stsapv2', 1)->where('stsapv3', 1);
+                        break;
+                    case 'rejected':
+                        $q->where(function ($qq) {
+                            $qq->where('stsapv1', 0)->orWhere('stsapv2', 0)->orWhere('stsapv3', 0);
+                        });
+                        break;
+                }
+            });
+ 
+        $allRows = $query->get()->sortByDesc('lopk')->values();
         $total = $allRows->count();
         $data  = $allRows->slice($offset, $rows)->values();
-    
+ 
         foreach ($data as $lo) {
-            $db = DB::connection($this->resolveConnection($lo->mif));
             $lo->jumlah_item  = $db->table('lodt')->where('lopk', $lo->lopk)->count();
             $lo->status_label = $this->resolveStatusLabel($lo);
-            $lo->no_lo        = $this->buildNoLo($lo->lopk, $lo->mif, $lo->lodate); // BARU
-            $lo->can_edit     = $this->canEditLo($lo); // BARU
+            $lo->no_lo        = $this->buildNoLo($lo->lopk, $lo->mif, $lo->lodate);
+            $lo->can_edit     = $this->canEditLo($lo);
         }
-    
+ 
         return response()->json(['total' => $total, 'rows' => $data]);
     }
 
@@ -182,96 +143,73 @@ class LoController extends Controller
         $rejected = [];
         $pending = [];
         $approvedCount = 0;
-    
+ 
         foreach ([1, 2, 3] as $lvl) {
             $val = $lo->{"stsapv{$lvl}"};
             if ($this->isRejected($val)) $rejected[] = $labels[$lvl];
             elseif ((int) $val === 1) $approvedCount++;
             else $pending[] = $labels[$lvl];
         }
-    
+ 
         if (!empty($rejected)) {
             return 'Ditolak (' . implode(', ', $rejected) . ')';
         }
-        if ($approvedCount === 3) {
-            return 'Selesai (Approved)';
-        }
-        if (empty($pending)) {
+        if ($approvedCount === 3 || empty($pending)) {
             return 'Selesai (Approved)';
         }
         return 'Menunggu Approve ' . implode(', ', $pending);
     }
-
+ 
     private function isRejected($val): bool
     {
         return $val !== null && (int) $val === 0;
     }
 
-    /**
-     * AJAX modal Buat LO -- TIDAK berubah dari versi sebelumnya (sudah
-     * benar loop per koneksi + super user).
-     */
     public function availableItems(Request $request)
     {
-        $isSuper = $this->isSuperUser();
-        $search  = $request->search;
-        $mifsToQuery = $isSuper ? [1, 2] : [$this->currentMif()];
-
-        $qtyColumns  = collect(range(1, 40))->map(fn($i) => "bj.qty{$i}")->implode(', ');
-        $sizeColumns = collect(range(1, 40))->map(fn($i) => "po.size{$i}")->implode(', ');
-
-        $allRows = collect();
-
-        foreach ($mifsToQuery as $mif) {
-            $db = DB::connection($this->resolveConnection($mif));
-
-            // FIX UTAMA: 'lodt'/'lo' SEKARANG di koneksi $db juga (BUKAN
-            // DB::table() default lagi).
-            $lockedBjpks = $db->table('lodt')
-                ->join('lo', 'lo.lopk', '=', 'lodt.lopk')
-                ->where('lo.mif', $mif) // BARU -- konsistensi, sama alasan getList/getListGudang
-                ->pluck('lodt.bjpk');
-
-            $rows = $db->table('bj')
-                ->join('po', 'po.popk', '=', 'bj.popk')
-                ->where('po.mif', $mif)
-                ->whereBetween('bj.grade', ['A', 'C'])
-                ->whereNull('bj.tglin')
-                ->whereNotIn('bj.bjpk', $lockedBjpks->isEmpty() ? [0] : $lockedBjpks->all())
-                ->when($search, function ($q) use ($search) {
-                    $q->where(function ($qq) use ($search) {
-                        $qq->where('po.POno', 'like', "%{$search}%")
-                            ->orWhere('po.OP', 'like', "%{$search}%")
-                            ->orWhere('po.buyer', 'like', "%{$search}%")
-                            ->orWhere('bj.material', 'like', "%{$search}%");
-                    });
-                })
-                ->selectRaw("
-                    bj.bjpk, bj.popk, bj.grade, bj.pcs, bj.tanggal,
-                    po.POno, po.OP, po.poref, po.customer, po.buyer, po.material, po.secsz,
-                    {$qtyColumns}, {$sizeColumns}
-                ")
-                ->orderByDesc('bj.tanggal')
-                ->get();
-
-            foreach ($rows as $row) {
-                $row->mif = $mif;
-                $sizes = [];
-                for ($i = 1; $i <= 40; $i++) {
-                    $label = $row->{"size{$i}"} ?? null;
-                    $qty   = $row->{"qty{$i}"} ?? null;
-                    if (!empty($label) && (int) $qty > 0) {
-                        $sizes[] = ['label' => $label, 'qty' => (int) $qty];
-                    }
-                    unset($row->{"size{$i}"}, $row->{"qty{$i}"});
+        $search = $request->search;
+        $mifFilter = $this->isSuperUser() ? null : $this->currentMif();
+ 
+        $db = DB::connection('mysql');
+        $qtyColumns  = $this->qtyColumnsExpr('bjgrade');
+        $sizeColumns = $this->sizeColumnsExpr('po');
+ 
+        $rows = $db->table('bjgrade')
+            ->join('po', 'po.popk', '=', 'bjgrade.popk')
+            ->where('bjgrade.status', 0)
+            ->whereBetween('bjgrade.grade', ['A', 'C'])
+            ->when($mifFilter, fn ($q) => $q->where('po.mif', $mifFilter))
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($qq) use ($search) {
+                    $qq->where('bjgrade.POno', 'like', "%{$search}%")
+                        ->orWhere('bjgrade.OP', 'like', "%{$search}%")
+                        ->orWhere('po.buyer', 'like', "%{$search}%")
+                        ->orWhere('bjgrade.material', 'like', "%{$search}%");
+                });
+            })
+            ->selectRaw("
+                bjgrade.bjpk, bjgrade.popk, bjgrade.grade, bjgrade.pcs, bjgrade.tanggal,
+                bjgrade.POno, bjgrade.OP, bjgrade.customer, bjgrade.material, bjgrade.secsz,
+                po.mif, po.poref, po.buyer,
+                {$qtyColumns}, {$sizeColumns}
+            ")
+            ->orderByDesc('bjgrade.tanggal')
+            ->get();
+ 
+        foreach ($rows as $row) {
+            $sizes = [];
+            for ($i = 1; $i <= 40; $i++) {
+                $label = $row->{"size{$i}"} ?? null;
+                $qty   = $row->{"qty{$i}"} ?? null;
+                if (!empty($label) && (int) $qty > 0) {
+                    $sizes[] = ['label' => $label, 'qty' => (int) $qty];
                 }
-                $row->sizes = $sizes;
+                unset($row->{"size{$i}"}, $row->{"qty{$i}"});
             }
-
-            $allRows = $allRows->concat($rows);
+            $row->sizes = $sizes;
         }
-
-        $grouped = $allRows->groupBy(fn($r) => $r->mif . '|' . $r->POno . '|' . $r->OP)
+ 
+        $grouped = $rows->groupBy(fn ($r) => $r->mif . '|' . $r->POno . '|' . $r->OP)
             ->map(function ($items) {
                 $first = $items->first();
                 return [
@@ -282,15 +220,10 @@ class LoController extends Controller
                     'items' => $items->values(),
                 ];
             })->values();
-
+ 
         return response()->json(['groups' => $grouped]);
     }
 
-    /**
-     * STORE -- FIX UTAMA: insert 'lo'/'lodt' SEKARANG ke koneksi mif
-     * yang sama dengan 'bj' (BUKAN default lagi), transaksi juga di
-     * koneksi itu.
-     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -298,35 +231,29 @@ class LoController extends Controller
             'bjpks'      => 'required|array|min:1',
             'bjpks.*'    => 'integer',
         ]);
-
-        $mif        = $this->currentMif();
-        $connection = $this->resolveConnection($mif);
-        $db = DB::connection($connection);
-
+ 
+        $mif = $this->currentMif();
+        $db  = DB::connection('mysql');
+ 
         $bjpks = collect($validated['bjpks'])->unique()->values();
-
-        $validBjpks = $db->table('bj')
+ 
+        // GANTI -- cukup cek status=0 (otomatis berarti valid & belum terkunci).
+        $finalBjpks = $db->table('bjgrade')
             ->whereIn('bjpk', $bjpks)
             ->whereBetween('grade', ['A', 'C'])
-            ->pluck('bjpk');
-
-        $alreadyLocked = $db->table('lodt')
-            ->join('lo', 'lo.lopk', '=', 'lodt.lopk')
-            ->where('lo.mif', $mif) // BARU
-            ->whereIn('lodt.bjpk', $validBjpks)
-            ->pluck('lodt.bjpk');
-
-        $finalBjpks = $validBjpks->diff($alreadyLocked)->values();
-
+            ->where('status', 0)
+            ->pluck('bjpk')
+            ->values();
+ 
         if ($finalBjpks->isEmpty()) {
             return response()->json([
                 'icon'  => 'warning',
                 'title' => 'Semua item yang dipilih sudah tidak valid (mungkin sudah terkunci LO lain atau grade berubah). Silakan refresh dan pilih ulang.',
             ], 422);
         }
-
+ 
         try {
-            $newLopk = DB::connection($connection)->transaction(function () use ($db, $validated, $finalBjpks, $mif) {
+            $newLopk = DB::connection('mysql')->transaction(function () use ($db, $validated, $finalBjpks, $mif) {
                 $newLopk = (int) ($db->table('lo')->lockForUpdate()->max('lopk')) + 1;
                 $db->table('lo')->insert([
                     'lopk'       => $newLopk,
@@ -337,7 +264,7 @@ class LoController extends Controller
                     'stsapv2'    => null,
                     'stsapv3'    => null,
                 ]);
-            
+ 
                 $newLodtpk = (int) ($db->table('lodt')->lockForUpdate()->max('lodtpk'));
                 $insertRows = [];
                 foreach ($finalBjpks as $bjpk) {
@@ -345,49 +272,48 @@ class LoController extends Controller
                     $insertRows[] = ['lodtpk' => $newLodtpk, 'lopk' => $newLopk, 'bjpk' => $bjpk];
                 }
                 $db->table('lodt')->insert($insertRows);
+ 
+                // BARU -- kunci bjgrade yang terpilih (status 0 -> 1).
+                $db->table('bjgrade')->whereIn('bjpk', $finalBjpks)->update(['status' => 1]);
+ 
                 return $newLopk;
             });
-
+ 
             $skippedCount = $bjpks->count() - $finalBjpks->count();
             $msg = "LO #{$newLopk} berhasil dibuat dengan " . $finalBjpks->count() . " item.";
             if ($skippedCount > 0) {
                 $msg .= " ({$skippedCount} item dilewati karena sudah tidak valid.)";
             }
-
+ 
             return response()->json(['icon' => 'success', 'title' => $msg, 'lopk' => $newLopk]);
         } catch (\Throwable $e) {
             return response()->json(['icon' => 'error', 'title' => 'Gagal menyimpan LO.'], 500);
         }
     }
 
-    /**
-     * DETAIL -- FIX UTAMA: terima $mif dari query string (dikirim
-     * frontend karena sudah tersedia dari row list), fallback coba
-     * kedua koneksi kalau tidak dikirim.
-     */
     public function detail(Request $request, $lopk)
     {
-        $found = $this->findLo($lopk, $request->query('mif'));
-        abort_unless($found, 404);
-        [$lo, $connection, $mif] = $found;
-    
-        $db = DB::connection($connection);
+        $lo = $this->findLo($lopk);
+        abort_unless($lo, 404);
+ 
+        $db = DB::connection('mysql');
         $bjpks = $db->table('lodt')->where('lopk', $lopk)->pluck('bjpk');
-    
-        $qtyColumns  = collect(range(1, 40))->map(fn($i) => "bj.qty{$i}")->implode(', ');
-        $sizeColumns = collect(range(1, 40))->map(fn($i) => "po.size{$i}")->implode(', ');
-    
-        $items = $db->table('bj')
-            ->join('po', 'po.popk', '=', 'bj.popk')
-            ->whereIn('bj.bjpk', $bjpks)
+ 
+        $qtyColumns  = $this->qtyColumnsExpr('bjgrade');
+        $sizeColumns = $this->sizeColumnsExpr('po');
+ 
+        $items = $db->table('bjgrade')
+            ->join('po', 'po.popk', '=', 'bjgrade.popk')
+            ->whereIn('bjgrade.bjpk', $bjpks)
             ->selectRaw("
-                bj.bjpk, bj.grade, bj.pcs, bj.tanggal, bj.tglin,
-                po.POno, po.OP, po.poref, po.customer, po.buyer, po.material, po.secsz,
+                bjgrade.bjpk, bjgrade.grade, bjgrade.pcs, bjgrade.tanggal, bjgrade.tglin,
+                bjgrade.POno, bjgrade.OP, bjgrade.customer, bjgrade.material, bjgrade.secsz,
+                po.poref, po.buyer,
                 {$qtyColumns}, {$sizeColumns}
             ")
-            ->orderBy('po.OP')
+            ->orderBy('bjgrade.OP')
             ->get();
-    
+ 
         foreach ($items as $item) {
             $sizes = [];
             for ($i = 1; $i <= 40; $i++) {
@@ -400,12 +326,12 @@ class LoController extends Controller
             }
             $item->sizes = $sizes;
         }
-    
-        $lo->sudah_diterima = $items->isNotEmpty() && $items->every(fn($i) => $i->tglin !== null);
+ 
+        $lo->sudah_diterima = $items->isNotEmpty() && $items->every(fn ($i) => $i->tglin !== null);
         $lo->status_label = $this->resolveStatusLabel($lo);
-        $lo->no_lo    = $this->buildNoLo($lo->lopk, $lo->mif, $lo->lodate); // BARU
-        $lo->can_edit = $this->canEditLo($lo); // BARU
-    
+        $lo->no_lo    = $this->buildNoLo($lo->lopk, $lo->mif, $lo->lodate);
+        $lo->can_edit = $this->canEditLo($lo);
+ 
         return response()->json(['lo' => $lo, 'items' => $items]);
     }
 
@@ -415,20 +341,18 @@ class LoController extends Controller
         if (!in_array($level, [1, 2, 3], true)) {
             return $this->respondApproveResult($request, false, 'Level approval tidak valid.');
         }
-    
-        $found = $this->findLo($lopk, $request->input('mif'));
-        if (!$found) {
+ 
+        $lo = $this->findLo($lopk);
+        if (!$lo) {
             return $this->respondApproveResult($request, false, 'LO tidak ditemukan.');
         }
-        [$lo, $connection] = $found;
-        $db = DB::connection($connection);
-    
+ 
         if ($lo->{"stsapv{$level}"} !== null) {
             return $this->respondApproveResult($request, false, "Level {$level} sudah pernah diproses sebelumnya.");
         }
-    
-        $db->table('lo')->where('lopk', $lopk)->update(["stsapv{$level}" => 1]);
-    
+ 
+        DB::connection('mysql')->table('lo')->where('lopk', $lopk)->update(["stsapv{$level}" => 1]);
+ 
         return $this->respondApproveResult($request, true, "Level {$level} berhasil di-approve.");
     }
     
@@ -438,36 +362,41 @@ class LoController extends Controller
         if (!in_array($level, [1, 2, 3], true)) {
             return $this->respondApproveResult($request, false, 'Level approval tidak valid.');
         }
-    
-        $found = $this->findLo($lopk, $request->input('mif'));
-        if (!$found) {
+ 
+        $lo = $this->findLo($lopk);
+        if (!$lo) {
             return $this->respondApproveResult($request, false, 'LO tidak ditemukan.');
         }
-        [$lo, $connection] = $found;
-        $db = DB::connection($connection);
-    
+ 
         if ($lo->{"stsapv{$level}"} !== null) {
             return $this->respondApproveResult($request, false, "Level {$level} sudah pernah diproses sebelumnya.");
         }
-    
+ 
+        $db = DB::connection('mysql');
         $db->table('lo')->where('lopk', $lopk)->update(["stsapv{$level}" => 0]);
-    
+ 
+        // BARU -- unlock bjgrade yang ada di LO ini kembali ke status 0.
+        $bjpks = $db->table('lodt')->where('lopk', $lopk)->pluck('bjpk');
+        $db->table('bjgrade')->whereIn('bjpk', $bjpks)->where('status', 1)->update(['status' => 0]);
+ 
         return $this->respondApproveResult($request, true, "Level {$level} ditolak.");
     }
 
     public function cancel(Request $request, $lopk)
     {
-        $found = $this->findLo($lopk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$lo, $connection] = $found;
-    
+        $lo = $this->findLo($lopk);
+        abort_unless($lo, 404);
+ 
         if (!$this->canEditLo($lo)) {
             return response()->json(['icon' => 'warning', 'title' => 'LO ini sudah ada approval yang masuk, tidak bisa dibatalkan lagi.'], 422);
         }
-    
-        $db = DB::connection($connection);
+ 
+        $db = DB::connection('mysql');
         try {
-            DB::connection($connection)->transaction(function () use ($db, $lopk) {
+            DB::connection('mysql')->transaction(function () use ($db, $lopk) {
+                $bjpks = $db->table('lodt')->where('lopk', $lopk)->pluck('bjpk');
+                $db->table('bjgrade')->whereIn('bjpk', $bjpks)->where('status', 1)->update(['status' => 0]);
+ 
                 $db->table('lodt')->where('lopk', $lopk)->delete();
                 $db->table('lo')->where('lopk', $lopk)->delete();
             });
@@ -479,16 +408,17 @@ class LoController extends Controller
 
     public function removeItem(Request $request, $lopk, $bjpk)
     {
-        $found = $this->findLo($lopk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$lo, $connection] = $found;
-    
+        $lo = $this->findLo($lopk);
+        abort_unless($lo, 404);
+ 
         if (!$this->canEditLo($lo)) {
             return response()->json(['icon' => 'warning', 'title' => 'LO ini sudah ada approval yang masuk, tidak bisa diedit lagi.'], 422);
         }
-    
-        $db = DB::connection($connection);
+ 
+        $db = DB::connection('mysql');
         $db->table('lodt')->where('lopk', $lopk)->where('bjpk', $bjpk)->delete();
+        $db->table('bjgrade')->where('bjpk', $bjpk)->where('status', 1)->update(['status' => 0]);
+ 
         return response()->json(['icon' => 'success', 'title' => 'Item dihapus dari LO, sudah bisa dipilih lagi.']);
     }
 
@@ -499,93 +429,89 @@ class LoController extends Controller
             'bjpks'      => 'required|array|min:1',
             'bjpks.*'    => 'integer',
         ]);
-    
-        $found = $this->findLo($lopk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$lo, $connection, $mif] = $found;
-    
+ 
+        $lo = $this->findLo($lopk);
+        abort_unless($lo, 404);
+ 
         if (!$this->canEditLo($lo)) {
             return response()->json(['icon' => 'warning', 'title' => 'LO ini sudah ada approval yang masuk, tidak bisa diedit lagi.'], 422);
         }
-    
-        $db = DB::connection($connection);
+ 
+        $db = DB::connection('mysql');
         $newBjpks = collect($validated['bjpks'])->unique()->values();
-    
-        $validBjpks = $db->table('bj')
+        $oldBjpks = $db->table('lodt')->where('lopk', $lopk)->pluck('bjpk');
+ 
+        // Valid = grade A-C DAN (status masih 0 [belum terkunci sama
+        // sekali] ATAU sudah jadi bagian LO INI sendiri [status 1, ada di
+        // $oldBjpks]).
+        $validBjpks = $db->table('bjgrade')
             ->whereIn('bjpk', $newBjpks)
             ->whereBetween('grade', ['A', 'C'])
-            ->pluck('bjpk');
-    
-        // Kunci oleh LO LAIN (BUKAN LO ini sendiri -- item yang sudah ada
-        // di LO ini boleh tetap dipertahankan).
-        $lockedByOtherLo = $db->table('lodt')
-            ->join('lo', 'lo.lopk', '=', 'lodt.lopk')
-            ->where('lo.mif', $mif)
-            ->where('lodt.lopk', '!=', $lopk)
-            ->whereIn('lodt.bjpk', $validBjpks)
-            ->pluck('lodt.bjpk');
-    
-        $finalBjpks = $validBjpks->diff($lockedByOtherLo)->values();
-    
-        if ($finalBjpks->isEmpty()) {
+            ->where(function ($q) use ($oldBjpks) {
+                $q->where('status', 0)->orWhereIn('bjpk', $oldBjpks);
+            })
+            ->pluck('bjpk')
+            ->values();
+ 
+        if ($validBjpks->isEmpty()) {
             return response()->json(['icon' => 'warning', 'title' => 'Semua item tidak valid (terkunci LO lain / grade berubah).'], 422);
         }
-    
+ 
         try {
-            DB::connection($connection)->transaction(function () use ($db, $lopk, $validated, $finalBjpks) {
+            DB::connection('mysql')->transaction(function () use ($db, $lopk, $validated, $validBjpks, $oldBjpks) {
                 $db->table('lo')->where('lopk', $lopk)->update([
                     'keterangan' => $validated['keterangan'] ?? null,
                 ]);
-    
-                // Sinkron total: hapus semua baris lama, insert ulang sesuai
-                // pilihan terbaru (sederhana & aman karena lodt tidak ada FK
-                // ke tabel lain yang perlu dipertahankan).
+ 
                 $db->table('lodt')->where('lopk', $lopk)->delete();
-    
+ 
                 $newLodtpk = (int) ($db->table('lodt')->lockForUpdate()->max('lodtpk'));
                 $insertRows = [];
-                foreach ($finalBjpks as $bjpk) {
+                foreach ($validBjpks as $bjpk) {
                     $newLodtpk++;
                     $insertRows[] = ['lodtpk' => $newLodtpk, 'lopk' => $lopk, 'bjpk' => $bjpk];
                 }
                 $db->table('lodt')->insert($insertRows);
+ 
+                // BARU -- unlock item LAMA yang tidak lagi dipilih.
+                $removedBjpks = $oldBjpks->diff($validBjpks);
+                $db->table('bjgrade')->whereIn('bjpk', $removedBjpks)->where('status', 1)->update(['status' => 0]);
+ 
+                // BARU -- lock item BARU yang belum pernah dikunci (status 0 -> 1).
+                $db->table('bjgrade')->whereIn('bjpk', $validBjpks)->where('status', 0)->update(['status' => 1]);
             });
-    
+ 
             return response()->json(['icon' => 'success', 'title' => "LO #{$lopk} berhasil diperbarui."]);
         } catch (\Throwable $e) {
             return response()->json(['icon' => 'error', 'title' => 'Gagal memperbarui LO.'], 500);
         }
     }
+ 
 
     public function sendLoEmail(Request $request, $lopk)
     {
-        $found = $this->findLo($lopk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$lo, $connection, $mif] = $found;
-        $db = DB::connection($connection);
-    
-        $emailConnection = $this->resolveConnection($this->currentMif());
-        $emailRow = DB::connection($emailConnection)->table('email')->where('jnsemail', 1)->first();
-    
+        $lo = $this->findLo($lopk);
+        abort_unless($lo, 404);
+        $db = DB::connection('mysql');
+ 
+        $emailRow = $db->table('email')->where('jnsemail', 1)->first();
         if (!$emailRow) {
             return response()->json(['icon' => 'error', 'title' => 'Data email approver (jnsemail=1) tidak ditemukan.'], 404);
         }
-    
+ 
         $noLo = $this->buildNoLo($lo->lopk, $lo->mif, $lo->lodate);
-    
+ 
         $bjpks = $db->table('lodt')->where('lopk', $lopk)->pluck('bjpk');
-        $qtyColumns  = collect(range(1, 40))->map(fn($i) => "bj.qty{$i}")->implode(', ');
-        $sizeColumns = collect(range(1, 40))->map(fn($i) => "po.size{$i}")->implode(', ');
-    
-        $itemsRaw = $db->table('bj')
-            ->join('po', 'po.popk', '=', 'bj.popk')
-            ->whereIn('bj.bjpk', $bjpks)
-            ->selectRaw("bj.grade, bj.pcs, po.POno, po.OP, po.material, po.secsz, {$qtyColumns}, {$sizeColumns}")
-            ->orderBy('po.OP')
+        $qtyColumns  = $this->qtyColumnsExpr('bjgrade');
+        $sizeColumns = $this->sizeColumnsExpr('po');
+ 
+        $itemsRaw = $db->table('bjgrade')
+            ->join('po', 'po.popk', '=', 'bjgrade.popk')
+            ->whereIn('bjgrade.bjpk', $bjpks)
+            ->selectRaw("bjgrade.grade, bjgrade.pcs, bjgrade.POno, bjgrade.OP, bjgrade.material, bjgrade.secsz, {$qtyColumns}, {$sizeColumns}")
+            ->orderBy('bjgrade.OP')
             ->get();
-    
-        // BARU -- FIX UTAMA: bangun ARRAY (bukan objek), pakai key 'color'
-        // generik (BUKAN 'material') supaya cocok dgn view shared.
+ 
         $items = collect($itemsRaw)->map(function ($item) {
             $sizes = [];
             for ($i = 1; $i <= 40; $i++) {
@@ -596,39 +522,34 @@ class LoController extends Controller
                 }
             }
             return [
-                'grade' => $item->grade,
-                'POno'  => $item->POno,
-                'OP'    => $item->OP,
-                'color' => $item->material,
-                'secsz' => $item->secsz,
-                'pcs'   => $item->pcs,
-                'sizes' => $sizes,
+                'grade' => $item->grade, 'POno' => $item->POno, 'OP' => $item->OP,
+                'color' => $item->material, 'secsz' => $item->secsz, 'pcs' => $item->pcs, 'sizes' => $sizes,
             ];
         });
-    
+ 
         $approvers = [
             1 => ['name' => $emailRow->name1, 'email' => $emailRow->apv1, 'label' => 'Manager'],
             2 => ['name' => $emailRow->name2, 'email' => $emailRow->apv2, 'label' => 'PPIC'],
             3 => ['name' => $emailRow->name3, 'email' => $emailRow->apv3, 'label' => 'Purchasing'],
         ];
-    
+ 
         $sentCount = 0;
         $failed = [];
-    
+ 
         foreach ($approvers as $level => $approver) {
             if (empty($approver['email'])) continue;
             if ($lo->{"stsapv{$level}"} !== null) continue;
-    
+ 
             $approveUrl = URL::temporarySignedRoute(
                 'lo.email-approve.page', now()->addDays(14),
-                ['lopk' => $lo->lopk, 'level' => $level, 'mif' => $lo->mif]
+                ['lopk' => $lo->lopk, 'level' => $level]
             );
-    
+ 
             try {
                 Mail::send('menu.shared.lo-email-approval', [
-                    'docNo'        => $noLo,           // BARU -- generik
-                    'docTitle'     => 'Finishing Kirim Sisa ke Gudang', // BARU
-                    'penerima'     => null,             // BARU -- LO tidak punya penerima
+                    'docNo'        => $noLo,
+                    'docTitle'     => 'Finishing Kirim Sisa ke Gudang',
+                    'penerima'     => null,
                     'keterangan'   => $lo->keterangan,
                     'approverName' => $approver['name'],
                     'levelLabel'   => $approver['label'],
@@ -643,7 +564,7 @@ class LoController extends Controller
                 $failed[] = $approver['label'] . ' (' . $approver['email'] . '): ' . $e->getMessage();
             }
         }
-    
+ 
         if ($sentCount === 0 && empty($failed)) {
             return response()->json(['icon' => 'warning', 'title' => 'Tidak ada email yang dikirim (semua level sudah diproses, atau alamat email kosong).']);
         }
@@ -660,29 +581,27 @@ class LoController extends Controller
     public function emailApprovePage(Request $request, $lopk, $level)
     {
         abort_unless($request->hasValidSignature(), 403, 'Link tidak valid atau sudah kedaluwarsa.');
-    
-        $mif = $request->query('mif');
-        $found = $this->findLo($lopk, $mif);
-        abort_unless($found, 404);
-        [$lo, $connection] = $found;
-    
+ 
+        $lo = $this->findLo($lopk);
+        abort_unless($lo, 404);
+        $db = DB::connection('mysql');
+ 
         $level = (int) $level;
         $alreadyDone = $lo->{"stsapv{$level}"} !== null;
         $noLo = $this->buildNoLo($lo->lopk, $lo->mif, $lo->lodate);
         $levelLabel = [1 => 'Manager', 2 => 'PPIC', 3 => 'Purchasing'][$level] ?? "Level {$level}";
-    
-        $db = DB::connection($connection);
+ 
         $bjpks = $db->table('lodt')->where('lopk', $lopk)->pluck('bjpk');
-        $qtyColumns  = collect(range(1, 40))->map(fn($i) => "bj.qty{$i}")->implode(', ');
-        $sizeColumns = collect(range(1, 40))->map(fn($i) => "po.size{$i}")->implode(', ');
-    
-        $itemsRaw = $db->table('bj')
-            ->join('po', 'po.popk', '=', 'bj.popk')
-            ->whereIn('bj.bjpk', $bjpks)
-            ->selectRaw("bj.grade, bj.pcs, po.POno, po.OP, po.material, po.secsz, {$qtyColumns}, {$sizeColumns}")
-            ->orderBy('po.OP')
+        $qtyColumns  = $this->qtyColumnsExpr('bjgrade');
+        $sizeColumns = $this->sizeColumnsExpr('po');
+ 
+        $itemsRaw = $db->table('bjgrade')
+            ->join('po', 'po.popk', '=', 'bjgrade.popk')
+            ->whereIn('bjgrade.bjpk', $bjpks)
+            ->selectRaw("bjgrade.grade, bjgrade.pcs, bjgrade.POno, bjgrade.OP, bjgrade.material, bjgrade.secsz, {$qtyColumns}, {$sizeColumns}")
+            ->orderBy('bjgrade.OP')
             ->get();
-    
+ 
         $items = collect($itemsRaw)->map(function ($item) {
             $sizes = [];
             for ($i = 1; $i <= 40; $i++) {
@@ -697,14 +616,14 @@ class LoController extends Controller
                 'color' => $item->material, 'secsz' => $item->secsz, 'pcs' => $item->pcs, 'sizes' => $sizes,
             ];
         });
-    
+ 
         $doApproveUrl = URL::temporarySignedRoute(
             'lo.email-approve.do-approve', now()->addDays(14), ['lopk' => $lopk, 'level' => $level]
         );
         $doRejectUrl = URL::temporarySignedRoute(
             'lo.email-approve.do-reject', now()->addDays(14), ['lopk' => $lopk, 'level' => $level]
         );
-    
+ 
         return view('menu.shared.lo-email-confirm', [
             'docNo'        => $noLo,
             'penerima'     => null,
@@ -718,58 +637,53 @@ class LoController extends Controller
     }
     
     
-    // ============================================================
-    // BARU -- emailDoApprove()/emailDoReject() -- TANPA session/login SAMA
-    // SEKALI, keamanan murni dari signature URL. Route param TIDAK
-    // menyertakan 'mif' (dicari via findLo() fallback coba kedua koneksi).
-    // ============================================================
     public function emailDoApprove(Request $request, $lopk, $level)
     {
         abort_unless($request->hasValidSignature(), 403, 'Link tidak valid atau sudah kedaluwarsa.');
-    
+ 
         $level = (int) $level;
         if (!in_array($level, [1, 2, 3], true)) {
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => 'Approval tidak valid.']);
         }
-    
-        $found = $this->findLo($lopk); // tanpa mif hint -- coba kedua koneksi
-        if (!$found) {
+ 
+        $lo = $this->findLo($lopk);
+        if (!$lo) {
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => 'LO tidak ditemukan.']);
         }
-        [$lo, $connection] = $found;
-        $db = DB::connection($connection);
-    
+ 
         if ($lo->{"stsapv{$level}"} !== null) {
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => "Approval sudah pernah diproses sebelumnya."]);
         }
-    
-        $db->table('lo')->where('lopk', $lopk)->update(["stsapv{$level}" => 1]);
-    
+ 
+        DB::connection('mysql')->table('lo')->where('lopk', $lopk)->update(["stsapv{$level}" => 1]);
+ 
         return view('menu.shared.lo-email-approve-done', ['success' => true, 'message' => "Berhasil approve LO."]);
     }
-    
+ 
     public function emailDoReject(Request $request, $lopk, $level)
     {
         abort_unless($request->hasValidSignature(), 403, 'Link tidak valid atau sudah kedaluwarsa.');
-    
+ 
         $level = (int) $level;
         if (!in_array($level, [1, 2, 3], true)) {
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => 'Approval tidak valid.']);
         }
-    
-        $found = $this->findLo($lopk);
-        if (!$found) {
+ 
+        $lo = $this->findLo($lopk);
+        if (!$lo) {
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => 'LO tidak ditemukan.']);
         }
-        [$lo, $connection] = $found;
-        $db = DB::connection($connection);
-    
+ 
         if ($lo->{"stsapv{$level}"} !== null) {
             return view('menu.shared.lo-email-approve-done', ['success' => false, 'message' => "Sudah pernah diproses sebelumnya."]);
         }
-    
+ 
+        $db = DB::connection('mysql');
         $db->table('lo')->where('lopk', $lopk)->update(["stsapv{$level}" => 0]);
-    
+ 
+        $bjpks = $db->table('lodt')->where('lopk', $lopk)->pluck('bjpk');
+        $db->table('bjgrade')->whereIn('bjpk', $bjpks)->where('status', 1)->update(['status' => 0]);
+ 
         return view('menu.shared.lo-email-approve-done', ['success' => true, 'message' => "LO ditolak."]);
     }
 
@@ -781,7 +695,7 @@ class LoController extends Controller
                 'title' => $message,
             ], $success ? 200 : 422);
         }
-    
+ 
         return view('menu.shared.lo-email-approve-done', ['success' => $success, 'message' => $message]);
     }
 
@@ -805,53 +719,37 @@ class LoController extends Controller
         $rows   = (int) ($request->rows ?? 50);
         $offset = ($page - 1) * $rows;
         $lopkSearch = $request->input('lopk');
-    
-        $allRows = collect();
-    
-        foreach ([1, 2] as $mif) {
-            $db = DB::connection($this->resolveConnection($mif));
-    
-            // FIX UTAMA: HAPUS filter stsapv1/2/3 -- tampilkan SEMUA LO,
-            // apa pun status approval-nya.
-            $rows_ = $db->table('lo')
-                ->where('mif', $mif)
-                ->when($lopkSearch, fn($q) => $q->where('lopk', 'like', "%{$lopkSearch}%"))
-                ->get();
-    
-            foreach ($rows_ as $lo) {
-                $lo->mif = $mif;
-    
-                $fullyApproved = (int) $lo->stsapv1 === 1 && (int) $lo->stsapv2 === 1 && (int) $lo->stsapv3 === 1;
-    
-                if ($fullyApproved) {
-                    $belumTerimaCount = $db->table('lodt')
-                        ->join('bj', 'bj.bjpk', '=', 'lodt.bjpk')
-                        ->where('lodt.lopk', $lo->lopk)
-                        ->whereNull('bj.tglin')
-                        ->count();
-                    $lo->sudah_diterima = $belumTerimaCount === 0;
-                } else {
-                    $lo->sudah_diterima = false; // belum full approve -- pasti belum bisa diterima
-                }
+ 
+        $db = DB::connection('mysql');
+ 
+        $allRows = $db->table('lo')
+            ->when($lopkSearch, fn ($q) => $q->where('lopk', 'like', "%{$lopkSearch}%"))
+            ->get();
+ 
+        foreach ($allRows as $lo) {
+            $fullyApproved = (int) $lo->stsapv1 === 1 && (int) $lo->stsapv2 === 1 && (int) $lo->stsapv3 === 1;
+ 
+            if ($fullyApproved) {
+                $belumTerimaCount = $db->table('lodt')
+                    ->join('bjgrade', 'bjgrade.bjpk', '=', 'lodt.bjpk')
+                    ->where('lodt.lopk', $lo->lopk)
+                    ->whereNull('bjgrade.tglin')
+                    ->count();
+                $lo->sudah_diterima = $belumTerimaCount === 0;
+            } else {
+                $lo->sudah_diterima = false;
             }
-    
-            $allRows = $allRows->concat($rows_);
         }
-    
+ 
         $allRows = $allRows->sortByDesc('lopk')->values();
         $total = $allRows->count();
         $data  = $allRows->slice($offset, $rows)->values();
-    
+ 
         foreach ($data as $lo) {
-            $db = DB::connection($this->resolveConnection($lo->mif));
             $lo->jumlah_item = $db->table('lodt')->where('lopk', $lo->lopk)->count();
-    
+ 
             $fullyApproved = (int) $lo->stsapv1 === 1 && (int) $lo->stsapv2 === 1 && (int) $lo->stsapv3 === 1;
-    
-            // BARU -- FIX UTAMA: status_label SEKARANG sesuai kondisi
-            // sebenarnya -- kalau belum full approve, pakai label approval
-            // biasa (Menunggu Approve X / Ditolak), BUKAN selalu
-            // "Siap Diterima".
+ 
             if (!$fullyApproved) {
                 $lo->status_label = $this->resolveStatusLabel($lo);
             } elseif ($lo->sudah_diterima) {
@@ -859,55 +757,47 @@ class LoController extends Controller
             } else {
                 $lo->status_label = 'Siap Diterima';
             }
-    
+ 
             $lo->no_lo = $this->buildNoLo($lo->lopk, $lo->mif, $lo->lodate);
         }
-    
+ 
         return response()->json(['total' => $total, 'rows' => $data]);
     }
 
-    /**
-     * TERIMA -- FIX UTAMA: SET bj.tglin (BUKAN kolom tglterima yang
-     * tidak ada) untuk SEMUA bjpk dalam LO ini, dalam 1 transaksi, di
-     * koneksi yang benar sesuai mif LO tersebut.
-     */
     public function terimaItem(Request $request, $lopk, $bjpk)
     {
-        $found = $this->findLo($lopk, $request->input('mif'));
-        abort_unless($found, 404);
-        [$lo, $connection] = $found;
-        $db = DB::connection($connection);
-    
+        $lo = $this->findLo($lopk);
+        abort_unless($lo, 404);
+        $db = DB::connection('mysql');
+ 
         if ((int) $lo->stsapv1 !== 1 || (int) $lo->stsapv2 !== 1 || (int) $lo->stsapv3 !== 1) {
             return response()->json([
                 'icon'  => 'warning',
                 'title' => 'LO ini belum selesai approve 3 level, belum bisa diterima.',
             ], 422);
         }
-    
-        // Pastikan bjpk ini memang bagian dari LO ini (jangan asal terima
-        // bjpk yang tidak terdaftar di lodt-nya).
+ 
         $isPartOfLo = $db->table('lodt')->where('lopk', $lopk)->where('bjpk', $bjpk)->exists();
         if (!$isPartOfLo) {
             return response()->json(['icon' => 'error', 'title' => 'Item ini bukan bagian dari LO ini.'], 422);
         }
-    
+ 
         try {
-            $data = $db->table('bj')->where('bjpk', $bjpk)->first();
-    
+            $data = $db->table('bjgrade')->where('bjpk', $bjpk)->first();
+ 
             if (!$data) {
                 return response()->json(['icon' => 'warning', 'title' => 'Data tidak ditemukan'], 404);
             }
-    
+ 
             if ($data->tglin !== null) {
                 return response()->json(['icon' => 'warning', 'title' => 'Item ini sudah diterima sebelumnya.'], 422);
             }
-    
-            $db->table('bj')->where('bjpk', $bjpk)->update([
+ 
+            $db->table('bjgrade')->where('bjpk', $bjpk)->update([
                 'status' => 2,
-                'tglin'  => now(),
+                'tglin'  => now()->format('Y-m-d'),
             ]);
-    
+ 
             return response()->json(['icon' => 'success', 'title' => 'Item berhasil ditandai diterima.']);
         } catch (\Exception $e) {
             return response()->json(['icon' => 'error', 'title' => 'Gagal memproses data'], 500);
@@ -916,24 +806,9 @@ class LoController extends Controller
 
     public function debugCheckLoDuplicates()
     {
-        $result = [];
-    
-        // Cek koneksi DEFAULT (kalau tabel 'lo' masih ada disitu & ada isinya,
-        // itu SISA DATA LAMA sebelum fix -- harus dibersihkan/dihapus).
-        try {
-            $countDefault = DB::table('lo')->count();
-            $result['default_connection'] = $countDefault;
-        } catch (\Throwable $e) {
-            $result['default_connection'] = 'Tabel tidak ada / error: ' . $e->getMessage();
-        }
-    
-        $result['mysql (mif=2)'] = DB::connection('mysql')->table('lo')->count();
-        $result['mysql_andon (mif=1)'] = DB::connection('mysql_andon')->table('lo')->count();
-    
-        $result['detail_mysql'] = DB::connection('mysql')->table('lo')->orderByDesc('lopk')->limit(10)->get();
-        $result['detail_mysql_andon'] = DB::connection('mysql_andon')->table('lo')->orderByDesc('lopk')->limit(10)->get();
-    
-        return response()->json($result);
+        return response()->json([
+            'lo_count' => DB::connection('mysql')->table('lo')->count(),
+        ]);
     }
 
 

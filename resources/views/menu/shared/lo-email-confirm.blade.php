@@ -134,18 +134,18 @@
                         <strong>{{ $levelLabel }}</strong>.
                     </p>
                     <div class="row g-2">
-                        <div class="col-6">
+                        {{-- <div class="col-6">
                             <button type="button"
                                 class="btn btn-outline-danger w-100 fw-semibold action-btn"
                                 data-bs-toggle="modal"
                                 data-bs-target="#rejectModal">
                                 <i class="fas fa-times me-1"></i> Reject
                             </button>
-                        </div>
-                        <div class="col-6">
+                        </div> --}}
+                        <div class="col-12">
                             <form method="POST" action="{{ $doApproveUrl }}">
                                 @csrf
-                                <button type="submit" class="btn btn-dark w-100 fw-semibold action-btn">
+                                <button type="submit" class="btn btn-dark w-100 fw-semibold action-btn" style="background:#16a34a; color:#ffffff; padding:13px 44px; border-radius:8px; text-decoration:none; font-weight:700; font-size:14.5px; display:inline-block;">
                                     <i class="fas fa-check me-1"></i> Approve
                                 </button>
                             </form>
